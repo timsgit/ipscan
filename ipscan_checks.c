@@ -147,7 +147,8 @@ int check_tcp_port(char * hostname, uint16_t port)
 				// If we haven't found a matching returncode/errno then log this ....
 				if (PORTUNKNOWN == retval)
 				{
-					fprintf(stderr, LOGPREFIX "connect unexpected response, errno is : %d (%s) for host %s port %d\n", errsv, strerror(errsv), hostname, port);
+					fprintf(stderr, LOGPREFIX "connect unexpected response, errno is : %d (%s) for host %s port %d\n", \
+							errsv, strerror(errsv), hostname, port);
 					retval = PORTUNEXPECTED;
 				}
 

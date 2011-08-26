@@ -34,7 +34,7 @@
 	// #define DBDEBUG 1
 
 	// Version
-	#define VERSION "0.74"
+	#define VERSION "0.77"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -50,15 +50,15 @@
 	// 0.72 Updated txt browser output and offer email feedback link.
 	// 0.73 add hostname, time into feedback email body
 	// 0.74 tidy up noscript link to text-only version, move to structure driven results classification
-	//
+	// 0.75 improved scan summary logging for structure driven approach
+	// 0.76 improved query string error checking, handling and reporting
+	// 0.77 added link to source code on github to results page.
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
 
 	// Database results directory
 	#define DBDIR "/var/lib/ipscan"
-
-
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
@@ -69,9 +69,8 @@
 	// Magic number requesting a scan summary
 	#define MAGICSUMMARY -999123
 
-
 	// Magic number requesting the start of a scan
-	#define MAGICBEGIN 123999
+	#define MAGICBEGIN 123456
 
 	// Maximum number of ports to be tested - this should exceed the sum of the default port list
 	// and the allowed user-defined ports
@@ -91,12 +90,15 @@
 
 	// Number of columns in log outputs
 	#define LOGMAXCOLS 4
+	// Maximum size for buffer used to assemble log entries, 20 characters per "column" should be plenty
+	#define LOGENTRYLEN (20* LOGMAXCOLS)
 
 	// Maximum number of supported query parameters
 	// Must ensure MAXQUERIES exceeds NUMUSERDEFPORTS by sufficient amount!
 	#define MAXQUERIES 16
 	#define MAXQUERYSTRLEN 255
 	#define MAXQUERYNAMELEN 32
+	#define MAXQUERYVALLEN 64
 
 	// Determine the executable CGI script filenames
 	// These SHOULD be defined in the makefile, but provide some defaults in case
@@ -134,7 +136,10 @@
 	#define NUMUSERDEFPORTS 4
 
 	// Logging prefix (goes into apache error_log)
-	#define LOGPREFIX "ipscan : Version "VERSION" : "
+	#define LOGPREFIX EXENAME" : Version "VERSION" : "
+
+	// returncode which the cgi program returns on an unhandled error - check the apache error log in this case
+	#define CHECKTHELOGRC 999
 
 	//
 	// Database related

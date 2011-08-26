@@ -97,7 +97,10 @@ int main(void)
 	int beginscan = 0;
 	int fetch = 0;
 
+	// the session starttime, used as an unique index for the database
 	time_t   starttime;
+	int64_t  querystarttime;
+
 	uint16_t port;
 	uint16_t portindex;
 
@@ -128,7 +131,12 @@ int main(void)
 	char reconquery[ (MAXQUERYSTRLEN + 1) ];
 	char *reconptr = &reconquery[0];
 
-	// Structure to hold variable names, their values and validity indication
+	// buffer for logging entries
+	int logbuffersize = LOGENTRYLEN;
+	char logbuffer[ (LOGENTRYLEN + 1) ];
+	char *logbufferptr = &logbuffer[0];
+
+	// Structure to hold querystring variable names, their values and a validity indication
 	typedef struct {
 		char varname[MAXQUERYNAMELEN];
 		int64_t varval;
@@ -138,7 +146,8 @@ int main(void)
 	queries query[MAXQUERIES];
 	unsigned int numqueries = 0;
 	int64_t varval = 0;
-	char valstring[ (MAXQUERYSTRLEN + 1) ];
+	// value string - add two chars to cope with trailing \0
+	char valstring[ (MAXQUERYVALLEN + 2) ];
 	
 	int64_t magic = 0;
 	int includeexisting = 0;
@@ -162,12 +171,12 @@ int main(void)
 		portsstats[i] = 0;
 	}
 
-	// Process id related
-	uint64_t session = 0ULL;
+	// Process id related - this version is extracted from the querystring
+	int64_t querysession = 0;
 
 	// Log the current time and "session" with which to initiate scan and fetch results
 	starttime = time(0);
-	session = (uint64_t) getpid();
+	uint64_t session = (uint64_t) getpid();
 
 	// QUERY_STRING / REQUEST_METHOD
 	// URL  of the form: ipv6.cgi?name1=value1&name2=value2
@@ -241,6 +250,10 @@ int main(void)
 						varnamenum ++;
 						byte ++;	
 					}
+					if (varnamenum >= MAXQUERYNAMELEN)
+					{
+						fprintf(stderr, LOGPREFIX "query parameter name string is too long : %s\n", querystring);
+					}
 					query[numqueries].varname[varnamenum]=0;
 					finished = (querystring[byte] < 32 || byte >= MAXQUERYSTRLEN) ? 1 : 0;
 					if (querystring[byte] == '=' && finished == 0)
@@ -248,13 +261,18 @@ int main(void)
 						byte++;
 						int valbyte = 0;
 						while ( querystring[byte] >= 32 && querystring[byte] != '='
-                                                && querystring[byte] != '&' && valbyte<64 && byte < MAXQUERYSTRLEN)
+                                && querystring[byte] != '&' && valbyte< MAXQUERYVALLEN && byte < MAXQUERYSTRLEN)
 						{
 							valstring[valbyte] = querystring[byte];
 							byte++;
 							valbyte++;
 						}
 						valstring[valbyte]=0;
+						if (valbyte >= MAXQUERYVALLEN)
+						{
+							fprintf(stderr, LOGPREFIX "query parameter value string is too long for %s : %s\n", \
+									query[numqueries].varname, querystring);
+						}
 						rc = sscanf(valstring,"%"SCNd64, &varval );
 						if (rc == 1)
 						{
@@ -291,7 +309,7 @@ int main(void)
 		else
 		{
 			fprintf(stderr, LOGPREFIX "Unsupported request method: %s.\n", requestmethod);
-			exit(999);
+			exit(CHECKTHELOGRC);
 		}
 	}
 
@@ -312,8 +330,7 @@ int main(void)
 		if (rc <= 0)
 		{
 			fprintf(stderr, LOGPREFIX "Unparseable IPv6 host address : %s\n", remoteaddrstring);
-			perror("inet_pton");
-			exit(1);
+			exit(CHECKTHELOGRC);
 		}
 		else
 		{
@@ -398,7 +415,7 @@ int main(void)
 			if (reconquerysize <= 0)
 			{
 				fprintf(stderr, LOGPREFIX "run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
-				exit(1);
+				exit(CHECKTHELOGRC);
 			}
 		}
 		else
@@ -406,7 +423,7 @@ int main(void)
 			#ifdef DEBUG
 			fprintf(stderr, LOGPREFIX "attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
 			#endif
-			exit(1);
+			exit(CHECKTHELOGRC);
 		}
 
 		// Determine whether existing ports are to be included in the tested list or not:
@@ -417,7 +434,7 @@ int main(void)
 		}
 		else
 		{
-			// default ports will be overwritten by custom ports
+			// default ports will be overwritten by any custom ports
 			numports = 0;
 		}
 
@@ -455,12 +472,13 @@ int main(void)
 							if (reconquerysize <= 0)
 							{
 								fprintf(stderr, LOGPREFIX "run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
-								exit(1);
+								exit(CHECKTHELOGRC);
 							}
 						}
 						else
 						{
 							fprintf(stderr, LOGPREFIX "customport%d reconstitution failed, due to unexpected size.\n", customport);
+							exit(CHECKTHELOGRC);
 						}
 					}
 				}
@@ -480,25 +498,25 @@ int main(void)
 
 		// Look for the starttime query string, set it to -1 if not present or invalid
 		i = 0;
-		starttime = -1;
+		querystarttime = -1;
 		while (i < numqueries && strncmp("starttime",query[i].varname,9)!= 0) i++;
 		if (i < numqueries && query[i].valid == 1)
 		{
 			if (query[i].varval >= 0)
 			{
-				starttime = query[i].varval;
+				querystarttime = query[i].varval;
 			}
 		}
 
 		// Look for the session query string, set it to -1 if not present or invalid
 		i = 0;
-		session = -1;
+		querysession = -1;
 		while (i < numqueries && strncmp("session",query[i].varname,7)!= 0) i++;
 		if (i < numqueries && query[i].valid == 1)
 		{
 			if (query[i].varval >= 0)
 			{
-				session = query[i].varval;
+				querysession = query[i].varval;
 			}
 		}
 
@@ -524,7 +542,8 @@ int main(void)
 		#ifdef DEBUG
 			fprintf(stderr, LOGPREFIX "DEBUG info: numqueries = %d,\n", numqueries);
 			fprintf(stderr, LOGPREFIX "DEBUG info: includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
-			fprintf(stderr, LOGPREFIX "DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d.\n", session, (uint64_t)starttime, numports);
+			fprintf(stderr, LOGPREFIX "DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d.\n", \
+					session, (uint64_t)starttime, numports);
 		#endif
 
 		//
@@ -535,12 +554,11 @@ int main(void)
 		//
 		//
 
-		#if (TEXTMODE == 1)
 
 		//
 		// NON-Javascript mode of operation (text browser compatible)
 		//
-
+		#if (TEXTMODE == 1)
 		// *IF* we have everything we need to initiate the scan/results page then we
 		// should have been passed (1+NUMUSERDEFPORTS) queries
 		// i.e. includeexisting (either +1 or -1) and customports 0 thru n params
@@ -561,7 +579,8 @@ int main(void)
 			printf("<H3><font color=\"red\">IPv6 Universal TCP Port Scanner by Tim Chappell<font color=\"black\"></H3>\n");
 			printf("<p>Results for host : %s</p>\n\n", remoteaddrstring);
 			fprintf(stderr, LOGPREFIX "Beginning scan of IPv6 client : %s\n", remoteaddrstring);
-			printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", asctime(localtime(&starttime)), (numports * TIMEOUTSECS));
+			printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", \
+					asctime(localtime(&starttime)), (numports * TIMEOUTSECS));
 
 			// Start of table
 			printf("<p><table border=\"1\" bordercolor=\"black\">\n");
@@ -611,6 +630,8 @@ int main(void)
 
 			// Create results key table
 			create_results_key_table(remoteaddrstring, starttime);
+			// Finish the output
+			create_html_body_end();
 
 			// Log the summary of results internally
 			i = 0;
@@ -619,42 +640,49 @@ int main(void)
 			{
 				if (position == 0)
 				{
-					fprintf(stderr, LOGPREFIX "Found ");
+					rc = snprintf(logbufferptr, logbuffersize, "Found %d %s",portsstats[i], resultsstruct[i].label );
+				}
+				else
+				{
+					rc = snprintf(logbufferptr, logbuffersize, ", %d %s", portsstats[i], resultsstruct[i].label);
 				}
 
-				fprintf(stderr, "%d %s, ", portsstats[i], resultsstruct[i].label );
-				position ++ ;
-
-				if (position >= LOGMAXCOLS)
+				if (rc >= logbuffersize)
 				{
-					fprintf(stderr, "\n");
+					fprintf(stderr, LOGPREFIX "logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
+					exit(CHECKTHELOGRC);
+				}
+
+				logbufferptr += rc ;
+				logbuffersize -= rc;
+				position ++ ;
+				if ( position >= LOGMAXCOLS || i == (NUMRESULTTYPES -1) )
+				{
+					fprintf(stderr, LOGPREFIX "%s\n", logbuffer);
+					logbufferptr = &logbuffer[0];
+					logbuffersize = LOGENTRYLEN;
 					position = 0;
 				}
 				i++ ;
 			}
 
-			// Finish the output
-			create_html_body_end();
 		}
-
-
 		#else
-
 
 		// *IF* we have everything we need to query the database ...
 		// session, starttime, fetch and includeexisting
 		// was numqueries >= 4, without includeexisting check - but javascript updateurl always minimally includes includeexisting
 
-		if ( numqueries >= 4 && session >= 0 && starttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0)
+		if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0)
 		{
 			// Simplified header in which to wrap array of results
 			create_json_header();
 			// Dump the current port results for this client, starttime and session
-			rc = dump_db(remotehost_msb, remotehost_lsb, starttime, session);
+			rc = dump_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
 			if (rc != 0)
 			{
 				fprintf(stderr, LOGPREFIX "dump_db rc was %d\n", rc);
-				exit(rc);
+				exit(CHECKTHELOGRC);
 			}
 		}
 
@@ -662,7 +690,7 @@ int main(void)
 		// *IF* we have everything we need to initiate the scan
 		// session, starttime, beginscan, includeexisting and userdefined ports [NOTE: no fetch]
 
-		else if ( numqueries >= 4 && session >= 0 && starttime >= 0 && beginscan == 1 && fetch == 0)
+		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && fetch == 0)
 		{
 
 			fprintf(stderr, LOGPREFIX "Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
@@ -695,20 +723,24 @@ int main(void)
 				//
 				// Put result into database:
 				//
-				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t) starttime, session, port, result);
+				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, port, result);
 				if (rc != 0)
 				{
 					fprintf(stderr, LOGPREFIX "write_db inside scan routine returned : %d\n", rc);
 					create_html_body_end();
-					exit(rc);
+					exit(CHECKTHELOGRC);
 				}
 			}
 
 			#ifdef DEBUG
-			fprintf(stderr, LOGPREFIX "rmthost    was : %"PRIx64":%"PRIx64"\n", remotehost_msb, remotehost_lsb);
-			fprintf(stderr, LOGPREFIX "starttime  was : %"PRIu64"\n", (uint64_t)starttime);
-			fprintf(stderr, LOGPREFIX "session    was : %"PRIu64"\n", session);
+			fprintf(stderr, LOGPREFIX "rmthost        was : %"PRIx64":%"PRIx64"\n", remotehost_msb, remotehost_lsb);
+			fprintf(stderr, LOGPREFIX "querystarttime was : %"PRId64"\n", querystarttime);
+			fprintf(stderr, LOGPREFIX "querysession   was : %"PRId64"\n", querysession);
 			#endif
+
+
+			// Finish the output
+			create_html_body_end();
 
 			// Log the summary of results internally
 			i = 0;
@@ -717,22 +749,31 @@ int main(void)
 			{
 				if (position == 0)
 				{
-					fprintf(stderr, LOGPREFIX "Found ");
+					rc = snprintf(logbufferptr, logbuffersize, "Found %d %s",portsstats[i], resultsstruct[i].label );
+				}
+				else
+				{
+					rc = snprintf(logbufferptr, logbuffersize, ", %d %s", portsstats[i], resultsstruct[i].label);
 				}
 
-				fprintf(stderr, "%d %s, ", portsstats[i], resultsstruct[i].label );
-				position ++ ;
-
-				if (position >= LOGMAXCOLS)
+				if (rc >= logbuffersize)
 				{
-					fprintf(stderr, "\n");
+					fprintf(stderr, LOGPREFIX "logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
+					exit(CHECKTHELOGRC);
+				}
+
+				logbufferptr += rc ;
+				logbuffersize -= rc;
+				position ++ ;
+				if ( position >= LOGMAXCOLS || i == (NUMRESULTTYPES -1) )
+				{
+					fprintf(stderr, LOGPREFIX "%s\n", logbuffer);
+					logbufferptr = &logbuffer[0];
+					logbuffersize = LOGENTRYLEN;
 					position = 0;
 				}
 				i++ ;
 			}
-
-			// Finish the output
-			create_html_body_end();
 		}
 
 		// *IF* we have everything we need to initiate create the standard results page
@@ -768,9 +809,8 @@ int main(void)
 			printf("<body>\n");
 			printf("<H3>Summary of Scans:</H3>\n");
 			// Output the scan summary
-
 			rc = summarise_db();
-
+			if (0 != rc) fprintf(stderr, LOGPREFIX "summarise_db: returned %d\n", rc);
 			// Finish the output
 			create_html_body_end();
 		}
@@ -778,7 +818,7 @@ int main(void)
 
 		else
 		{
-			// Dummy report
+			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
 			create_html_common_header();
 			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", VERSION);
 			printf("</head>\n");
@@ -786,9 +826,10 @@ int main(void)
 			printf("<b>Nothing to report.</p>\n");
 			// Finish the output
 			create_html_body_end();
-			fprintf(stderr, LOGPREFIX "Something untoward happened, numqueries = %d,\n", numqueries);
+			fprintf(stderr, LOGPREFIX "Something untoward happened, numqueries = %d, magic = %"PRId64"\n", numqueries, magic);
 			fprintf(stderr, LOGPREFIX "includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
-			fprintf(stderr, LOGPREFIX "session = %"PRIu64" starttime = %"PRIu64" and numports = %d.\n", session, (uint64_t)starttime, numports);
+			fprintf(stderr, LOGPREFIX "querysession = %"PRId64" querystarttime = %"PRId64" and numports = %d.\n", \
+					querysession, querystarttime, numports);
 		}
 	}
 	exit(0);

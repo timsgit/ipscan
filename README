@@ -1,4 +1,4 @@
-ipscan - an http-initiated IPv6 port scanner.
+ipscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser comptabile versions.
 
 Copyright (C) 2011 Tim Chappell.
 
@@ -15,44 +15,50 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
+along with ipscan. If not, see <http://www.gnu.org/licenses/>.
 
 ---
 
 ipscan requires sqlite3 and its development libraries to be installed on the server which will act as your scanner.
-
-ipscan is known to build on Opensuse versions 11.1 and 11.4 
+ipscan is known to build on Opensuse versions 11.1 and 11.4 and run alongside Apache 2.2. 
 
 Steps:
 	1. edit the Makefile and adjust the following entries as required:
 		a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
 		b. URLPATH - this is the URL by which the cgi files will be accessed from your webserver
 			e.g. http://ipv6.chappell-family.com/cgi-bin6/ipscan-js.cgi then set URLPATH=/cgi-bin6
-		c. SQLITE3BIN - this should be set to point to the location of your sqlite3 binary
-		c. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
+		c. SQLITE3BIN - this should be set to point to the location of your sqlite3 binary (e.g. /usr/bin/sqlite3)
+		d. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
 
 	2. edit ipscan.h and adjust *at least* the following entries:
 		a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will be world-accessible
-		b. DBDIR - the sqlite3 database files will be created here - ensure the specified directory exists and is writeable by apache!
+		b. DBDIR - the sqlite3 database files will be created here - ensure the specified directory exists and is write/execute by apache!
 
-	3. edit ipscan_portlist.h and change the list of ports to be tested if required
+	3. edit ipscan_portlist.h and change the list of ports to be tested, if required
 	
 	4. make && make install
 	
-	5. make sure that the URL path directory (which may well be via an Apache alias) is enabled to run cgi:
+	5. make sure that the URL path directory (which may well be accessed via an Apache alias) is enabled to execute cgi:
 	
 	ScriptAlias /cgi-bin6/ "/srv/www/cgi-bin6/"
-	<Directory "/srv/www/cgi-bin6">
+        <Directory "/srv/www/cgi-bin6">
         	AllowOverride None
         	Options +ExecCGI -Includes
         	Order allow,deny
         	Allow from 2000::/3
-    	</Directory>
+        </Directory>
 	
-	6. Browse from a machine that you want testing to http://[server-ipv6-address]/cgi-bin6/ipscan-txt.cgi  
+	6. Browse from a machine that you want testing towards your servers' IPv6 address, e.g.
+		w3m http://ipv6.chappell-family.com/cgi-bin6/ipscan-txt.cgi  
 
 	7. Check the apache access and error logs for messages. ipscan will place summary messages in the error log for all scans.
 	
-	
 For those considering providing ipscan access on the public internet consider adding a landing page which will check for 
-host IP address suitability prior to allowing access to the cgi script - most (all) search engine spiders only use IPv4.	
+host IP address suitability prior to allowing access to the cgi script(s) - most (all?) search engine spiders currently only use IPv4. 
+It may be advisable to only offer direct links to the cgi scripts if the address checks were successful.
+
+See http://ipv6.chappell-family.com/ipv6tcptest/ as an example.
+
+Getting further help:
+If you need further help then please email me at: webmaster@chappell-family.com
+	

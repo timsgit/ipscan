@@ -31,7 +31,7 @@
 #include <inttypes.h>
 
 
-// Include resultsstruct
+// Include resultsstruct in order to generate some of the html content
 extern struct rslt_struc resultsstruct[];
 
 void create_html_common_header(void)
@@ -65,9 +65,11 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("var fetches = 0;\n");
 	printf("var request = \"\";\n");
 	printf("var initreq = \"\";\n");
-	// printf("var updateurl = \""DIRPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches;\n", session, (uint32_t)timestamp, reconquery);
 	printf("var updateurl = \"\";\n");
-	printf("var starturl = \""DIRPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\";\n", MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
+	printf("var lastupdate = 0;\n");
+	printf("var starturl = \""DIRPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\";\n",\
+			MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
+	// create a prefilled array containing the list of ports to be tested
 	printf("var portlist = [");
 	for (portindex=0; portindex<numports; portindex++)
 	{
@@ -75,6 +77,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 		if (portindex == 0) printf(" %d", port); else printf(" ,%d", port);
 	}
 	printf(" ];\n");
+	// create a prefilled array containing the testing state of each port to be tested, defaults to PORTUNKNOWN
 	printf("var state = [");
 	for (portindex=0; portindex<numports; portindex++)
 	{
@@ -82,28 +85,28 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 		if (portindex == 0) printf(" %d", PORTUNKNOWN); else printf(" ,%d", PORTUNKNOWN);
 	}
 	printf(" ];\n");
-
-	// additions
+	// create a prefilled array containing the potential states returned for each port
 	printf("var retvals = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (i == 0) printf(" %d",resultsstruct[i].returnval); else printf(" ,%d",resultsstruct[i].returnval);
 	}
 	printf(" ];\n");
-
+	// create a prefilled array containing the text label (shorthand) describing each of the potential states returned for each port
 	printf("var labels = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (i == 0) printf(" \"%s\"",resultsstruct[i].label); else printf(" ,\"%s\"",resultsstruct[i].label);
 	}
 	printf(" ];\n");
+	// create a prefilled array containing the colour to be applied to each of the potential states returned for each port
 	printf("var colours = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (i == 0) printf(" \"%s\"",resultsstruct[i].colour); else printf(" ,\"%s\"",resultsstruct[i].colour);
 	}
 	printf(" ];\n");
-	// additions
+	// create an HTTP object which copes with each of the various browser vagaries
 	printf("function makeHttpObject()\n");
 	printf("{\n");
 	printf("	try {return new XMLHttpRequest();}\n");
@@ -114,7 +117,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("	catch (error) {}\n");
 	printf("	throw new Error(\"Could not create HTTP request object.\");\n");
 	printf("}\n");
-
+	// function to "blink" the test running state during test execution
 	printf("function blink()\n");
 	printf("{\n");
 	printf("	if (document.getElementById(\"scanstate\").style.color == \"red\")\n");
@@ -126,28 +129,35 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("		document.getElementById(\"scanstate\").style.color = \"red\";\n");
 	printf("	}\n");
 	printf("}\n");
-
+	// startTimer() is really the initiation function. it sets the scanstate to RUNNING to give the user confidence that things are happening.
+	// then the initial GET of the starturl is performed to request that the server begins the scan.
+	// finally the periodic call of update() is schedule in order to retrieve and reflect the ongoing scan status.
 	printf("function startTimer()\n");
 	printf("{\n");
-	printf("myInterval = window.setInterval( \"update()\", %d );\n", (JSONFETCHEVERY*1000) );
-	printf("initreq = makeHttpObject();\n");
-	printf("initreq.open( \"GET\", starturl, true);\n");
-	printf("initreq.send(null);\n");
 	printf("document.getElementById(\"scanstate\").innerHTML = \"RUNNING.\";\n");
 	printf("document.getElementById(\"scanstate\").style.color=\"black\";\n");
 	printf("myBlink = window.setInterval( \"blink()\", 1000 );\n");
+	printf("initreq = makeHttpObject();\n");
+	printf("initreq.open( \"GET\", starturl, true);\n");
+	printf("initreq.send(null);\n");
+	printf("myInterval = window.setInterval( \"update()\", %d );\n", (JSONFETCHEVERY*1000) );
 	printf("} // end function startTimer\n");
-
+	// the update() function schedules a GET from the server and then awaits its successful completion.
+	// the embedded function waits for the asynchronous HTTP 200 code to be received and then evaluates the returned JSON array.
 	printf("function update()\n");
 	printf("{\n");
 	printf("var i = 0;\n");
 	printf("++fetches;\n");
-	printf("updateurl = \""DIRPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches;\n", session, (uint32_t)timestamp,reconquery);
-	printf("if (fetches >%d) {window.clearInterval(myInterval)};\n",(int)( (4 + (numports*TIMEOUTSECS) / JSONFETCHEVERY )) );
+	printf("updateurl = \""DIRPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches;\n", session,\
+			(uint32_t)timestamp,reconquery);
+	printf("if (fetches >%d)\n",(int)( (4 + (numports*TIMEOUTSECS) / JSONFETCHEVERY )) );
+	printf("{\n");
+	printf("	window.clearInterval(myInterval);\n");
+	printf("	lastupdate = 1;\n");
+	printf("}\n");
 	printf("request = makeHttpObject();\n");
 	// third param determines sync/async fetch true=async
 	printf("request.open( \"GET\", updateurl, true);\n");
-	// printf("request.setRequestHeader(\"Content-Type\", \"text/json;charset=UTF-8\");\n");
 	printf("request.onreadystatechange = function()\n");
 	printf("{\n");
 	printf("	if (request.readyState == 4 && request.status == 200)\n");
@@ -155,6 +165,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf(" 		var lateststate = eval( '(' + request.responseText + ')' );\n");
 	printf("		if (lateststate.length > 1);\n");
 	printf("		{\n");
+	// if we've received a complete set of results for the ports under test then stop the periodic tasks
 	printf("			if (lateststate.length > portlist.length)\n");
 	printf("			{\n");
 	printf("				window.clearInterval(myInterval);\n");
@@ -165,29 +176,37 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("				state[i] = lateststate[i];\n");
 	printf("			}\n");
 	printf("		}\n");
-	printf("		var textupdate = \"UNKNOWN\";\n");
-	printf("		var colourupdate = \"white\";\n");
+
 	printf("		for (i = 0; i < %d ; i++)\n", numports);
 	printf("		{\n");
-	printf("			var result = state[i];\n");
+	printf("			var textupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].label);
+	printf("			var colourupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].colour);
 	printf("			var elemid = \"port\" + portlist[i];\n");
-
+	// find a matching return value and select the appropriate label and colour code
 	printf("			for (j = 0; j < retvals.length; j++)\n");
 	printf("			{\n");
-	printf("				if (retvals[j] == result)\n");
+	printf("				if (retvals[j] == state[i])\n");
 	printf("				{\n");
 	printf("					textupdate = \"Port \" + portlist[i] + \" = \" + labels[j];\n");
 	printf("					colourupdate = colours[j];\n");
 	printf("				}\n");
 	printf("			}\n");
-
+	// update the text on the page ....
 	printf("			document.getElementById( elemid ).innerHTML = textupdate;\n");
 	printf("			document.getElementById( elemid ).style.backgroundColor=colourupdate;\n");
 	printf("		}\n");
+	// update the page to reflect the fact we've finished
 	printf("		if (lateststate.length > portlist.length)\n");
 	printf("		{\n");
 	printf("			document.getElementById(\"scanstate\").innerHTML = \"COMPLETE.\";\n");
 	printf("			document.getElementById(\"scanstate\").style.color=\"black\";\n");
+	printf("		}\n");
+	// handle failure to complete the scan in the allocated number of updates
+	printf("		else if (lateststate.length <= portlist.length && lastupdate == 1)\n");
+	printf("		{\n");
+	printf("			window.clearInterval(myBlink);\n");
+	printf("			document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";\n");
+	printf("			document.getElementById(\"scanstate\").style.color=\"red\";\n");
 	printf("		}\n");
 	printf("	}\n");
 	printf("}\n");
@@ -212,9 +231,11 @@ void create_results_key_table(char * hostname, time_t timestamp)
 {
 	int i;
 
-	// Offer the opportunity for feedback
+	// Offer the opportunity for feedback and a link to the source
 	printf("<P><B>If you have any queries related to the results of this scan, or suggestions for improvement/additions to its' functionality");
-	printf(" then please <A href=\"mailto:%s?subject=Feedback on IPv6 scanner&body=host: %s, time: %s\">email me.</A></B></P>\n", EMAILADDRESS, hostname, asctime(localtime(&timestamp)) );
+	printf(" then please <A href=\"mailto:%s?subject=Feedback on IPv6 scanner&body=host: %s, time: %s\">email me.</A>",\
+			EMAILADDRESS, hostname, asctime(localtime(&timestamp)) );
+	printf(" The source code for this scanner is freely available at <A href=\"https://github.com/timsgit/ipscan\">github.</A></B></P>\n");
 
 	printf("<P><TABLE border=\"1\" bordercolor=\"black\">\n");
 	printf("<tr align=\"left\">\n");
@@ -255,7 +276,8 @@ void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint1
 		last = (portindex == (numports-1)) ? 1 : 0 ;
 
 		if (position ==0) printf("<tr align=\"center\">\n");
-		printf("<td width=\"%d%%\" bgcolor=\"%s\" id=\"port%d\">Port %d = %s</td>\n",COLUMNPCT,resultsstruct[PORTUNKNOWN].colour, port,port, resultsstruct[PORTUNKNOWN].label );
+		printf("<td width=\"%d%%\" bgcolor=\"%s\" id=\"port%d\">Port %d = %s</td>\n",COLUMNPCT,resultsstruct[PORTUNKNOWN].colour, \
+				port, port, resultsstruct[PORTUNKNOWN].label );
 		position++;
 		if (position >= MAXCOLS || last == 1) { printf("</tr>\n"); position=0; };
 
