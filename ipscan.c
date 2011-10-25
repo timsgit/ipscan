@@ -306,6 +306,17 @@ int main(void)
 				#endif
 			}
 		}
+		else if (strncmp("HEAD", requestmethod, 4) == 0)
+		{
+			// Create the header
+			create_html_common_header();
+			// Now finish the header
+        		printf("<title>IPv6 Universal TCP Port Scanner Version %s</title>\n", VERSION);
+        		printf("</head>\n");
+		        printf("</html>\n");
+			fprintf(stderr, LOGPREFIX "HEAD request method, sending headers only\n");
+			exit(0);
+		}
 		else
 		{
 			fprintf(stderr, LOGPREFIX "Unsupported request method: %s.\n", requestmethod);

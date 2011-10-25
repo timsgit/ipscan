@@ -1,4 +1,4 @@
-ipscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser comptabile versions.
+ipscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 
 Copyright (C) 2011 Tim Chappell.
 
@@ -20,7 +20,7 @@ along with ipscan. If not, see <http://www.gnu.org/licenses/>.
 ---
 
 ipscan requires sqlite3 and its development libraries to be installed on the server which will act as your scanner.
-ipscan is known to build on Opensuse versions 11.1 and 11.4 and run alongside Apache 2.2. 
+ipscan is known to build on Opensuse versions 11.1 and 11.4 and run alongside Apache version 2.2. 
 
 Steps:
 	1. edit the Makefile and adjust the following entries as required:
@@ -35,7 +35,7 @@ Steps:
 		a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will 
                    be world-accessible
 		b. DBDIR - the sqlite3 database files will be created here - ensure the specified 
-                   directory exists and is write/execute by apache!
+                   directory exists and has read/write/execute permissions for apache!
 
 	3. edit ipscan_portlist.h and change the list of ports to be tested, if required
 	
