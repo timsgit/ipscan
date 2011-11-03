@@ -254,7 +254,6 @@ void create_results_key_table(char * hostname, time_t timestamp)
 
 void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint16_t numports, uint16_t *portlist)
 {
-	time_t nowtime;
 	uint16_t portindex;
 	uint16_t port;
 	int position = 0;
@@ -264,7 +263,6 @@ void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint1
 	printf("<H3>IPv6 TCP Port Scan Results</H3>\n");
 	printf("<p>Results for host : %s</p>\n\n", hostname);
 
-	nowtime = time(0);
 	printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", asctime(localtime(&timestamp)), numports);
 
 	// Start of table

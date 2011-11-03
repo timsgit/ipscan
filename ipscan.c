@@ -85,9 +85,12 @@ int main(void)
 	#if (TEXTMODE != 1)
 	// Currently unused, but referenced in javascript mode
 	char serveraddrstring[INET6_ADDRSTRLEN] = "unknown";
+	#else
+	// last is only used in text-only mode
+	int last = 0;
 	#endif
 
-	int result, last = 0;
+	int result;
 	char remoteaddrstring[64];
 	char *remoteaddrvar;
 
@@ -715,7 +718,6 @@ int main(void)
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex];
-				last = (portindex == (numports-1)) ? 1 : 0 ;
 				result = check_tcp_port(remoteaddrstring, port);
 
 				// Find a matching returnval, or else flag it as unknown

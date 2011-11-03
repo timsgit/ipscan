@@ -34,7 +34,7 @@
 	// #define DBDEBUG 1
 
 	// Version
-	#define VERSION "0.78"
+	#define VERSION "0.79"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -54,6 +54,7 @@
 	// 0.76 improved query string error checking, handling and reporting
 	// 0.77 added link to source code on github to results page.
 	// 0.78 added support for HEAD method
+	// 0.79 Minor tweaks to ipscan_web.c and ipscan.c remove set but unused variables
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
