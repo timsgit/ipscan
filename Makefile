@@ -17,12 +17,21 @@
 #    You should have received a copy of the GNU General Public License
 #    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
 
+# Makefile version
+# 0.01 - initial version
+# 0.02 - added MySQL support
+
 # General build variables, including reference to the SQLITE3 library
+SHELL=/bin/sh
 LIBPATHS=-L/usr/lib
 INCLUDES=-I/usr/include
+LIBS=
 CC=gcc
-LIBS=-lsqlite3
-CFLAGS=-Wall -O
+CFLAGS=-Wall
+
+# Determine the database backend type that we're going to use
+# 0 = sqlite ; 1 = mysql
+DBTYPE=0
 
 # Install location for the CGI files
 TARGETDIR=/srv/www/cgi-bin6
@@ -48,13 +57,27 @@ JSTARGET=ipscan-js.cgi
 # 
 ##############################################################################
 
+# Determine the appropriate database related include/library paths
+# as well as any necessary libraries
+ifeq (${DBTYPE}, 0)
+LIBS+=-lsqlite3
+CFLAGS+=-O
+INCLUDES+=
+else
+LIBS+=$(shell mysql_config --libs)
+CFLAGS+=$(shell mysql_config --cflags)
+INCLUDES+=$(shell mysql_config --include)
+endif
+
 # Concatenate the necessary parameters for the two targets
-CMNPARAMS=-DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" -DDIRPATH=\"$(URLPATH)\" -DSQLITE3BIN=\"$(SQLITE3BIN)\"
+CMNPARAMS=-DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" -DDIRPATH=\"$(URLPATH)\" -DSQLITE3BIN=\"$(SQLITE3BIN)\" -DDBTYPE=$(DBTYPE)
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 $(CMNPARAMS)
 
-# Common header file which is always a dependancy
-HEADERFILE=ipscan.h
+# Common header files which are always a dependancy
+HEADERFILES=ipscan.h ipscan_portlist.h Makefile
+# Any other files on which we depend
+DEPENDFILE=Makefile
 
 # Generate the list of text-version and javascript-version objects from the source files
 TXTOBJS=$(patsubst %.c,%-txt.o,$(wildcard *.c))
@@ -65,15 +88,15 @@ JSOBJS=$(patsubst %.c,%-js.o,$(wildcard *.c))
 all : $(TXTTARGET) $(JSTARGET)
 
 # Rules to build an individual text-version object and the overall text-version target
-%-txt.o: %.c $(HEADERFILE)
+%-txt.o: %.c $(HEADERFILES) $(DEPENDFILE)
 	$(CC) $(TXTPARAMS) -c $(INCLUDES) $(LIBPATHS) $(LIBS) -o $@ $<
-$(TXTTARGET) : $(TXTOBJS) $(HEADERFILE)
+$(TXTTARGET) : $(TXTOBJS) $(HEADERFILES) $(DEPENDFILE)
 	$(CC) $(TXTPARAMS) -o $(TXTTARGET) $(INCLUDES) $(LIBPATHS) $(LIBS) $(TXTOBJS)
 
 # Rules to build an individual jscript-version object and the overall jscript-version target
-%-js.o: %.c $(HEADERFILE)
+%-js.o: %.c $(HEADERFILES) $(DEPENDFILE)
 	$(CC) $(JSPARAMS) -c $(INCLUDES) $(LIBPATHS) $(LIBS) -o $@ $<
-$(JSTARGET) : $(JSOBJS) $(HEADERFILE)
+$(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
 	$(CC) $(JSPARAMS) -o $(JSTARGET) $(INCLUDES) $(LIBPATHS) $(LIBS) $(JSOBJS)
 
 # Rules to copy the built objects to the target installation directory

@@ -17,6 +17,9 @@
 //    You should have received a copy of the GNU General Public License
 //    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
 
+// ipscan_web.c version
+// 0.01 - initial version
+
 #include "ipscan.h"
 
 #include <stdio.h>
@@ -57,7 +60,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 
 	create_html_common_header();
 
-	printf("<title>IPv6 Universal TCP Port Scanner Version %s</title>\n", VERSION);
+	printf("<title>IPv6 Universal TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("<script type = \"text/javascript\" language=\"javascript\">\n");
 	printf("<!--\n");
 	printf("var myInterval = 0;\n");
@@ -176,7 +179,6 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("				state[i] = lateststate[i];\n");
 	printf("			}\n");
 	printf("		}\n");
-
 	printf("		for (i = 0; i < %d ; i++)\n", numports);
 	printf("		{\n");
 	printf("			var textupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].label);
@@ -310,7 +312,7 @@ void create_html_form(uint16_t numports, uint16_t *portlist)
 	int position = 0;
 	int last = 0;
 
-	printf("<title>IPv6 Universal TCP Port Scanner Version %s</title>\n", VERSION);
+	printf("<title>IPv6 Universal TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("</head>\n");
 	printf("<body>\n");
 	printf("<H3><font color=\"red\">IPv6 Universal TCP Port Scanner by Tim Chappell<font color=\"black\"></H3>\n");

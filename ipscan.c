@@ -17,6 +17,10 @@
 //    You should have received a copy of the GNU General Public License
 //    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
 
+// ipscan.c version
+// 0.01 - first released version
+// 0.02 - additional DEBUG added for MySQL investigation
+
 #include "ipscan.h"
 #include "ipscan_portlist.h"
 //
@@ -314,7 +318,7 @@ int main(void)
 			// Create the header
 			create_html_common_header();
 			// Now finish the header
-        		printf("<title>IPv6 Universal TCP Port Scanner Version %s</title>\n", VERSION);
+        		printf("<title>IPv6 Universal TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
         		printf("</head>\n");
 		        printf("</html>\n");
 			fprintf(stderr, LOGPREFIX "HEAD request method, sending headers only\n");
@@ -373,8 +377,8 @@ int main(void)
 			}
 
 			#ifdef DEBUG
-			fprintf(stderr, LOGPREFIX "Remote host address MSB %"PRIx64"\n", remotehost_msb);
-			fprintf(stderr, LOGPREFIX "Remote host address LSB %"PRIx64"\n", remotehost_lsb);
+			fprintf(stderr, LOGPREFIX "Remote host address MSB %"PRIx64" and LSB %"PRIx64"\n", remotehost_msb, remotehost_lsb);
+			fprintf(stderr, LOGPREFIX "Remote host address MSB %"PRIu64" and LSB %"PRIu64"\n", remotehost_msb, remotehost_lsb);
 			#endif
 
 		}
@@ -587,7 +591,7 @@ int main(void)
 			// Create the header
 			create_html_common_header();
 			// Create main output
-			printf("<title>IPv6 TCP Port Scanner Text Browser Version %s</title>\n", VERSION);
+			printf("<title>IPv6 TCP Port Scanner Text Browser Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
 			printf("<H3><font color=\"red\">IPv6 Universal TCP Port Scanner by Tim Chappell<font color=\"black\"></H3>\n");
@@ -711,7 +715,7 @@ int main(void)
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
 			create_html_common_header();
-			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", VERSION);
+			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
 
@@ -817,15 +821,16 @@ int main(void)
 		else if (numqueries == 1 && magic == MAGICSUMMARY )
 		{
 			create_html_common_header();
-			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", VERSION);
+			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
-			printf("<H3>Summary of Scans:</H3>\n");
+			printf("<H3><font color=\"red\">IPv6 Universal TCP Port Scanner by Tim Chappell<font color=\"black\"></H3>\n");
+			printf("<P>Summary of Scans:</P>\n");
 			// Output the scan summary
 			rc = summarise_db();
-			if (0 != rc) fprintf(stderr, LOGPREFIX "summarise_db: returned %d\n", rc);
 			// Finish the output
 			create_html_body_end();
+			fprintf(stderr, LOGPREFIX "summarise_db: provided the requested summary, exited with rc=%d\n", rc);
 		}
 		#endif
 
@@ -833,7 +838,7 @@ int main(void)
 		{
 			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
 			create_html_common_header();
-			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", VERSION);
+			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
 			printf("<b>Nothing to report.</p>\n");

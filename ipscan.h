@@ -33,8 +33,8 @@
 	// #define DEBUG 1
 	// #define DBDEBUG 1
 
-	// Version
-	#define VERSION "0.79"
+	// ipscan Version
+	#define IPSCAN_VER "0.81"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -54,17 +54,21 @@
 	// 0.76 improved query string error checking, handling and reporting
 	// 0.77 added link to source code on github to results page.
 	// 0.78 added support for HEAD method
-	// 0.79 Minor tweaks to ipscan_web.c and ipscan.c remove set but unused variables
+	// 0.79 Minor tweaks to ipscan_web.c and ipscan.c to remove set but unused variables
+	// 0.80 include optional MySQL support which touches Makefile, ipscan.h and ipscan_db.c
+	// 0.81 added Microsoft RDP protocol, port 3389, to list of default ports
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
 
-	// Database results directory
+		// Database results directory
 	#define DBDIR "/var/lib/ipscan"
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
-	// a new value for MAGICSUMMARY before enabling it!
+	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
+    // available using an URL similar to:
+	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=-999123
 	#define SUMMARYENABLE 0
 
 	// *** PLEASE CHANGE THIS MAGICSUMMARY VALUE BEFORE ENABLING ***
@@ -102,6 +106,13 @@
 	#define MAXQUERYNAMELEN 32
 	#define MAXQUERYVALLEN 64
 
+	// Determine database type, should be determined in Makefile, but default to sqlite3
+	// There should be no need to change this setting.
+	// 0 = sqlite3 ; 1 = mysql
+	#ifndef DBTYPE
+		#define DBTYPE 0
+	#endif
+
 	// Determine the executable CGI script filenames
 	// These SHOULD be defined in the makefile, but provide some defaults in case
 	#ifndef EXETXTNAME
@@ -111,7 +122,7 @@
 		#define EXEJSNAME "ipscan-js.cgi"
 	#endif
 
-	// Determine database filenames
+	// Determine sqlite database filenames
 	#define DBTXTNAME "results-txt.db"
 	#define DBJSNAME "results-js.db"
 
@@ -124,7 +135,7 @@
 		#define DATABASEFILE DBJSNAME
 	#endif
 
-	// Create a reference pointing to the results' database file
+	// Create a reference pointing to the sqlite results' database file
 	#define DBFILE DBDIR "/" DATABASEFILE
 
 	// Served HTTP URL directory path - needs leading /, but not a trailing one ...
@@ -138,7 +149,7 @@
 	#define NUMUSERDEFPORTS 4
 
 	// Logging prefix (goes into apache error_log)
-	#define LOGPREFIX EXENAME" : Version "VERSION" : "
+	#define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
 
 	// returncode which the cgi program returns on an unhandled error - check the apache error log in this case
 	#define CHECKTHELOGRC 999
@@ -155,6 +166,31 @@
 	#define MAXDBQUERYSIZE 255
 	#define DBACCESS_ATTEMPTS 5
 	#define BUSYHANDLERMAXCALLS 20
+
+	// MySQL database-related globals
+
+	#define MYSQL_HOST "localhost"
+	#define MYSQL_USER "ipscan-user"
+	#define MYSQL_PASSWD "ipscan-passwd"
+	#define MYSQL_DBNAME "ipscan"
+	#define MYSQL_TBLNAME "results"
+
+	// Steps for creating the MySQL database - this MUST be done before tests are performed!
+	// -------------------------------------------------------------------------------------
+	//
+	// NB: adjust the user name, password and database name to match the globals you've edited above:
+	//
+	// mysql> create database ipscan;
+	// Query OK, 1 row affected (0.00 sec)
+	//
+	// mysql> create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
+	// Query OK, 0 rows affected (0.01 sec)
+	//
+	// mysql> grant all privileges on ipscan.* to 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
+	// Query OK, 0 rows affected (0.01 sec)
+	//
+	// mysql> exit
+	// Bye
 
 	// Timeout for port response
 	#define TIMEOUTSECS 1

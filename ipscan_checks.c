@@ -17,6 +17,9 @@
 //    You should have received a copy of the GNU General Public License
 //    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
 
+// ipscan_checks.c version
+// 0.01 - initial version
+
 #include "ipscan.h"
 //
 #include <stdlib.h>
