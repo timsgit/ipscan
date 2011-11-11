@@ -34,7 +34,7 @@
 	// #define DBDEBUG 1
 
 	// ipscan Version
-	#define IPSCAN_VER "0.81"
+	#define IPSCAN_VER "0.82"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -57,6 +57,7 @@
 	// 0.79 Minor tweaks to ipscan_web.c and ipscan.c to remove set but unused variables
 	// 0.80 include optional MySQL support which touches Makefile, ipscan.h and ipscan_db.c
 	// 0.81 added Microsoft RDP protocol, port 3389, to list of default ports
+	// 0.82 added/modified some Apple related ports
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
