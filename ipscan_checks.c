@@ -19,6 +19,7 @@
 
 // ipscan_checks.c version
 // 0.01 - initial version
+// 0.02 - added syslog support
 
 #include "ipscan.h"
 //
@@ -38,6 +39,11 @@
 
 // String comparison
 #include <string.h>
+
+// Logging with syslog requires additional include
+#if (LOGMODE == 1)
+	#include <syslog.h>
+#endif
 
 // Include resultsstruct
 extern struct rslt_struc resultsstruct[];
@@ -64,7 +70,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 	error = getaddrinfo(hostname, portnum, &hints, &res);
 	if (error != 0)
 	{
-		fprintf(stderr, LOGPREFIX "getaddrinfo: %s for host %s port %d\n", gai_strerror(error), hostname, port);
+		IPSCAN_LOG( LOGPREFIX "getaddrinfo: %s for host %s port %d\n", gai_strerror(error), hostname, port);
 		retval = PORTINTERROR;
 	}
 	else
@@ -85,7 +91,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 			if (sock == -1)
 			{
 				int errsv = errno ;
-				fprintf(stderr, LOGPREFIX "Bad socket call, returned %d (%s)\n", errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "Bad socket call, returned %d (%s)\n", errsv, strerror(errsv));
 				retval = PORTINTERROR;
 			}
 
@@ -100,7 +106,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 				if (timeo < 0)
 				{
 					int errsv = errno ;
-					fprintf(stderr, LOGPREFIX "Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
+					IPSCAN_LOG( LOGPREFIX "Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
 					retval = PORTINTERROR;
 				}
 			}
@@ -116,7 +122,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 				if (timeo < 0)
 				{
 					int errsv = errno ;
-					fprintf(stderr, LOGPREFIX "Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
+					IPSCAN_LOG( LOGPREFIX "Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
 					retval = PORTINTERROR;
 				}
 			}
@@ -144,13 +150,13 @@ int check_tcp_port(char * hostname, uint16_t port)
 				}
 
 				#ifdef DEBUG
-				fprintf(stderr, LOGPREFIX "found port %d returned conn = %d, errsv = %d(%s)\n",port, conn, errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "found port %d returned conn = %d, errsv = %d(%s)\n",port, conn, errsv, strerror(errsv));
 				#endif
 
 				// If we haven't found a matching returncode/errno then log this ....
 				if (PORTUNKNOWN == retval)
 				{
-					fprintf(stderr, LOGPREFIX "connect unexpected response, errno is : %d (%s) for host %s port %d\n", \
+					IPSCAN_LOG( LOGPREFIX "connect unexpected response, errno is : %d (%s) for host %s port %d\n", \
 							errsv, strerror(errsv), hostname, port);
 					retval = PORTUNEXPECTED;
 				}
@@ -158,7 +164,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 				cl = close(sock);
 				if (cl == -1)
 				{
-					fprintf(stderr, LOGPREFIX "close unexpected failure : %d (%s)\n", errno, strerror(errno));
+					IPSCAN_LOG( LOGPREFIX "close unexpected failure : %d (%s)\n", errno, strerror(errno));
 				}
 
 			}

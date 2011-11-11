@@ -20,6 +20,7 @@
 // ipscan_db.c version
 // 0.01 - initial version
 // 0.02 - added MySQL support
+// 0.03 - added syslog support
 
 #include "ipscan.h"
 //
@@ -43,6 +44,10 @@
 	#include <mysql.h>
 #endif
 
+// Logging with syslog requires additional include
+#if (LOGMODE == 1)
+	#include <syslog.h>
+#endif
 
 // String comparison
 #include <string.h>
@@ -77,7 +82,7 @@ extern struct rslt_struc resultsstruct[];
 		}
 
 		// otherwise blocked call will now return with error
-		fprintf(stderr, LOGPREFIX "write_db: busyHandler was called %d times, now exiting\n", previouscalls);
+		IPSCAN_LOG( LOGPREFIX "write_db: busyHandler was called %d times, now exiting\n", previouscalls);
 		return 0;
 	}
 	
@@ -87,9 +92,9 @@ extern struct rslt_struc resultsstruct[];
 		int i;
 		for(i=0; i<argc; i++)
 		{
-			fprintf(stderr, LOGPREFIX "%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+			IPSCAN_LOG( LOGPREFIX "%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
 		}
-		fprintf(stderr, LOGPREFIX "\n");
+		IPSCAN_LOG( LOGPREFIX "\n");
 		return 0;
 	}
 
@@ -135,13 +140,13 @@ extern struct rslt_struc resultsstruct[];
 
 		if ( (fstream = fopen(DBFILE, "r")) == NULL )
 		{
-			fprintf(stderr, LOGPREFIX  "write_db: Database file %s is non-existent, or unwriteable, creating ...\n", DBFILE);
+			IPSCAN_LOG( LOGPREFIX  "write_db: Database file %s is non-existent, or unwriteable, creating ...\n", DBFILE);
 			// Make directory with full (rwx) OWNER and partial (r-x) GRP/OTH privileges
 			mkrc = mkdir( DBDIR, (S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) );
 			errsv = errno ;
 			if (-1 == mkrc)
 			{
-				fprintf(stderr, LOGPREFIX  "write_db: Failed to mkdir %s reason %d (%s)\n", DBDIR, errsv, strerror(errsv) );
+				IPSCAN_LOG( LOGPREFIX  "write_db: Failed to mkdir %s reason %d (%s)\n", DBDIR, errsv, strerror(errsv) );
 			}
 			// At this point we can assume that the directory exists, if it doesn't then there's little we can do ...
 			system( SQLITE3BIN" "DBFILE" .quit" );
@@ -158,7 +163,7 @@ extern struct rslt_struc resultsstruct[];
 			rc = sqlite3_open( DBFILE, &db);
 			if (rc != SQLITE_OK)
 			{
-				fprintf(stderr, LOGPREFIX "write_db: Failed to open database at attempt %"PRIu16", reason : %s\n", attempt, sqlite3_errmsg(db));
+				IPSCAN_LOG( LOGPREFIX "write_db: Failed to open database at attempt %"PRIu16", reason : %s\n", attempt, sqlite3_errmsg(db));
 				sqlite3_close(db);
 			}
 			// Include PID in order that all processes don't use the same wait time
@@ -172,7 +177,7 @@ extern struct rslt_struc resultsstruct[];
 
 		if( rc != SQLITE_OK )
 		{
-			fprintf(stderr,  LOGPREFIX "write_db: Can't open database: %s\n", sqlite3_errmsg(db));
+			IPSCAN_LOG(  LOGPREFIX "write_db: Can't open database: %s\n", sqlite3_errmsg(db));
 			sqlite3_close(db);
 			return (1);
 		}
@@ -184,7 +189,7 @@ extern struct rslt_struc resultsstruct[];
 			rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS r1 (r1key INTEGER PRIMARY KEY, hostmsb INT8, hostlsb INT8, createdate INT8, session INT8, portnum INT8, portresult INT8);", callback, 0, &zErrMsg);
 			if( rc!=SQLITE_OK )
 			{
-				fprintf(stderr, LOGPREFIX "write_db: SQL table create error: %s\n", zErrMsg);
+				IPSCAN_LOG( LOGPREFIX "write_db: SQL table create error: %s\n", zErrMsg);
 				sqlite3_free(zErrMsg);
 				sqlite3_close(db);
 				return (3);
@@ -197,13 +202,13 @@ extern struct rslt_struc resultsstruct[];
 				{
 
 					#ifdef DBDEBUG
-					fprintf(stderr, LOGPREFIX "write_db: Query insert string is : %s", query);
+					IPSCAN_LOG( LOGPREFIX "write_db: Query insert string is : %s", query);
 					#endif
 
 					rc = sqlite3_exec(db, query, 0, 0, &zErrMsg);
 					if( rc!=SQLITE_OK )
 					{
-						fprintf(stderr, LOGPREFIX "write_db: SQL insert entry error: %s\n", zErrMsg);
+						IPSCAN_LOG( LOGPREFIX "write_db: SQL insert entry error: %s\n", zErrMsg);
 						sqlite3_free(zErrMsg);
 						sqlite3_close(db);
 						return (5);
@@ -211,13 +216,13 @@ extern struct rslt_struc resultsstruct[];
 					else
 					{
 					#ifdef DBDEBUG
-						fprintf(stderr, LOGPREFIX "write_db: SQL insert returned successfully\n");
+						IPSCAN_LOG( LOGPREFIX "write_db: SQL insert returned successfully\n");
 					#endif
 					}
 				}
 				else
 				{
-						fprintf(stderr, LOGPREFIX "write_db: Failed to create SQL query for insert\n");
+						IPSCAN_LOG( LOGPREFIX "write_db: Failed to create SQL query for insert\n");
 						sqlite3_close(db);
 						return (4);
 				}
@@ -259,7 +264,7 @@ extern struct rslt_struc resultsstruct[];
 		connection = mysql_init(NULL);
 		if (NULL == connection)
 		{
-			fprintf(stderr, LOGPREFIX "write_db: Failed to initialise MySQL\n");
+			IPSCAN_LOG( LOGPREFIX "write_db: Failed to initialise MySQL\n");
 			retval = 1;
 		}
 		else
@@ -274,8 +279,8 @@ extern struct rslt_struc resultsstruct[];
 				mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 				if (NULL == mysqlrc)
 				{
-					fprintf(stderr, LOGPREFIX "write_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
-					fprintf(stderr, LOGPREFIX "write_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+					IPSCAN_LOG( LOGPREFIX "write_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
+					IPSCAN_LOG( LOGPREFIX "write_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 					retval = 3;
 				}
 				else
@@ -284,7 +289,7 @@ extern struct rslt_struc resultsstruct[];
 					if (qrylen > 0)
 					{
 						#ifdef DBDEBUG
-						fprintf(stderr, LOGPREFIX "write_db: MySQL Query is : %s\n", query);
+						IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 						#endif
 						rc = mysql_real_query(connection, query, qrylen);
 						if (rc == 0)
@@ -293,7 +298,7 @@ extern struct rslt_struc resultsstruct[];
 							if (qrylen > 0)
 							{
 								#ifdef DBDEBUG
-								fprintf(stderr, LOGPREFIX "write_db: MySQL Query is : %s\n", query);
+								IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 								#endif
 								rc = mysql_real_query(connection, query, qrylen);
 								if (rc == 0)
@@ -302,34 +307,34 @@ extern struct rslt_struc resultsstruct[];
 								}
 								else
 								{
-									fprintf(stderr, LOGPREFIX "write_db: Failed to execute insert query %d (%s)\n",\
+									IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute insert query %d (%s)\n",\
 											mysql_errno(connection), mysql_error(connection) );
 									retval = 7;
 								}
 							}
 							else
 							{
-								fprintf(stderr, LOGPREFIX "write_db: Failed to create insert query\n");
+								IPSCAN_LOG( LOGPREFIX "write_db: Failed to create insert query\n");
 								retval = 8;
 							}
 						}
 						else
 						{
-							fprintf(stderr, LOGPREFIX "write_db: Failed to execute create_table query %d (%s)\n",\
+							IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute create_table query %d (%s)\n",\
 									mysql_errno(connection), mysql_error(connection) );
 							retval = 6;
 						}
 					}
 					else
 					{
-						fprintf(stderr, LOGPREFIX "write_db: Failed to create create_table query\n");
+						IPSCAN_LOG( LOGPREFIX "write_db: Failed to create create_table query\n");
 						retval = 5;
 					}
 				}
 			}
 			else
 			{
-				fprintf(stderr, LOGPREFIX "write_db: mysql_options() failed - check your my.cnf file\n");
+				IPSCAN_LOG( LOGPREFIX "write_db: mysql_options() failed - check your my.cnf file\n");
 				retval = 2;
 			}
 			// Tidy up
@@ -364,7 +369,7 @@ extern struct rslt_struc resultsstruct[];
 		}
 
 		// otherwise blocked call will now return with error
-		fprintf(stderr, LOGPREFIX "dump_db: busyHandler was called %d times, now exiting\n", previouscalls);
+		IPSCAN_LOG( LOGPREFIX "dump_db: busyHandler was called %d times, now exiting\n", previouscalls);
 		return 0;
 	}
 
@@ -412,7 +417,7 @@ extern struct rslt_struc resultsstruct[];
 			rc = sqlite3_open( DBFILE, &db);
 			if (rc != SQLITE_OK)
 			{
-				fprintf(stderr, LOGPREFIX "dump_db: Failed to open database at attempt %"PRIu16 ", reason : %s\n", attempt, sqlite3_errmsg(db));
+				IPSCAN_LOG( LOGPREFIX "dump_db: Failed to open database at attempt %"PRIu16 ", reason : %s\n", attempt, sqlite3_errmsg(db));
 				sqlite3_close(db);
 			}
 			// Include PID in order that all processes don't use the same wait time
@@ -426,7 +431,7 @@ extern struct rslt_struc resultsstruct[];
 
 		if( rc != SQLITE_OK )
 		{
-			fprintf(stderr, LOGPREFIX "dump_db: Can't open database: %s\n", sqlite3_errmsg(db));
+			IPSCAN_LOG( LOGPREFIX "dump_db: Can't open database: %s\n", sqlite3_errmsg(db));
 			sqlite3_close(db);
 			return (1);
 		}
@@ -442,12 +447,12 @@ extern struct rslt_struc resultsstruct[];
 				if (rc > 0)
 				{
 					#ifdef DBDEBUG
-					fprintf(stderr, LOGPREFIX "SQL Query is : %s\n", query);
+					IPSCAN_LOG( LOGPREFIX "SQL Query is : %s\n", query);
 					#endif
 					rc = sqlite3_exec(db, "PRAGMA SHOW_DATATYPES=ON", 0, 0, &zErrMsg);
 					if( rc!=SQLITE_OK )
 					{
-						fprintf(stderr, LOGPREFIX "dump_db: SQL pragma setting error: %s\n", zErrMsg);
+						IPSCAN_LOG( LOGPREFIX "dump_db: SQL pragma setting error: %s\n", zErrMsg);
 						sqlite3_free(zErrMsg);
 						sqlite3_close(db);
 						return (8);
@@ -458,7 +463,7 @@ extern struct rslt_struc resultsstruct[];
 						rc = sqlite3_exec(db, query, callbackresultsdumper, 0, &zErrMsg);
 						if( rc!=SQLITE_OK )
 						{
-							fprintf(stderr, LOGPREFIX "dump_db: SQL query db error: %s\n", zErrMsg);
+							IPSCAN_LOG( LOGPREFIX "dump_db: SQL query db error: %s\n", zErrMsg);
 							sqlite3_free(zErrMsg);
 							sqlite3_close(db);
 							return (7);
@@ -467,7 +472,7 @@ extern struct rslt_struc resultsstruct[];
 						{
 							printf(" -9999 ]\n");
 							#ifdef DBDEBUG
-							fprintf(stderr, LOGPREFIX "dump_db: SQL dump returned successfully\n");
+							IPSCAN_LOG( LOGPREFIX "dump_db: SQL dump returned successfully\n");
 							#endif
 						}
 
@@ -475,7 +480,7 @@ extern struct rslt_struc resultsstruct[];
 				}
 				else
 				{
-						fprintf(stderr, LOGPREFIX "dump_db: Failed to create SQL query for dump\n");
+						IPSCAN_LOG( LOGPREFIX "dump_db: Failed to create SQL query for dump\n");
 						sqlite3_close(db);
 						return (6);
 				}
@@ -504,7 +509,7 @@ extern struct rslt_struc resultsstruct[];
 		connection = mysql_init(NULL);
 		if (NULL == connection)
 		{
-			fprintf(stderr, LOGPREFIX "dump_db: Failed to initialise MySQL\n");
+			IPSCAN_LOG( LOGPREFIX "dump_db: Failed to initialise MySQL\n");
 			retval = 1;
 		}
 		else
@@ -519,8 +524,8 @@ extern struct rslt_struc resultsstruct[];
 				mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 				if (NULL == mysqlrc)
 				{
-					fprintf(stderr, LOGPREFIX "dump_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-					fprintf(stderr, LOGPREFIX "dump_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+					IPSCAN_LOG( LOGPREFIX "dump_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+					IPSCAN_LOG( LOGPREFIX "dump_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 					retval = 3;
 				}
 				else
@@ -532,7 +537,7 @@ extern struct rslt_struc resultsstruct[];
 					{
 
 						#ifdef DBDEBUG
-						fprintf(stderr, LOGPREFIX "dump_db: MySQL Query is : %s\n", query);
+						IPSCAN_LOG( LOGPREFIX "dump_db: MySQL Query is : %s\n", query);
 						#endif
 						rc = mysql_real_query(connection, query, qrylen);
 						if (0 == rc)
@@ -542,7 +547,7 @@ extern struct rslt_struc resultsstruct[];
 							{
 								num_fields = mysql_num_fields(result);
 								#ifdef DBDEBUG
-								fprintf(stderr, LOGPREFIX "dump_db: MySQL returned num_fields : %d\n", num_fields);
+								IPSCAN_LOG( LOGPREFIX "dump_db: MySQL returned num_fields : %d\n", num_fields);
 								#endif
 								printf("[ ");
 
@@ -558,24 +563,24 @@ extern struct rslt_struc resultsstruct[];
 								// Didn't get any results, so check if we should have got some
 								if (mysql_field_count(connection) == 0)
 								{
-									fprintf(stderr, LOGPREFIX "dump_db: suprisingly mysql_store_result() expected to return 0 fields\n");
+									IPSCAN_LOG( LOGPREFIX "dump_db: suprisingly mysql_store_result() expected to return 0 fields\n");
 								}
 								else
 								{
-									fprintf(stderr, LOGPREFIX "dump_db: mysql_store_result() error : %s\n", mysql_error(connection));
+									IPSCAN_LOG( LOGPREFIX "dump_db: mysql_store_result() error : %s\n", mysql_error(connection));
 									retval = 10;
 								}
 							}
 						}
 						else
 						{
-							fprintf(stderr, LOGPREFIX "dump_db: Failed to execute select query\n");
+							IPSCAN_LOG( LOGPREFIX "dump_db: Failed to execute select query\n");
 							retval = 5;
 						}
 					}
 					else
 					{
-						fprintf(stderr, LOGPREFIX "dump_db: Failed to create select query\n");
+						IPSCAN_LOG( LOGPREFIX "dump_db: Failed to create select query\n");
 						retval = 4;
 					}
 				}
@@ -584,7 +589,7 @@ extern struct rslt_struc resultsstruct[];
 			}
 			else
 			{
-				fprintf(stderr, LOGPREFIX "dump_db: mysql_options() failed - check your my.cnf file\n");
+				IPSCAN_LOG( LOGPREFIX "dump_db: mysql_options() failed - check your my.cnf file\n");
 				retval = 9;
 			}
 		}
@@ -616,7 +621,7 @@ extern struct rslt_struc resultsstruct[];
 		}
 
 		// otherwise blocked call will now return with error
-		fprintf(stderr, LOGPREFIX "summarise_db: busyHandler was called %d times, now exiting\n", previouscalls);
+		IPSCAN_LOG( LOGPREFIX "summarise_db: busyHandler was called %d times, now exiting\n", previouscalls);
 		return 0;
 	}
 
@@ -679,7 +684,7 @@ extern struct rslt_struc resultsstruct[];
 			rc = sqlite3_open( DBFILE, &db);
 			if (rc != SQLITE_OK)
 			{
-				fprintf(stderr, LOGPREFIX "summarise_db: Failed to open database at attempt %"PRIu16 ", reason : %s\n", attempt, sqlite3_errmsg(db));
+				IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to open database at attempt %"PRIu16 ", reason : %s\n", attempt, sqlite3_errmsg(db));
 				sqlite3_close(db);
 			}
 			// Include PID in order that all processes don't use the same wait time
@@ -693,7 +698,7 @@ extern struct rslt_struc resultsstruct[];
 
 		if( rc != SQLITE_OK)
 		{
-			fprintf(stderr, LOGPREFIX "summarise_db: Can't open database: %s\n", sqlite3_errmsg(db));
+			IPSCAN_LOG( LOGPREFIX "summarise_db: Can't open database: %s\n", sqlite3_errmsg(db));
 			sqlite3_close(db);
 			return (1);
 		}
@@ -708,12 +713,12 @@ extern struct rslt_struc resultsstruct[];
 				if (rc > 0)
 				{
 					#ifdef DBDEBUG
-					fprintf(stderr, LOGPREFIX "SQL Query is : %s\n", query);
+					IPSCAN_LOG( LOGPREFIX "SQL Query is : %s\n", query);
 					#endif
 					rc = sqlite3_exec(db, "PRAGMA SHOW_DATATYPES=ON", 0, 0, &zErrMsg);
 					if( rc!=SQLITE_OK )
 					{
-						fprintf(stderr, LOGPREFIX "summarise_db: SQL pragma setting error: %s\n", zErrMsg);
+						IPSCAN_LOG( LOGPREFIX "summarise_db: SQL pragma setting error: %s\n", zErrMsg);
 						sqlite3_free(zErrMsg);
 						sqlite3_close(db);
 						return (8);
@@ -725,7 +730,7 @@ extern struct rslt_struc resultsstruct[];
 						rc = sqlite3_exec(db, query, callbacksummarydumper, 0, &zErrMsg);
 						if( rc!=SQLITE_OK )
 						{
-							fprintf(stderr, LOGPREFIX "summarise_db: SQL query db error: %s\n", zErrMsg);
+							IPSCAN_LOG( LOGPREFIX "summarise_db: SQL query db error: %s\n", zErrMsg);
 							sqlite3_free(zErrMsg);
 							sqlite3_close(db);
 							return (7);
@@ -734,7 +739,7 @@ extern struct rslt_struc resultsstruct[];
 						{
 							printf("</table></p>\n");
 							#ifdef DBDEBUG
-							fprintf(stderr, LOGPREFIX "summarise_db: SQL dump returned successfully\n");
+							IPSCAN_LOG( LOGPREFIX "summarise_db: SQL dump returned successfully\n");
 							#endif
 						}
 
@@ -742,7 +747,7 @@ extern struct rslt_struc resultsstruct[];
 				}
 				else
 				{
-						fprintf(stderr, LOGPREFIX "summarise_db: Failed to create SQL query for dump\n");
+						IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to create SQL query for dump\n");
 						sqlite3_close(db);
 						return (6);
 				}
@@ -776,7 +781,7 @@ extern struct rslt_struc resultsstruct[];
 		connection = mysql_init(NULL);
 		if (NULL == connection)
 		{
-			fprintf(stderr, LOGPREFIX "summarise_db: Failed to initialise MySQL\n");
+			IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to initialise MySQL\n");
 			retval = 1;
 		}
 		else
@@ -791,8 +796,8 @@ extern struct rslt_struc resultsstruct[];
 				mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 				if (NULL == mysqlrc)
 				{
-					fprintf(stderr, LOGPREFIX "summarise_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-					fprintf(stderr, LOGPREFIX "summarise_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+					IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+					IPSCAN_LOG( LOGPREFIX "summarise_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 					retval = 3;
 				}
 				else
@@ -802,7 +807,7 @@ extern struct rslt_struc resultsstruct[];
 					if (qrylen > 0)
 					{
 						#ifdef DBDEBUG
-						fprintf(stderr, LOGPREFIX "summarise_db: MySQL Query is : %s\n", query);
+						IPSCAN_LOG( LOGPREFIX "summarise_db: MySQL Query is : %s\n", query);
 						#endif
 						rc = mysql_real_query(connection, query, qrylen);
 						if (0 == rc)
@@ -854,24 +859,24 @@ extern struct rslt_struc resultsstruct[];
 								// Didn't get any results, so check if we should have got some
 								if (mysql_field_count(connection) == 0)
 								{
-									fprintf(stderr, LOGPREFIX "summarise_db: suprisingly mysql_store_result() expected to return 0 fields\n");
+									IPSCAN_LOG( LOGPREFIX "summarise_db: suprisingly mysql_store_result() expected to return 0 fields\n");
 								}
 								else
 								{
-									fprintf(stderr, LOGPREFIX "summarise_db: mysql_store_result() error : %s\n", mysql_error(connection));
+									IPSCAN_LOG( LOGPREFIX "summarise_db: mysql_store_result() error : %s\n", mysql_error(connection));
 									retval = 10;
 								}
 							}
 						}
 						else
 						{
-							fprintf(stderr, LOGPREFIX "summarise_db: Failed to execute select query\n");
+							IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to execute select query\n");
 							retval = 5;
 						}
 					}
 					else
 					{
-						fprintf(stderr, LOGPREFIX "summarise_db: Failed to create select query\n");
+						IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to create select query\n");
 						retval = 4;
 					}
 
@@ -881,7 +886,7 @@ extern struct rslt_struc resultsstruct[];
 			}
 			else
 			{
-				fprintf(stderr, LOGPREFIX "summarise_db: mysql_options() failed - check your my.cnf file\n");
+				IPSCAN_LOG( LOGPREFIX "summarise_db: mysql_options() failed - check your my.cnf file\n");
 				retval = 9;
 			}
 		}

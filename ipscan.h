@@ -33,8 +33,18 @@
 	// #define DEBUG 1
 	// #define DBDEBUG 1
 
+	// Determine which logging target to use stderr (0) or syslog(1)
+	#define LOGMODE 0
+
+	// Create the appropriate logging macro
+	#if (LOGMODE == 0)
+		#define IPSCAN_LOG(...) fprintf(stderr, __VA_ARGS__ )
+	#else
+		#define IPSCAN_LOG(...) syslog(LOG_NOTICE, __VA_ARGS__ )
+	#endif
+
 	// ipscan Version
-	#define IPSCAN_VER "0.82"
+	#define IPSCAN_VER "0.83"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -58,6 +68,7 @@
 	// 0.80 include optional MySQL support which touches Makefile, ipscan.h and ipscan_db.c
 	// 0.81 added Microsoft RDP protocol, port 3389, to list of default ports
 	// 0.82 added/modified some Apple related ports
+	// 0.83 added support for syslog logging
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -149,7 +160,7 @@
 	// Must ensure MAXQUERIES exceeds NUMUSERDEFPORTS by sufficient amount!
 	#define NUMUSERDEFPORTS 4
 
-	// Logging prefix (goes into apache error_log)
+		// Logging prefix (goes into apache error_log or syslog)
 	#define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
 
 	// returncode which the cgi program returns on an unhandled error - check the apache error log in this case
