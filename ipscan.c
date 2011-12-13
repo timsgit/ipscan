@@ -21,6 +21,7 @@
 // 0.01 - first released version
 // 0.02 - additional DEBUG added for MySQL investigation
 // 0.03 - added syslog support
+// 0.04 - improved HTML (transition to styles, general compliance)
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -330,9 +331,9 @@ int main(void)
 			// Create the header
 			create_html_common_header();
 			// Now finish the header
-        		printf("<title>IPv6 Universal TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
-        		printf("</head>\n");
-		        printf("</html>\n");
+        		printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+        		printf("</HEAD>\n");
+		        printf("</HTML>\n");
 			IPSCAN_LOG( LOGPREFIX "HEAD request method, sending headers only\n");
 			exit(0);
 		}
@@ -603,17 +604,17 @@ int main(void)
 			// Create the header
 			create_html_common_header();
 			// Create main output
-			printf("<title>IPv6 TCP Port Scanner Text Browser Version %s</title>\n", IPSCAN_VER);
-			printf("</head>\n");
-			printf("<body>\n");
-			printf("<H3><font color=\"red\">IPv6 Universal TCP Port Scanner by Tim Chappell<font color=\"black\"></H3>\n");
-			printf("<p>Results for host : %s</p>\n\n", remoteaddrstring);
-			IPSCAN_LOG( LOGPREFIX "Beginning scan of IPv6 client : %s\n", remoteaddrstring);
-			printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", \
+			printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("</HEAD>\n");
+			printf("<BODY>\n");
+			printf("<H3 style=\"color:red\">IPv6 Universal TCP Port Scanner by Tim Chappell</H3>\n");
+			printf("<P>Results for host : %s</P>\n\n", remoteaddrstring);
+			IPSCAN_LOG( LOGPREFIX "Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
+			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
 					asctime(localtime(&starttime)), (numports * TIMEOUTSECS));
 
 			// Start of table
-			printf("<p><table border=\"1\" bordercolor=\"black\">\n");
+			printf("<TABLE border=\"1\">\n");
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex];
@@ -631,7 +632,7 @@ int main(void)
 				}
 
 				// Start of a new row, so insert the appropriate tag if required
-				if (position ==0) printf("<tr>");
+				if (position ==0) printf("<TR>");
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
@@ -639,24 +640,24 @@ int main(void)
 				if (result == resultsstruct[i].returnval)
 				{
 					portsstats[result]++ ;
-					printf("<TD bgcolor=\"%s\">Port %d = %s</TD>", resultsstruct[i].colour, port, resultsstruct[i].label);
+					printf("<TD style=\"background-color:%s\">Port %d = %s</TD>", resultsstruct[i].colour, port, resultsstruct[i].label);
 				}
 				else
 				{
-					printf("<TD bgcolor=\"white\">Port %d = BAD</TD>",port);
+					printf("<TD style=\"background-color:white\">Port %d = BAD</TD>",port);
 					IPSCAN_LOG( LOGPREFIX "WARNING: Unknown result for port %d is %d\n",port,result);
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
 
 				// Get ready for the next cell, add the end of row tag if required
 				position++;
-				if (position >= TXTMAXCOLS || last == 1) { printf("</tr>\n"); position=0; };
+				if (position >= TXTMAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
 
 			}
-			printf("</table></p>\n");
+			printf("</TABLE>\n");
 
 			starttime = time(0);
-			printf("<p>Scan of %d ports complete at: %s.</p>\n", numports, asctime(localtime(&starttime)));
+			printf("<P>Scan of %d ports complete at: %s.</P>\n", numports, asctime(localtime(&starttime)));
 
 			// Create results key table
 			create_results_key_table(remoteaddrstring, starttime);
@@ -727,9 +728,9 @@ int main(void)
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
 			create_html_common_header();
-			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
-			printf("</head>\n");
-			printf("<body>\n");
+			printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("</HEAD>\n");
+			printf("<BODY>\n");
 
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
@@ -833,10 +834,10 @@ int main(void)
 		else if (numqueries == 1 && magic == MAGICSUMMARY )
 		{
 			create_html_common_header();
-			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
-			printf("</head>\n");
-			printf("<body>\n");
-			printf("<H3><font color=\"red\">IPv6 Universal TCP Port Scanner by Tim Chappell<font color=\"black\"></H3>\n");
+			printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("</HEAD>\n");
+			printf("<BODY>\n");
+			printf("<H3 style=\"color:red\">IPv6 Universal TCP Port Scanner by Tim Chappell</H3>\n");
 			printf("<P>Summary of Scans:</P>\n");
 			// Output the scan summary
 			rc = summarise_db();
@@ -850,10 +851,10 @@ int main(void)
 		{
 			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
 			create_html_common_header();
-			printf("<title>IPv6 TCP Port Scanner Version %s</title>\n", IPSCAN_VER);
-			printf("</head>\n");
-			printf("<body>\n");
-			printf("<b>Nothing to report.</p>\n");
+			printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("</HEAD>\n");
+			printf("<BODY>\n");
+			printf("<P>Nothing to report.</P>\n");
 			// Finish the output
 			create_html_body_end();
 			IPSCAN_LOG( LOGPREFIX "Something untoward happened, numqueries = %d, magic = %"PRId64"\n", numqueries, magic);

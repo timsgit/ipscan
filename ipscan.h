@@ -44,7 +44,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.84"
+	#define IPSCAN_VER "0.85"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -70,6 +70,7 @@
 	// 0.82 added/modified some Apple related ports
 	// 0.83 added support for syslog logging
 	// 0.84 renumbered default ports so they are monotonic
+	// 0.85 tidied up HTML to make Opera happy
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"

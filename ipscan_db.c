@@ -21,6 +21,7 @@
 // 0.01 - initial version
 // 0.02 - added MySQL support
 // 0.03 - added syslog support
+// 0.04 - improved HTML (transition to styles, general compliance)
 
 #include "ipscan.h"
 //
@@ -655,10 +656,10 @@ extern struct rslt_struc resultsstruct[];
 
 		if (inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN) != NULL)
 		{
-			printf("<tr align=\"center\">\n");
-			printf("<td width=\"50%%\">%s</td>\n", hostname);
-			printf("<td width=\"50%%\">%s</td>\n", asctime(localtime(&createdate)));
-			printf("</tr>\n");
+			printf("<TR style=\"text-align:center\">\n");
+			printf("<TD width=\"50%%\">%s</TD>", hostname);
+			printf("<TD width=\"50%%\">%s</TD>\n", asctime(localtime(&createdate)));
+			printf("</TR>\n");
 		}
 
 		return(0);
@@ -725,8 +726,8 @@ extern struct rslt_struc resultsstruct[];
 					}
 					else
 					{
-						printf("<p><table border=\"1\" bordercolor=\"black\">\n");
-						printf("<tr align=\"center\"><td width=\"50%%\">Host scanned:</td><td width=\"50%%\">Scan begin time:</td></tr>\n");
+						printf("<TABLE border=\"1\">\n");
+						printf("<TR style=\"text-align:center\"><TD width=\"50%%\">Host scanned:</TD><TD width=\"50%%\">Scan begin time:</TD></TR>\n");
 						rc = sqlite3_exec(db, query, callbacksummarydumper, 0, &zErrMsg);
 						if( rc!=SQLITE_OK )
 						{
@@ -737,7 +738,7 @@ extern struct rslt_struc resultsstruct[];
 						}
 						else
 						{
-							printf("</table></p>\n");
+							printf("</TABLE>\n");
 							#ifdef DBDEBUG
 							IPSCAN_LOG( LOGPREFIX "summarise_db: SQL dump returned successfully\n");
 							#endif
@@ -816,8 +817,8 @@ extern struct rslt_struc resultsstruct[];
 							if (result)
 							{
 
-								printf("<p><table border=\"1\" bordercolor=\"black\">\n");
-								printf("<tr align=\"center\"><td width=\"50%%\">Host scanned:</td><td width=\"50%%\">Scan begin time:</td></tr>\n");
+								printf("<TABLE border=\"1\">\n");
+								printf("<TR style=\"text-align:center\"><TD width=\"50%%\">Host scanned:</TD><TD width=\"50%%\">Scan begin time:</TD></TR>\n");
 
 								while ((row = mysql_fetch_row(result)))
 								{
@@ -843,14 +844,14 @@ extern struct rslt_struc resultsstruct[];
 
 									if (inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN) != NULL)
 									{
-										printf("<tr align=\"center\">\n");
-										printf("<td width=\"50%%\">%s</td>\n", hostname);
-										printf("<td width=\"50%%\">%s</td>\n", asctime(localtime(&createdate)));
-										printf("</tr>\n");
+										printf("<TR style=\"text-align:center\">\n");
+										printf("<TD width=\"50%%\">%s</TD>", hostname);
+										printf("<TD width=\"50%%\">%s</TD>\n", asctime(localtime(&createdate)));
+										printf("</TR>\n");
 									}
 								}
 
-								printf("</table></p>\n");
+								printf("</TABLE>\n");
 
 								mysql_free_result(result);
 							}
@@ -859,7 +860,7 @@ extern struct rslt_struc resultsstruct[];
 								// Didn't get any results, so check if we should have got some
 								if (mysql_field_count(connection) == 0)
 								{
-									IPSCAN_LOG( LOGPREFIX "summarise_db: suprisingly mysql_store_result() expected to return 0 fields\n");
+									IPSCAN_LOG( LOGPREFIX "summarise_db: surprisingly mysql_store_result() expected to return 0 fields\n");
 								}
 								else
 								{
