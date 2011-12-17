@@ -32,6 +32,7 @@
 	// DEBUG build options - enabling these will result in copious amounts of information
 	// #define DEBUG 1
 	// #define DBDEBUG 1
+	// #define PINGDEBUG 1
 
 	// Determine which logging target to use stderr (0) or syslog(1)
 	#define LOGMODE 0
@@ -44,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.85"
+	#define IPSCAN_VER "0.86"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -71,6 +72,7 @@
 	// 0.83 added support for syslog logging
 	// 0.84 renumbered default ports so they are monotonic
 	// 0.85 tidied up HTML to make Opera happy
+	// 0.86 added ICMPv6 ping
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -212,6 +214,16 @@
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
 	#define JSONFETCHEVERY 4
 
+	// ICMPv6 ECHO REQUEST packet size - larger than 64 byte minimum
+	#define ICMPV6_PACKET_SIZE 128
+
+	// Size to be allocated for transmit/receive buffer
+	#define ICMPV6_PACKET_BUFFER_SIZE 2048
+
+	// Protocol mappings (stored in database)
+	#define IPSCAN_PROTO_TCP (0<<16)
+	#define IPSCAN_PROTO_ICMPV6 (1<<16)
+
 	// Mapping for connection attempt results
 	// To add a new entry first insert a new internal state in the PORTSTATE enumeration and then add a
 	// matching entry in the results structure in ipscan.c
@@ -230,6 +242,8 @@
 		PORTNOROUTE,
 		PORTPKTTOOBIG,
 		PORTPARAMPROB,
+		ECHONOREPLY,
+		ECHOREPLY,
 		/* Unexpected and Unknown error response cases, do NOT change */
 		PORTUNEXPECTED,
 		PORTUNKNOWN,

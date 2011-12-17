@@ -22,6 +22,7 @@
 // 0.02 - additional DEBUG added for MySQL investigation
 // 0.03 - added syslog support
 // 0.04 - improved HTML (transition to styles, general compliance)
+// 0.05 - addition of ping functionality
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -58,6 +59,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int summarise_db(void);
 int check_tcp_port(char * hostname, uint16_t port);
+int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session);
 void create_html_common_header(void);
 void create_json_header(void);
 void create_results_key_table(char * hostname, time_t timestamp);
@@ -71,24 +73,26 @@ void create_html_form(uint16_t numports, uint16_t *portlist);
 // structure holding the potential results table - entries MUST be in montonically increasing enumerated returnval order
 struct rslt_struc resultsstruct[] =
 {
-	/* returnval,		connrc,	conn_errno		TEXT lbl	TEXT col	Description/User feedback	*/
-	{ PORTOPEN, 		0, 		0,	 			"OPEN", 	"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-	{ PORTABORT, 		-1, 	ECONNABORTED, 	"ABRT", 	"yellow",	"An abort indication was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-	{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 	"yellow",	"A refused indication (TCP RST/ACK or ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-	{ PORTCRESET, 		-1, 	ECONNRESET, 	"CRST", 	"yellow",	"A connection reset request was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-	{ PORTNRESET, 		-1, 	ENETRESET, 		"NRST", 	"yellow",	"A network reset request was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-	{ PORTINPROGRESS, 	-1, 	EINPROGRESS, 	"STLTH", 	"green",	"No response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
-	{ PORTPROHIBITED, 	-1, 	EACCES, 		"PHBTD", 	"yellow",	"An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-	{ PORTUNREACHABLE, 	-1, 	ENETUNREACH, 	"NUNRCH", 	"yellow",	"An unreachable response (ICMPv6 type 1 code 0) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-	{ PORTNOROUTE, 		-1, 	EHOSTUNREACH, 	"HUNRCH", 	"yellow",	"A No route to host response (ICMPv6 type 1 code 3 or ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-	{ PORTPKTTOOBIG, 	-1, 	EMSGSIZE, 		"TOOBIG", 	"yellow",	"A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-	{ PORTPARAMPROB, 	-1, 	EPROTO, 		"PRMPRB", 	"yellow",	"A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	/* returnval,		connrc,	conn_errno		TEXT lbl			TEXT col	Description/User feedback	*/
+	{ PORTOPEN, 		0, 		0,	 			"OPEN", 			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
+	{ PORTABORT, 		-1, 	ECONNABORTED, 	"ABRT", 			"yellow",	"An abort indication was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 			"yellow",	"A refused indication (TCP RST/ACK or ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ PORTCRESET, 		-1, 	ECONNRESET, 	"CRST", 			"yellow",	"A connection reset request was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ PORTNRESET, 		-1, 	ENETRESET, 		"NRST", 			"yellow",	"A network reset request was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ PORTINPROGRESS, 	-1, 	EINPROGRESS, 	"STLTH", 			"green",	"No response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
+	{ PORTPROHIBITED, 	-1, 	EACCES, 		"PHBTD", 			"yellow",	"An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ PORTUNREACHABLE, 	-1, 	ENETUNREACH, 	"NUNRCH", 			"yellow",	"An unreachable response (ICMPv6 type 1 code 0) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ PORTNOROUTE, 		-1, 	EHOSTUNREACH, 	"HUNRCH", 			"yellow",	"A No route to host response (ICMPv6 type 1 code 3 or ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ PORTPKTTOOBIG, 	-1, 	EMSGSIZE, 		"TOOBIG", 			"yellow",	"A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ PORTPARAMPROB, 	-1, 	EPROTO, 		"PRMPRB", 			"yellow",	"A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+	{ ECHONOREPLY, 		-96, 	-96,	 		"ECHO NO REPLY",	"green",	"No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
+	{ ECHOREPLY, 		-97, 	-97,	 		"ECHO REPLY", 		"yellow",	"An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
 	/* Unexpected and unknown error response cases, do NOT change */
-	{ PORTUNEXPECTED,	-98,	-98,			"UNXPCT",	"white",	"An unexpected response was received to the connect attempt."},
-	{ PORTUNKNOWN, 		-99,	-99, 			"UNKWN", 	"white",	"An unknown error response was received, or the port is yet to be tested."},
-	{ PORTINTERROR,		-100,	-100,			"INTERR",	"white",	"An internal error occurred."},
+	{ PORTUNEXPECTED,	-98,	-98,			"UNXPCT",			"white",	"An unexpected response was received to the connect attempt."},
+	{ PORTUNKNOWN, 		-99,	-99, 			"UNKWN", 			"white",	"An unknown error response was received, or the port is yet to be tested."},
+	{ PORTINTERROR,		-100,	-100,			"INTERR",			"white",	"An internal error occurred."},
 	/* End of list marker, do NOT change */
-	{ PORTEOL,			-101,	-101,			"EOL",		"black",	"End of list marker."}
+	{ PORTEOL,			-101,	-101,			"EOL",				"black",	"End of list marker."}
 };
 
 int main(void)
@@ -613,6 +617,23 @@ int main(void)
 			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
 					asctime(localtime(&starttime)), (numports * TIMEOUTSECS));
 
+			result = check_icmpv6_echoresponse(remoteaddrstring, starttime, session);
+			portsstats[result]++ ;
+
+			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), result);
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "WARNING : write_db for ping result returned : %d\n", rc);
+			}
+
+			printf("<TABLE border=\"1\">\n");
+			printf("<TR style=\"text-align:left\">\n");
+			printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">%s</TD>\n",resultsstruct[result].colour,resultsstruct[result].label);
+			printf("</TR>\n");
+			printf("</TABLE>\n");
+
+			printf("<P> </P>\n");
+
 			// Start of table
 			printf("<TABLE border=\"1\">\n");
 			for (portindex= 0; portindex < numports ; portindex++)
@@ -625,7 +646,7 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "INFO: port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
 				#endif
 
-				rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, port, result );
+				rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_TCP), result );
 				if (rc != 0)
 				{
 					IPSCAN_LOG( LOGPREFIX "WARNING : write_db returned %d\n", rc);
@@ -732,6 +753,17 @@ int main(void)
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
 
+			result = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession);
+			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d\n",remoteaddrstring, result);
+			portsstats[result]++ ;
+			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), result);
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "write_db for ping result returned : %d\n", rc);
+				create_html_body_end();
+				exit(CHECKTHELOGRC);
+			}
+
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex];
@@ -753,7 +785,7 @@ int main(void)
 				//
 				// Put result into database:
 				//
-				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, port, result);
+				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_TCP), result);
 				if (rc != 0)
 				{
 					IPSCAN_LOG( LOGPREFIX "write_db inside scan routine returned : %d\n", rc);

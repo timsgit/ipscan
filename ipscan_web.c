@@ -20,6 +20,7 @@
 // ipscan_web.c version
 // 0.01 - initial version
 // 0.02 - improved HTML (transition to styles, general compliance)
+// 0.03 - addition of ping functionality
 
 #include "ipscan.h"
 
@@ -77,18 +78,20 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 			MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
 	// create a prefilled array containing the list of ports to be tested
 	printf("var portlist = [");
+	printf(" %d", (0+IPSCAN_PROTO_ICMPV6));
 	for (portindex=0; portindex<numports; portindex++)
 	{
 		port=portlist[portindex];
-		if (portindex == 0) printf(" %d", port); else printf(" ,%d", port);
+		printf(" ,%d", port);
 	}
 	printf(" ];\n");
 	// create a prefilled array containing the testing state of each port to be tested, defaults to PORTUNKNOWN
 	printf("var state = [");
+	printf(" %d", PORTUNKNOWN);
 	for (portindex=0; portindex<numports; portindex++)
 	{
 		port=portlist[portindex];
-		if (portindex == 0) printf(" %d", PORTUNKNOWN); else printf(" ,%d", PORTUNKNOWN);
+		printf(" ,%d", PORTUNKNOWN);
 	}
 	printf(" ];\n");
 	// create a prefilled array containing the potential states returned for each port
@@ -156,7 +159,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("++fetches;\n");
 	printf("updateurl = \""DIRPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches;\n", session,\
 			(uint32_t)timestamp,reconquery);
-	printf("if (fetches >%d)\n",(int)( (4 + (numports*TIMEOUTSECS) / JSONFETCHEVERY )) );
+	printf("if (fetches >%d)\n",(int)( (6 + (numports*TIMEOUTSECS) / JSONFETCHEVERY )) );
 	printf("{\n");
 	printf("	window.clearInterval(myInterval);\n");
 	printf("	lastupdate = 1;\n");
@@ -169,7 +172,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("	if (request.readyState == 4 && request.status == 200)\n");
 	printf("	{\n");
 	printf(" 		var lateststate = eval( '(' + request.responseText + ')' );\n");
-	printf("		if (lateststate.length > 1);\n");
+	printf("		if (lateststate.length > 1)\n");
 	printf("		{\n");
 	// if we've received a complete set of results for the ports under test then stop the periodic tasks
 	printf("			if (lateststate.length > portlist.length)\n");
@@ -182,17 +185,24 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("				state[i] = lateststate[i];\n");
 	printf("			}\n");
 	printf("		}\n");
-	printf("		for (i = 0; i < %d ; i++)\n", numports);
+	printf("		for (i = 0; i <= %d ; i++)\n", numports);
 	printf("		{\n");
 	printf("			var textupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].label);
 	printf("			var colourupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].colour);
-	printf("			var elemid = \"port\" + portlist[i];\n");
+	printf("			var elemid = \"pingstate\";\n");
+	printf("			if (i > 0)\n");
+	printf("			{\n");
+	printf("				elemid = \"port\" + portlist[i];\n");
+	printf("			}\n");
 	// find a matching return value and select the appropriate label and colour code
 	printf("			for (j = 0; j < retvals.length; j++)\n");
 	printf("			{\n");
 	printf("				if (retvals[j] == state[i])\n");
 	printf("				{\n");
 	printf("					textupdate = \"Port \" + portlist[i] + \" = \" + labels[j];\n");
+	// ICMPv6 PING case only requires the port status to be returned
+	printf("					if (i==0) textupdate = labels[j];\n");
+	// Colour setting
 	printf("					colourupdate = colours[j];\n");
 	printf("				}\n");
 	printf("			}\n");
@@ -219,9 +229,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("} // end function update\n");
 	printf("// end hiding contents from old browsers -->\n");
 	printf("</SCRIPT>\n");
-
 	printf("</HEAD>\n");
-
 }
 
 
@@ -278,8 +286,16 @@ void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint1
 
 	printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", asctime(localtime(&timestamp)), numports);
 
+	printf("<TABLE border=\"1\">\n");
+	printf("<TR style=\"text-align:left\">\n");
+	printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\" id=\"pingstate\">%s</TD>\n",resultsstruct[PORTUNKNOWN].colour,resultsstruct[PORTUNKNOWN].label);
+	printf("</TR>\n");
+	printf("</TABLE>\n");
+
+	printf("<P> </P>\n");
+
 	// Start of table
-	printf("<TABLE border=\"4\">\n");
+	printf("<TABLE border=\"1\">\n");
 
 	for (portindex= 0; portindex < numports ; portindex++)
 	{

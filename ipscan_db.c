@@ -22,6 +22,7 @@
 // 0.02 - added MySQL support
 // 0.03 - added syslog support
 // 0.04 - improved HTML (transition to styles, general compliance)
+// 0.05 - addition of ping functionality (doc tidyup only)
 
 #include "ipscan.h"
 //
@@ -113,29 +114,21 @@ extern struct rslt_struc resultsstruct[];
 		rc = SQLITE_ERROR;
 
 		// ROWID HOSTADDRESS DATE TIME SESSIONID PORT RESULT
-
-		// ROWID INT8
-		// HOSTADDRESS MSB INT8
-		//	       LSB INT8
-		// DATE-TIME INT8
-		// SESSIONID ??
 		//
-		// PORT INT8
-		//		16-bits Port number (0-65535)
-		//		16-bits Protocol (TCP only at present)
-		//		32-bits Reserved
-		// RESULT INT8
-
-		// INSERT INTO t1 VALUES(NULL,123);
-		// is logically equivalent to saying:
-
-		// INSERT INTO t1 VALUES((SELECT max(a) FROM t1)+1,123);
-
-		// There is a function named sqlite3_last_insert_rowid() which will return
-		// the integer key for the most recent insert operation.
-
-		// SELECT x FROM t1 WHERE a = b ORDER BY x;
-		// --result 1 2 3
+		// ROWID           INT8
+		//
+		// HOSTADDRESS MSB INT8
+		//	           LSB INT8
+		// DATE-TIME       INT8
+		//
+		// SESSIONID       INT8
+		//
+		// PORT            INT8
+		//		           [15:0]  16-bits Port number (0-65535)
+		//		           [31:16] 16-bits Protocol
+		//		           [63:32] 32-bits Reserved (0)
+		//
+		// RESULT          INT8
 
 		FILE *fstream;
 
@@ -244,16 +237,21 @@ extern struct rslt_struc resultsstruct[];
 	{
 		// ID HOSTADDRESS DATE TIME SESSIONID PORT RESULT
 
-		// ID              INT8
-		// HOSTADDRESS MSB INT8
-		//	           LSB INT8
-		// DATE-TIME       INT8
-		// SESSIONID       INT8
-		// PORT INT8
-		//				16-bits Port number (0-65535)
-		//				16-bits Protocol (TCP only at present)
-		//				32-bits Reserved
-		// RESULT INT8
+		// ID                 BIGINT UNSIGNED
+		//
+		// HOSTADDRESS MSB    BIGINT UNSIGNED
+		//	           LSB    BIGINT UNSIGNED
+		//
+		// DATE-TIME          BIGINT UNSIGNED
+		//
+		// SESSIONID          BIGINT UNSIGNED
+		//
+		// PORT               BIGINT UNSIGNED
+		//				      [15:0]  16-bits Port number (0-65535)
+		//				      [31:16] 16-bits Protocol
+		//				      [63:32] 32-bits Reserved (0)
+		//
+		// RESULT             BIGINT UNSIGNED
 
 		int rc;
 		unsigned int qrylen;

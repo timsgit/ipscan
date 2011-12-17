@@ -20,6 +20,7 @@
 # Makefile version
 # 0.01 - initial version
 # 0.02 - added MySQL support
+# 0.03 - addition of ping functionality (suid bit set)
 
 # General build variables, including reference to the SQLITE3 library
 SHELL=/bin/sh
@@ -104,6 +105,8 @@ $(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
 install : $(TXTTARGET) $(JSTARGET)
 	cp $(TXTTARGET) $(TARGETDIR)
 	cp $(JSTARGET) $(TARGETDIR)
+	chmod 4555 $(TARGETDIR)/$(TXTTARGET)
+	chmod 4555 $(TARGETDIR)/$(JSTARGET)
 	
 # Rule to clean the source directory	
 .PHONY: clean
