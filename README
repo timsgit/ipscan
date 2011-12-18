@@ -68,24 +68,22 @@ Steps:
 	   Bye
 	   
 	5. make && make install
-           Note: the latest version requires suid permission on the executables since ping functionality needs
-                 a raw socket.
 	
-        6. make sure that the URL path directory (which may well be accessed via an Apache alias) 
-           is enabled to execute cgi:
+	6. make sure that the URL path directory (which may well be accessed via an Apache alias) 
+       is enabled to execute cgi:
 	
 	   ScriptAlias /cgi-bin6/ "/srv/www/cgi-bin6/"
-           <Directory "/srv/www/cgi-bin6">
-             AllowOverride None
-             Options +ExecCGI -Includes
-             Order allow,deny
-             Allow from 2000::/3
-           </Directory>
+       <Directory "/srv/www/cgi-bin6">
+          AllowOverride None
+          Options +ExecCGI -Includes
+          Order allow,deny
+          Allow from 2000::/3
+       </Directory>
 	
-	6. Browse from a machine that you want testing towards your servers' IPv6 address, e.g.
+	7. Browse from a machine that you want testing towards your servers' IPv6 address, e.g.
 		w3m http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi  
 
-	7. Check the apache access and error logs for messages. ipscan will place summary messages in the error log
+	8. Check the apache access and error logs for messages. ipscan will place summary messages in the error log
            for all scans.
 	
 For those considering providing ipscan access on the public internet consider adding a landing page which will check for host IP address suitability prior to allowing access to the cgi script(s) - most (all?) search engine spiders currently only use IPv4. 

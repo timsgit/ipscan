@@ -73,6 +73,7 @@
 	// 0.84 renumbered default ports so they are monotonic
 	// 0.85 tidied up HTML to make Opera happy
 	// 0.86 added ICMPv6 ping
+	// 0.87 tidied ipscan_checks
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
