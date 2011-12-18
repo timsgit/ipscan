@@ -39,25 +39,27 @@
 // IPv6 address conversion
 #include <arpa/inet.h>
 
-// Other IPv6 related
-#include <netinet/ip6.h>
-#include <netinet/icmp6.h>
-
 // String comparison
 #include <string.h>
-
-//Poll support
-#include <poll.h>
 
 // Logging with syslog requires additional include
 #if (LOGMODE == 1)
 	#include <syslog.h>
 #endif
 
-#define ICMP6DATAOFFSET sizeof(struct icmp6_hdr)
-
 // Include resultsstruct
 extern struct rslt_struc resultsstruct[];
+
+// Other IPv6 related
+#include <netinet/ip6.h>
+#include <netinet/icmp6.h>
+
+//Poll support
+#include <poll.h>
+
+// Define offset into ICMPv6 packet where user-defined data resides
+#define ICMP6DATAOFFSET sizeof(struct icmp6_hdr)
+
 
 //
 // Send an ICMPv6 ECHO-REQUEST and see whether we receive an ECHO-REPLY in response
@@ -354,7 +356,9 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		}
 		else if (rc == 0)
 		{
+			#ifdef PINGDEBUG
 			IPSCAN_LOG( LOGPREFIX "RESTART: poll returned 0 results\n");
+			#endif
 			continue;
 		}
 
@@ -364,7 +368,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 		if ( (pollfiledesc[0].revents & POLLIN) != POLLIN)
 		{
-			IPSCAN_LOG( LOGPREFIX "RESTART: failed to find POLLIN\n");
+			IPSCAN_LOG( LOGPREFIX "RESTART: poll returned but failed to find POLLIN set: %d\n",pollfiledesc[0].revents);
 			continue;
 		}
 

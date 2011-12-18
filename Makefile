@@ -71,7 +71,8 @@ INCLUDES+=$(shell mysql_config --include)
 endif
 
 # Concatenate the necessary parameters for the two targets
-CMNPARAMS=-DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" -DDIRPATH=\"$(URLPATH)\" -DSQLITE3BIN=\"$(SQLITE3BIN)\" -DDBTYPE=$(DBTYPE)
+CMNPARAMS=-DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
+CMNPARAMS+= -DDIRPATH=\"$(URLPATH)\" -DSQLITE3BIN=\"$(SQLITE3BIN)\" -DDBTYPE=$(DBTYPE)
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 $(CMNPARAMS)
 
@@ -101,6 +102,7 @@ $(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
 	$(CC) $(JSPARAMS) -o $(JSTARGET) $(INCLUDES) $(LIBPATHS) $(LIBS) $(JSOBJS)
 
 # Rules to copy the built objects to the target installation directory
+# optionally set setuid bit on targets if required
 .PHONY: install
 install : $(TXTTARGET) $(JSTARGET)
 	cp $(TXTTARGET) $(TARGETDIR)

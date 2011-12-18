@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.87"
+	#define IPSCAN_VER "0.88"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -74,6 +74,7 @@
 	// 0.85 tidied up HTML to make Opera happy
 	// 0.86 added ICMPv6 ping
 	// 0.87 tidied ipscan_checks
+	// 0.88 ping logging improvements
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -215,7 +216,8 @@
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
 	#define JSONFETCHEVERY 4
 
-	// ICMPv6 ECHO REQUEST packet size - larger than 64 byte minimum
+	// ICMPv6 ECHO REQUEST packet size - suggest larger than 64 byte minimum is sensible, but as a minimum
+	// needs to support magic string insertion anyway
 	#define ICMPV6_PACKET_SIZE 128
 
 	// Size to be allocated for transmit/receive buffer

@@ -617,6 +617,7 @@ int main(void)
 			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
 					asctime(localtime(&starttime)), (numports * TIMEOUTSECS));
 
+			// Ping the remote host and store the result ...
 			result = check_icmpv6_echoresponse(remoteaddrstring, starttime, session);
 			portsstats[result]++ ;
 
@@ -631,7 +632,6 @@ int main(void)
 			printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">%s</TD>\n",resultsstruct[result].colour,resultsstruct[result].label);
 			printf("</TR>\n");
 			printf("</TABLE>\n");
-
 			printf("<P> </P>\n");
 
 			// Start of table
@@ -754,7 +754,9 @@ int main(void)
 			printf("<BODY>\n");
 
 			result = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession);
+			#ifdef PINGDEBUG
 			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d\n",remoteaddrstring, result);
+			#endif
 			portsstats[result]++ ;
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), result);
 			if (rc != 0)
