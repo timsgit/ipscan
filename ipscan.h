@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.88"
+	#define IPSCAN_VER "0.89"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -75,6 +75,7 @@
 	// 0.86 added ICMPv6 ping
 	// 0.87 tidied ipscan_checks
 	// 0.88 ping logging improvements
+	// 0.89 further logging improvements for ICMPv6 responses
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"

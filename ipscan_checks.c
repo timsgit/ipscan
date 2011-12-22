@@ -112,6 +112,8 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	unsigned int txseqno = 14872; // MAGIC number - assume no reason to start at 1?
 	unsigned int rxseqno;
 
+	unsigned int rxicmp6_type, rxicmp6_code;
+
 	bzero(&hints, sizeof(hints));
 	hints.ai_family = AF_INET6;
 	hints.ai_flags = AI_CANONNAME;
@@ -436,26 +438,33 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				continue;
 			}
 
+			// Extract ICMPv6 type and code for checking and reporting
+			rxicmp6hdr_ptr = (struct icmp6_hdr *)rxpacket;
+			rxicmp6_type = rxicmp6hdr_ptr->icmp6_type;
+			rxicmp6_code = rxicmp6hdr_ptr->icmp6_code;
+			// Extract sequence number and ID
+			rxseqno = htons(rxicmp6hdr_ptr->icmp6_seq);
+			rxid = htons(rxicmp6hdr_ptr->icmp6_id);
+
 			// Check whether our tx destination equals our rx source
 			if (IN6_ARE_ADDR_EQUAL(&source,&destination)==0)
 			{
+				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was %d ICMP6_CODE was %d\n", rxicmp6_type, rxicmp6_code);
 				IPSCAN_LOG( LOGPREFIX "RESTART: address mismatch\n");
 				continue;
 			}
 
-			rxicmp6hdr_ptr = (struct icmp6_hdr *)rxpacket;
-
 			// Check what type of ICMPv6 packet we received and handle appropriately ...
-			if (rxicmp6hdr_ptr->icmp6_type == ICMP6_ECHO_REPLY)
+			if (rxicmp6_type == ICMP6_ECHO_REPLY)
 			{
 				#ifdef PINGDEBUG
-				IPSCAN_LOG( LOGPREFIX "Received an ICMP6_ECHO_REPLY\n");
+				IPSCAN_LOG( LOGPREFIX "Received an ICMP6_ECHO_REPLY, with code %d\n", rxicmp6_code);
 				#endif
 			}
-			else if ( rxicmp6hdr_ptr->icmp6_type == ICMP6_DST_UNREACH )
+			else if ( rxicmp6_type == ICMP6_DST_UNREACH )
 			{
-				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was DST_UNREACH, with code %d\n", rxicmp6hdr_ptr->icmp6_code);
-				switch ( rxicmp6hdr_ptr->icmp6_code )
+				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was DST_UNREACH, with code %d\n", rxicmp6_code);
+				switch ( rxicmp6_code )
 				{
 				case ICMP6_DST_UNREACH_NOROUTE:
 					retval = PORTUNREACHABLE;
@@ -476,35 +485,32 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				if (-1 != sock) close(sock); // close socket if appropriate
 				return(retval);
 			}
-			else if (rxicmp6hdr_ptr->icmp6_type == ICMP6_PARAM_PROB)
+			else if (rxicmp6_type == ICMP6_PARAM_PROB)
 			{
-				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was PARAM_PROB\n");
+				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was PARAM_PROB, with code %d\n", rxicmp6_code);
 				retval = PORTPARAMPROB;
 				if (-1 != sock) close(sock); // close socket if appropriate
 				return(retval);
 			}
-			else if (rxicmp6hdr_ptr->icmp6_type == ICMP6_TIME_EXCEEDED)
+			else if (rxicmp6_type == ICMP6_TIME_EXCEEDED)
 			{
-				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was TIME_EXCEEDED\n");
+				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was TIME_EXCEEDED, with code %d\n", rxicmp6_code);
 				retval = PORTNOROUTE;
 				if (-1 != sock) close(sock); // close socket if appropriate
 				return(retval);
 			}
-			else if (rxicmp6hdr_ptr->icmp6_type == ICMP6_PACKET_TOO_BIG)
+			else if (rxicmp6_type == ICMP6_PACKET_TOO_BIG)
 			{
-				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was PACKET_TOO_BIG\n");
+				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was PACKET_TOO_BIG, with code %d\n", rxicmp6_code);
 				retval = PORTPKTTOOBIG;
 				if (-1 != sock) close(sock); // close socket if appropriate
 				return(retval);
 			}
 			else
 			{
-				IPSCAN_LOG( LOGPREFIX "RESTART: unhandled ICMP6_TYPE was %d ICMP6_CODE was %d\n", rxicmp6hdr_ptr->icmp6_type, rxicmp6hdr_ptr->icmp6_code);
+				IPSCAN_LOG( LOGPREFIX "RESTART: unhandled ICMP6_TYPE was %d ICMP6_CODE was %d\n", rxicmp6_type, rxicmp6_code);
 				continue;
 			}
-
-			rxseqno = htons(rxicmp6hdr_ptr->icmp6_seq);
-			rxid = htons(rxicmp6hdr_ptr->icmp6_id);
 
 			#ifdef PINGDEBUG
 			IPSCAN_LOG( LOGPREFIX "ICMP6_SEQ was %d (0x%04x) ICMP6_ID was %d (0x%04x)\n", rxseqno, rxseqno, rxid, rxid);
