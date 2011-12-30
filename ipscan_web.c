@@ -21,6 +21,7 @@
 // 0.01 - initial version
 // 0.02 - improved HTML (transition to styles, general compliance)
 // 0.03 - addition of ping functionality
+// 0.04 - addition of indirect host support
 
 #include "ipscan.h"
 
@@ -78,7 +79,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 			MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
 	// create a prefilled array containing the list of ports to be tested
 	printf("var portlist = [");
-	printf(" %d", (0+IPSCAN_PROTO_ICMPV6));
+	printf("\"indhost\", %d", (0+IPSCAN_PROTO_ICMPV6));
 	for (portindex=0; portindex<numports; portindex++)
 	{
 		port=portlist[portindex];
@@ -87,7 +88,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf(" ];\n");
 	// create a prefilled array containing the testing state of each port to be tested, defaults to PORTUNKNOWN
 	printf("var state = [");
-	printf(" %d", PORTUNKNOWN);
+	printf(" \"indhost\", %d", PORTUNKNOWN);
 	for (portindex=0; portindex<numports; portindex++)
 	{
 		port=portlist[portindex];
@@ -185,23 +186,33 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("				state[i] = lateststate[i];\n");
 	printf("			}\n");
 	printf("		}\n");
-	printf("		for (i = 0; i <= %d ; i++)\n", numports);
+	// go around all ports
+	printf("		for (i = 1; i <= %d ; i++)\n", (numports+1));
 	printf("		{\n");
 	printf("			var textupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].label);
 	printf("			var colourupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].colour);
+	printf("			var findstate = state[i];\n");
 	printf("			var elemid = \"pingstate\";\n");
-	printf("			if (i > 0)\n");
-	printf("			{\n");
-	printf("				elemid = \"port\" + portlist[i];\n");
-	printf("			}\n");
+	printf("			if (i > 1) elemid = \"port\" + portlist[i];\n");
+	printf("			if (i == 1 && findstate>=%d) findstate = state[i] - %d;\n", IPSCAN_INDIRECT_RESPONSE, IPSCAN_INDIRECT_RESPONSE);
 	// find a matching return value and select the appropriate label and colour code
 	printf("			for (j = 0; j < retvals.length; j++)\n");
 	printf("			{\n");
-	printf("				if (retvals[j] == state[i])\n");
+	printf("				if (retvals[j] == findstate)\n");
 	printf("				{\n");
 	printf("					textupdate = \"Port \" + portlist[i] + \" = \" + labels[j];\n");
-	// ICMPv6 PING case only requires the port status to be returned
-	printf("					if (i==0) textupdate = labels[j];\n");
+	// ICMPv6 PING case requires the port status (or indirect host) to be returned
+	printf("					if (i==1)\n");
+	printf("					{\n");
+	printf("						if (state[i]>=%d)\n", IPSCAN_INDIRECT_RESPONSE);
+	printf("						{\n");
+	printf("							textupdate = \"INDIRECT-\" + labels[j] + \" (from \" + state[0] + \")\";\n");
+	printf("						}\n");
+	printf("						else\n");
+	printf("						{\n");
+	printf("							textupdate = labels[j];\n");
+	printf("						}\n");
+	printf("					}\n");
 	// Colour setting
 	printf("					colourupdate = colours[j];\n");
 	printf("				}\n");
@@ -261,6 +272,8 @@ void create_results_key_table(char * hostname, time_t timestamp)
 		printf("</TR>\n");
 	}
 	printf("</TABLE>\n");
+	printf("<P>NOTE: Results in the ICMPv6 ECHO REQUEST test marked as INDIRECT indicate an ICMPv6 error response was received from another host (e.g. a router or firewall) rather");
+	printf(" than the host under test. In this case the address of the responding host is also displayed.</P>\n");
 }
 
 void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint16_t numports, uint16_t *portlist)

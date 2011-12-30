@@ -23,6 +23,7 @@
 // 0.03 - added syslog support
 // 0.04 - improved HTML (transition to styles, general compliance)
 // 0.05 - addition of ping functionality (doc tidyup only)
+// 0.06 - addition of storage for indirect host responses
 
 #include "ipscan.h"
 //
@@ -100,7 +101,7 @@ extern struct rslt_struc resultsstruct[];
 		return 0;
 	}
 
-	int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result )
+	int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char * indirecthost)
 	{
 		sqlite3 *db;
 		char *zErrMsg = 0;
@@ -129,6 +130,8 @@ extern struct rslt_struc resultsstruct[];
 		//		           [63:32] 32-bits Reserved (0)
 		//
 		// RESULT          INT8
+		//
+		// INDHOST         TEXT
 
 		FILE *fstream;
 
@@ -180,7 +183,7 @@ extern struct rslt_struc resultsstruct[];
 			// insert the busy handler
 			sqlite3_busy_handler(db, writebusyhandler, unused);
 
-			rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS r1 (r1key INTEGER PRIMARY KEY, hostmsb INT8, hostlsb INT8, createdate INT8, session INT8, portnum INT8, portresult INT8);", callback, 0, &zErrMsg);
+			rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS r1 (r1key INTEGER PRIMARY KEY, hostmsb INT8, hostlsb INT8, createdate INT8, session INT8, portnum INT8, portresult INT8, indhost TEXT);", callback, 0, &zErrMsg);
 			if( rc!=SQLITE_OK )
 			{
 				IPSCAN_LOG( LOGPREFIX "write_db: SQL table create error: %s\n", zErrMsg);
@@ -191,7 +194,7 @@ extern struct rslt_struc resultsstruct[];
 			else
 			{
 				// write the data
-				rc = sprintf(query, "INSERT INTO r1 (hostmsb, hostlsb, createdate, session, portnum, portresult) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d' )\n", host_msb, host_lsb, timestamp, session, port, result);
+				rc = sprintf(query, "INSERT INTO r1 (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )\n", host_msb, host_lsb, timestamp, session, port, result, indirecthost);
 				if (rc > 0)
 				{
 
@@ -233,7 +236,7 @@ extern struct rslt_struc resultsstruct[];
 
 	// MYSQL version
 
-	int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result )
+	int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char * indirecthost )
 	{
 		// ID HOSTADDRESS DATE TIME SESSIONID PORT RESULT
 
@@ -252,6 +255,8 @@ extern struct rslt_struc resultsstruct[];
 		//				      [63:32] 32-bits Reserved (0)
 		//
 		// RESULT             BIGINT UNSIGNED
+		//
+		// INDHOST            VARCHAR(INET6_ADDRSTRLEN+1)
 
 		int rc;
 		unsigned int qrylen;
@@ -284,7 +289,7 @@ extern struct rslt_struc resultsstruct[];
 				}
 				else
 				{
-					qrylen = sprintf(query, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, PRIMARY KEY (id) )",MYSQL_TBLNAME );
+					qrylen = sprintf(query, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					if (qrylen > 0)
 					{
 						#ifdef DBDEBUG
@@ -293,7 +298,7 @@ extern struct rslt_struc resultsstruct[];
 						rc = mysql_real_query(connection, query, qrylen);
 						if (rc == 0)
 						{
-							qrylen = sprintf(query, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result);
+							qrylen = sprintf(query, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
 							if (qrylen > 0)
 							{
 								#ifdef DBDEBUG
@@ -392,7 +397,28 @@ extern struct rslt_struc resultsstruct[];
 
 	int callbackresultsdumper(void *pArg, int argc, char **argv, char **columnNames)
 	{
-		printf("%s, ", argv[6]);
+		int rc, result, port;
+		char hostind[INET6_ADDRSTRLEN+1];
+		// If we have eight parameters then check whether this is the ICMPv6 test (based on port number)
+		// and if so then print the indirect host and result, else just the result
+		if (argc == 8)
+		{
+			rc = sscanf(argv[5], "%d", &port);
+			rc = sscanf(argv[6], "%d", &result);
+			rc = sscanf(argv[7], "%s", hostind);
+			if ( port == (0 + IPSCAN_PROTO_ICMPV6) )
+			{
+				printf("\"%s\", %d, ", hostind, result);
+			}
+			else
+			{
+				printf("%d, ", result);
+			}
+		}
+		else // original format
+		{
+			printf("%s, ", argv[6]);
+		}
 		return(0);
 	}
 
@@ -499,6 +525,8 @@ extern struct rslt_struc resultsstruct[];
 		int retval = 0;
 		unsigned int num_fields;
 		unsigned int qrylen;
+		int port, result;
+		char hostind[INET6_ADDRSTRLEN+1];
 		char query[MAXDBQUERYSIZE];
 		MYSQL *connection;
 		MYSQL *mysqlrc;
@@ -552,7 +580,24 @@ extern struct rslt_struc resultsstruct[];
 
 								while ((row = mysql_fetch_row(result)))
 								{
-									printf("%s, ", row[num_fields-1]);
+									if (num_fields == 8) // now includes indirect host field
+									{
+										rc = sscanf(row[5], "%d", &port);
+										rc = sscanf(row[6], "%d", &result);
+										rc = sscanf(row[7], "%s", &hostind);
+										if ( port == (0 + IPSCAN_PROTO_ICMPV6) )
+										{
+											printf("\"%s\", %d, ", hostind, result);
+										}
+										else
+										{
+											printf("%d, ", result);
+										}
+									}
+									else // original approach
+									{
+										printf("%s, ", row[num_fields-1]);
+									}
 								}
 								printf(" -9999 ]\n");
 								mysql_free_result(result);
@@ -562,7 +607,7 @@ extern struct rslt_struc resultsstruct[];
 								// Didn't get any results, so check if we should have got some
 								if (mysql_field_count(connection) == 0)
 								{
-									IPSCAN_LOG( LOGPREFIX "dump_db: suprisingly mysql_store_result() expected to return 0 fields\n");
+									IPSCAN_LOG( LOGPREFIX "dump_db: surprisingly mysql_field_count() expected to return 0 fields\n");
 								}
 								else
 								{

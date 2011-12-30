@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.89"
+	#define IPSCAN_VER "0.90"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -76,6 +76,7 @@
 	// 0.87 tidied ipscan_checks
 	// 0.88 ping logging improvements
 	// 0.89 further logging improvements for ICMPv6 responses
+	// 0.90 INNER ICMPv6 packet logging, checking and reporting
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -141,9 +142,9 @@
 		#define EXEJSNAME "ipscan-js.cgi"
 	#endif
 
-	// Determine sqlite database filenames
-	#define DBTXTNAME "results-txt.db"
-	#define DBJSNAME "results-js.db"
+	// Determine sqlite database filenames (updated names for version 0.90 onward)
+	#define DBTXTNAME "results-txtb.db"
+	#define DBJSNAME "results-jsb.db"
 
 	// Determine the executables' and database results' file names
 	#if (TEXTMODE == 1)
@@ -228,6 +229,9 @@
 	#define IPSCAN_PROTO_TCP (0<<16)
 	#define IPSCAN_PROTO_ICMPV6 (1<<16)
 
+	// Flag indicating that the response was indirect rather than from the host under test
+	#define IPSCAN_INDIRECT_RESPONSE 256
+
 	// Mapping for connection attempt results
 	// To add a new entry first insert a new internal state in the PORTSTATE enumeration and then add a
 	// matching entry in the results structure in ipscan.c
@@ -269,7 +273,6 @@
 		char *colour;
 		char *description;
 	};
-
 
 	// End of defines
 #endif

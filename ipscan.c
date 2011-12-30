@@ -22,7 +22,7 @@
 // 0.02 - additional DEBUG added for MySQL investigation
 // 0.03 - added syslog support
 // 0.04 - improved HTML (transition to styles, general compliance)
-// 0.05 - addition of ping functionality
+// 0.05 - addition of ICMPv6 ECHO-REQUEST functionality
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -55,11 +55,11 @@
 
 
 // Prototype declarations
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, unsigned int port, int32_t result );
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char * indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int summarise_db(void);
 int check_tcp_port(char * hostname, uint16_t port);
-int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session);
+int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
 void create_html_common_header(void);
 void create_json_header(void);
 void create_results_key_table(char * hostname, time_t timestamp);
@@ -106,9 +106,12 @@ int main(void)
 	int last = 0;
 	#endif
 
-	int result;
+	int result, pingresult;
 	char remoteaddrstring[64];
 	char *remoteaddrvar;
+
+	// Storage for indirecthost address, in case required
+	char indirecthost[INET6_ADDRSTRLEN];
 
 	unsigned int position = 0;
 
@@ -618,10 +621,16 @@ int main(void)
 					asctime(localtime(&starttime)), (numports * TIMEOUTSECS));
 
 			// Ping the remote host and store the result ...
-			result = check_icmpv6_echoresponse(remoteaddrstring, starttime, session);
+			pingresult = check_icmpv6_echoresponse(remoteaddrstring, starttime, session, indirecthost);
+			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
+
+			#ifdef PINGDEBUG
+			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d, indirect host %s\n",remoteaddrstring, pingresult, indirecthost);
+			#endif
+
 			portsstats[result]++ ;
 
-			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), result);
+			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "WARNING : write_db for ping result returned : %d\n", rc);
@@ -629,7 +638,14 @@ int main(void)
 
 			printf("<TABLE border=\"1\">\n");
 			printf("<TR style=\"text-align:left\">\n");
-			printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">%s</TD>\n",resultsstruct[result].colour,resultsstruct[result].label);
+			if (pingresult >= IPSCAN_INDIRECT_RESPONSE)
+			{
+				printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">INDIRECT-%s (from %s)</TD>\n",resultsstruct[result].colour,resultsstruct[result].label, indirecthost);
+			}
+			else
+			{
+				printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">%s</TD>\n",resultsstruct[result].colour,resultsstruct[result].label);
+			}
 			printf("</TR>\n");
 			printf("</TABLE>\n");
 			printf("<P> </P>\n");
@@ -646,7 +662,7 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "INFO: port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
 				#endif
 
-				rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_TCP), result );
+				rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_TCP), result, "unused" );
 				if (rc != 0)
 				{
 					IPSCAN_LOG( LOGPREFIX "WARNING : write_db returned %d\n", rc);
@@ -753,12 +769,13 @@ int main(void)
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
 
-			result = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession);
+			pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, indirecthost);
+			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#ifdef PINGDEBUG
-			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d\n",remoteaddrstring, result);
+			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d, indirect host %s\n",remoteaddrstring, pingresult, indirecthost);
 			#endif
 			portsstats[result]++ ;
-			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), result);
+			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "write_db for ping result returned : %d\n", rc);
@@ -787,7 +804,7 @@ int main(void)
 				//
 				// Put result into database:
 				//
-				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_TCP), result);
+				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_TCP), result, "unused");
 				if (rc != 0)
 				{
 					IPSCAN_LOG( LOGPREFIX "write_db inside scan routine returned : %d\n", rc);

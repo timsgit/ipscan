@@ -22,6 +22,7 @@
 // 0.02 - added syslog support
 // 0.03 - addition of ping functionality
 // 0.04 - reordered code to match calling order
+// 0.05 - add support for indirect ICMPv6 host responses
 
 #include "ipscan.h"
 //
@@ -65,15 +66,13 @@ extern struct rslt_struc resultsstruct[];
 // Send an ICMPv6 ECHO-REQUEST and see whether we receive an ECHO-REPLY in response
 //
 
-int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session)
+int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router)
 {
 	struct addrinfo *res;
 	struct addrinfo hints;
 
 	struct sockaddr_in6 destination;
 	struct sockaddr_in6 source;
-	struct sockaddr *srcaddr;
-	int srclen;
 
 	int sock = -1;
 	int errsv;
@@ -138,6 +137,9 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	memcpy(&destination, res->ai_addr, res->ai_addrlen);
 	// Done with the address info now, so free the area
 	freeaddrinfo(res);
+
+	// Set default address to "unset"
+	snprintf(router, INET6_ADDRSTRLEN, "unset");
 
 	// Get root privileges in order to create the raw socket
 
@@ -289,6 +291,19 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	// Choose a packet slightly bigger than minimum size
 	sendsize = ICMPV6_PACKET_SIZE;
 
+	rc = getnameinfo((struct sockaddr *)&destination, sizeof(destination), tmpbuf, sizeof(tmpbuf), NULL, 0, NI_NUMERICHOST);
+	errsv = errno;
+	if (rc == 0)
+	{
+		#ifdef PINGDEBUG
+		IPSCAN_LOG( LOGPREFIX "Transmitted destination address was %s\n", tmpbuf);
+		#endif
+	}
+	else
+	{
+		IPSCAN_LOG( LOGPREFIX "RESTART: getnameinfo returned bad indication %d (%s)\n",errsv, gai_strerror(errsv));
+	}
+
 	// scatter/gather array
 	memset(&txiov, 0, sizeof(txiov));
 	txiov[0].iov_base = (caddr_t)&txpackdata;
@@ -309,15 +324,11 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 	if (rc != sendsize)
 	{
-		IPSCAN_LOG( LOGPREFIX"sendmsg sent %s %d chars but sendmsg returned %d\n", hostname, sendsize, rc);
+		IPSCAN_LOG( LOGPREFIX"sendmsg sent %d chars to %s but sendmsg returned %d\n", sendsize, hostname, rc);
 		retval = PORTINTERROR;
 		if (-1 != sock) close(sock); // close socket if appropriate
 		return(retval);
 	}
-
-	#ifdef PINGDEBUG
-	IPSCAN_LOG( LOGPREFIX"session mapped into txid was %d (0x%04x)\n", txid,txid);
-	#endif
 
 	// -----------------------------------------------
 	//
@@ -325,10 +336,8 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	//
 	// -----------------------------------------------
 
-	#ifdef PINGDEBUG
-	IPSCAN_LOG( LOGPREFIX "Setting up receiver ...\n");
-	#endif
-
+	// indirect determines whether a host other than the intended target has replied
+	int indirect = 0;
 	time_t timestart = time(0);
 	time_t timenow = timestart;
 	unsigned int loopcount = 0;
@@ -397,6 +406,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		}
 		else
 		{
+			int rxpacketsize = rc;
 			#ifdef PINGDEBUG
 			IPSCAN_LOG( LOGPREFIX "recvmsg returned indicating %d bytes received\n",rc);
 			#endif
@@ -421,10 +431,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				continue;
 			}
 
-			srcaddr = (struct sockaddr *)rmsghdr.msg_name;
-			srclen = rmsghdr.msg_namelen;
-			
-			rc = getnameinfo(srcaddr, srclen, tmpbuf, sizeof(tmpbuf), NULL, 0, NI_NUMERICHOST);
+			rc = getnameinfo((struct sockaddr *)&source, sizeof(source), tmpbuf, sizeof(tmpbuf), NULL, 0, NI_NUMERICHOST);
 			errsv = errno;
 			if (rc == 0)
 			{
@@ -438,6 +445,10 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				continue;
 			}
 
+			// Store the outer packet address in case we do have a valid response from a machine(router) other than
+			// the intended target
+			inet_ntop(AF_INET6, &(source.sin6_addr), router, INET6_ADDRSTRLEN);
+
 			// Extract ICMPv6 type and code for checking and reporting
 			rxicmp6hdr_ptr = (struct icmp6_hdr *)rxpacket;
 			rxicmp6_type = rxicmp6hdr_ptr->icmp6_type;
@@ -446,20 +457,146 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			rxseqno = htons(rxicmp6hdr_ptr->icmp6_seq);
 			rxid = htons(rxicmp6hdr_ptr->icmp6_id);
 
-			// Check whether our tx destination equals our rx source
-			if (IN6_ARE_ADDR_EQUAL(&source,&destination)==0)
+			// Check whether our tx destination address equals our rx source
+			// RFC3542 section 2.3 macro returns non-zero if addresses equal, otherwise 0
+			if ( IN6_ARE_ADDR_EQUAL( &(source.sin6_addr), &(destination.sin6_addr) ) == 0 )
 			{
-				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was %d ICMP6_CODE was %d\n", rxicmp6_type, rxicmp6_code);
-				IPSCAN_LOG( LOGPREFIX "RESTART: address mismatch\n");
-				continue;
+
+				#ifdef PINGDEBUG
+				IPSCAN_LOG( LOGPREFIX "OUTER IPv6 hdr src address did not match our tx dest address\n");
+				#endif
+
+				// if a router replied instead of the host under test then size will be original packet plus an IPv6 header
+				if ( rxpacketsize == (sizeof(struct ip6_hdr) + 8 + sendsize) )
+				{
+					char ipv6address[INET6_ADDRSTRLEN];
+					struct ip6_hdr *rx2ip6hdr_ptr;
+					struct icmp6_hdr *rx2icmp6hdr_ptr;
+					rx2ip6hdr_ptr = (struct ip6_hdr *)&rxpacket[sizeof(struct icmp6_hdr)];
+					// struct in6_addr ip6_src and ip6_dst
+					struct in6_addr orig_dst = rx2ip6hdr_ptr->ip6_dst;
+					struct in6_addr orig_src = rx2ip6hdr_ptr->ip6_src;
+					unsigned int nextheader = rx2ip6hdr_ptr->ip6_nxt;
+
+					inet_ntop(AF_INET6, &orig_src, ipv6address, INET6_ADDRSTRLEN);
+					// original source address would be our IPv6 address
+					#ifdef PINGDEBUG
+					IPSCAN_LOG( LOGPREFIX "INNER IPv6 hdr src address is: %s\n", ipv6address);
+					#endif
+
+					inet_ntop(AF_INET6, &orig_dst, ipv6address, INET6_ADDRSTRLEN);
+					// original destination should match our transmitted destination address
+					IPSCAN_LOG( LOGPREFIX "INNER IPv6 hdr dst address is: %s\n", ipv6address);
+
+					// if addresses don't match then it was returned in response to another packet,
+					// so this packet is not relevant to us ...
+					if ( IN6_ARE_ADDR_EQUAL( &orig_dst, &(destination.sin6_addr) ) == 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "RESTART: INNER IPv6 hdr dst address != transmitted destination\n");
+						continue;
+					}
+
+
+					// Check that the next header is ICMPv6
+					if (nextheader == IPPROTO_ICMPV6)
+					{
+						rx2icmp6hdr_ptr = (struct icmp6_hdr *)&rxpacket[sizeof(struct icmp6_hdr)+sizeof(struct ip6_hdr)];
+						unsigned int rx2icmp6_type = rx2icmp6hdr_ptr->icmp6_type;
+						unsigned int rx2icmp6_code = rx2icmp6hdr_ptr->icmp6_code;
+						// Extract sequence number and ID
+						unsigned int rx2seqno = htons(rx2icmp6hdr_ptr->icmp6_seq);
+						unsigned int rx2id = htons(rx2icmp6hdr_ptr->icmp6_id);
+
+						// Check inner ICMPv6 packet was an ECHO_REQUEST
+						if (rx2icmp6_type != ICMP6_ECHO_REQUEST)
+						{
+							IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6_TYPE was not ECHO_REQUEST : %d\n", rx2icmp6_type);
+							continue;
+						}
+
+						// Check inner ICMPv6 code was 0
+						if (rx2icmp6_code != 0)
+						{
+							IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6_CODE was not 0 : %d\n", rx2icmp6_code);
+							continue;
+						}
+
+						// Check sequence number matches what we transmitted
+						if (rx2seqno != txseqno)
+						{
+							IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6_SEQN was not %d : %d\n", txseqno, rx2seqno);
+							continue;
+						}
+
+						// Check ID matches what we transmitted
+						if (rx2id != txid)
+						{
+							IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6_ID was not %d : %d\n", txid, rx2id);
+							continue;
+						}
+
+						// Check for the expected received data
+						// sent:
+						// "%"PRId64" %"PRId64" 010892 210695", starttime, session
+						uint64_t rx2starttime, rx2session;
+						unsigned int rx2magic1, rx2magic2;
+
+						rc = sscanf(&rxpackdata[sizeof(struct icmp6_hdr)+sizeof(struct ip6_hdr)+ICMP6DATAOFFSET], "%"PRId64" %"PRId64" %d %d", &rx2starttime, &rx2session, &rx2magic1, &rx2magic2);
+						if (rc == 4)
+						{
+							if (rx2starttime != starttime)
+							{
+								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2starttime (%"PRId64") != starttime (%"PRId64")\n", rx2starttime, starttime);
+								continue;
+							}
+							if (rx2session != session)
+							{
+								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2session (%"PRId64") != session (%"PRId64")\n", rx2session, session);
+								continue;
+							}
+							if (10892 != rx2magic1)
+							{
+								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2magic1 (%d) != 10892\n", rx2magic1);
+								continue;
+							}
+							if (210695 != rx2magic2)
+							{
+								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2magic2 (%d) != 210695\n", rx2magic2);
+								continue;
+							}
+
+							//
+							// If we get to this point then the returned packet was in response to the packet we originally
+							// transmitted
+							//
+							IPSCAN_LOG( LOGPREFIX "INNER ICMPv6 was a successful match, so flagging INDIRECT response\n");
+							indirect = IPSCAN_INDIRECT_RESPONSE;
+						}
+						else
+						{
+							// wrong number of parameters
+							IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 packet returned number of magic parameters (%d) != 4\n", rc);
+							continue;
+						}
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "RESTART: INNER IPv6 next header didn't indicate an ICMPv6 packet inside : 0x%02x\n", nextheader);
+						continue;
+					}
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "OUTER address mismatch with INNER unexpected size : %d\n", rxpacketsize);
+					continue;
+				}
+
 			}
 
 			// Check what type of ICMPv6 packet we received and handle appropriately ...
 			if (rxicmp6_type == ICMP6_ECHO_REPLY)
 			{
-				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "Received an ICMP6_ECHO_REPLY, with code %d\n", rxicmp6_code);
-				#endif
 			}
 			else if ( rxicmp6_type == ICMP6_DST_UNREACH )
 			{
@@ -483,28 +620,28 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 					break;
 				}
 				if (-1 != sock) close(sock); // close socket if appropriate
-				return(retval);
+				return(retval+indirect);
 			}
 			else if (rxicmp6_type == ICMP6_PARAM_PROB)
 			{
 				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was PARAM_PROB, with code %d\n", rxicmp6_code);
 				retval = PORTPARAMPROB;
 				if (-1 != sock) close(sock); // close socket if appropriate
-				return(retval);
+				return(retval+indirect);
 			}
 			else if (rxicmp6_type == ICMP6_TIME_EXCEEDED)
 			{
 				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was TIME_EXCEEDED, with code %d\n", rxicmp6_code);
 				retval = PORTNOROUTE;
 				if (-1 != sock) close(sock); // close socket if appropriate
-				return(retval);
+				return(retval+indirect);
 			}
 			else if (rxicmp6_type == ICMP6_PACKET_TOO_BIG)
 			{
 				IPSCAN_LOG( LOGPREFIX "ICMP6_TYPE was PACKET_TOO_BIG, with code %d\n", rxicmp6_code);
 				retval = PORTPKTTOOBIG;
 				if (-1 != sock) close(sock); // close socket if appropriate
-				return(retval);
+				return(retval+indirect);
 			}
 			else
 			{
@@ -557,14 +694,14 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				if (10892 != rxmagic1)
 				{
 					#ifdef PINGDEBUG
-					IPSCAN_LOG( LOGPREFIX "RESTART: magic data rxmagic1 (%d) != 010892\n", rxmagic1);
+					IPSCAN_LOG( LOGPREFIX "RESTART: magic data rxmagic1 (%d) != 10892\n", rxmagic1);
 					#endif
 					continue;
 				}
 				if (210695 != rxmagic2)
 				{
 					#ifdef PINGDEBUG
-					IPSCAN_LOG( LOGPREFIX "RESTART: magic data rxmagic2 (%d) != 010892\n", rxmagic2);
+					IPSCAN_LOG( LOGPREFIX "RESTART: magic data rxmagic2 (%d) != 210695\n", rxmagic2);
 					#endif
 					continue;
 				}
