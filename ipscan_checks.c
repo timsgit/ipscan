@@ -23,6 +23,7 @@
 // 0.03 - addition of ping functionality
 // 0.04 - reordered code to match calling order
 // 0.05 - add support for indirect ICMPv6 host responses
+// 0.06 - improved default ICMPv6 packet logging
 
 #include "ipscan.h"
 //
@@ -108,7 +109,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 	unsigned int txid = (unsigned int)session;
 	unsigned int rxid;
-	unsigned int txseqno = 14872; // MAGIC number - assume no reason to start at 1?
+	unsigned int txseqno = ICMPV6_MAGIC_SEQ; // MAGIC number - assume no reason to start at 1?
 	unsigned int rxseqno;
 
 	unsigned int rxicmp6_type, rxicmp6_code;
@@ -279,7 +280,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	IPSCAN_LOG( LOGPREFIX "Sending PING unique data starttime=%"PRId64" session=%"PRId64"\n", starttime, session);
 	#endif
 
-	rc = snprintf(&txpackdata[ICMP6DATAOFFSET],(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET),"%"PRId64" %"PRId64" 010892 210695", starttime, session);
+	rc = snprintf(&txpackdata[ICMP6DATAOFFSET],(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET),"%"PRId64" %"PRId64" %d %d", starttime, session, ICMPV6_MAGIC_VALUE1, ICMPV6_MAGIC_VALUE2);
 	if (rc < 0 || rc > (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET))
 	{
 		IPSCAN_LOG( LOGPREFIX "snprintf returned %d, expected >=0 but <= %d\n", rc, (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET));
@@ -469,7 +470,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				// if a router replied instead of the host under test then size will be original packet plus an IPv6 header
 				if ( rxpacketsize == (sizeof(struct ip6_hdr) + 8 + sendsize) )
 				{
-					char ipv6address[INET6_ADDRSTRLEN];
+					char ipv6address[INET6_ADDRSTRLEN], ipv6address2[INET6_ADDRSTRLEN];
 					struct ip6_hdr *rx2ip6hdr_ptr;
 					struct icmp6_hdr *rx2icmp6hdr_ptr;
 					rx2ip6hdr_ptr = (struct ip6_hdr *)&rxpacket[sizeof(struct icmp6_hdr)];
@@ -480,24 +481,27 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 					inet_ntop(AF_INET6, &orig_src, ipv6address, INET6_ADDRSTRLEN);
 					// original source address would be our IPv6 address
+					// TODO - perhaps we should be checking this for completeness ...
 					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "INNER IPv6 hdr src address is: %s\n", ipv6address);
 					#endif
 
 					inet_ntop(AF_INET6, &orig_dst, ipv6address, INET6_ADDRSTRLEN);
 					// original destination should match our transmitted destination address
+					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "INNER IPv6 hdr dst address is: %s\n", ipv6address);
+					#endif
 
 					// if addresses don't match then it was returned in response to another packet,
 					// so this packet is not relevant to us ...
 					if ( IN6_ARE_ADDR_EQUAL( &orig_dst, &(destination.sin6_addr) ) == 0)
 					{
-						IPSCAN_LOG( LOGPREFIX "RESTART: INNER IPv6 hdr dst address != transmitted destination\n");
+						inet_ntop(AF_INET6, &(destination.sin6_addr), ipv6address2, INET6_ADDRSTRLEN);
+						IPSCAN_LOG( LOGPREFIX "RESTART: INNER IPv6 hdr DST %s != TX DST %s\n", ipv6address, ipv6address2);
 						continue;
 					}
 
-
-					// Check that the next header is ICMPv6
+					// Check that the next header is ICMPv6, otherwise not in response to our tx
 					if (nextheader == IPPROTO_ICMPV6)
 					{
 						rx2icmp6hdr_ptr = (struct icmp6_hdr *)&rxpacket[sizeof(struct icmp6_hdr)+sizeof(struct ip6_hdr)];
@@ -537,7 +541,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 						// Check for the expected received data
 						// sent:
-						// "%"PRId64" %"PRId64" 010892 210695", starttime, session
+						// "%"PRId64" %"PRId64" ICMPV6_MAGIC_VALUE1 ICMPV6_MAGIC_VALUE2", starttime, session
 						uint64_t rx2starttime, rx2session;
 						unsigned int rx2magic1, rx2magic2;
 
@@ -554,14 +558,14 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2session (%"PRId64") != session (%"PRId64")\n", rx2session, session);
 								continue;
 							}
-							if (10892 != rx2magic1)
+							if (ICMPV6_MAGIC_VALUE1 != rx2magic1)
 							{
-								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2magic1 (%d) != 10892\n", rx2magic1);
+								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2magic1 (%d) != expected %d\n", rx2magic1, ICMPV6_MAGIC_VALUE1);
 								continue;
 							}
-							if (210695 != rx2magic2)
+							if (ICMPV6_MAGIC_VALUE2 != rx2magic2)
 							{
-								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2magic2 (%d) != 210695\n", rx2magic2);
+								IPSCAN_LOG( LOGPREFIX "RESTART: INNER ICMPv6 magic data rx2magic2 (%d) != expected %d\n", rx2magic2, ICMPV6_MAGIC_VALUE2);
 								continue;
 							}
 
@@ -648,29 +652,20 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				IPSCAN_LOG( LOGPREFIX "RESTART: unhandled ICMP6_TYPE was %d ICMP6_CODE was %d\n", rxicmp6_type, rxicmp6_code);
 				continue;
 			}
-
-			#ifdef PINGDEBUG
-			IPSCAN_LOG( LOGPREFIX "ICMP6_SEQ was %d (0x%04x) ICMP6_ID was %d (0x%04x)\n", rxseqno, rxseqno, rxid, rxid);
-			#endif
-
 			if (rxseqno != txseqno)
 			{
-				#ifdef PINGDEBUG
-				IPSCAN_LOG( LOGPREFIX "RESTART: Sequence number mismatch - not for us\n");
-				#endif
+				IPSCAN_LOG( LOGPREFIX "RESTART: Sequence number mismatch - got %d, expected %d\n", rxseqno, txseqno);
 				continue;
 			}
 			if (rxid != txid)
 			{
-				#ifdef PINGDEBUG
-				IPSCAN_LOG( LOGPREFIX "RESTART: id mismatch - not for us\n");
-				#endif
+				IPSCAN_LOG( LOGPREFIX "RESTART: id mismatch - got %d, expected %d\n", rxid, txid);
 				continue;
 			}
 
 			// Check for the expected received data
 			// sent:
-			// "%"PRId64" %"PRId64" 010892 210695", starttime, session
+			// "%"PRId64" %"PRId64" ICMPV6_MAGIC_VALUE1 ICMPV6_MAGIC_VALUE2", starttime, session
 			uint64_t rxstarttime, rxsession;
 			unsigned int rxmagic1, rxmagic2;
 
@@ -679,46 +674,34 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			{
 				if (rxstarttime != starttime)
 				{
-					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "RESTART: magic data rxstarttime (%"PRId64") != starttime (%"PRId64")\n", rxstarttime, starttime);
-					#endif
 					continue;
 				}
 				if (rxsession != session)
 				{
-					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "RESTART: magic data rxsession (%"PRId64") != session (%"PRId64")\n", rxsession, session);
-					#endif
 					continue;
 				}
-				if (10892 != rxmagic1)
+				if (ICMPV6_MAGIC_VALUE1 != rxmagic1)
 				{
-					#ifdef PINGDEBUG
-					IPSCAN_LOG( LOGPREFIX "RESTART: magic data rxmagic1 (%d) != 10892\n", rxmagic1);
-					#endif
+					IPSCAN_LOG( LOGPREFIX "RESTART: RX magic data 1 (%d) != expected %d\n", rxmagic1, ICMPV6_MAGIC_VALUE1);
 					continue;
 				}
-				if (210695 != rxmagic2)
+				if (ICMPV6_MAGIC_VALUE2 != rxmagic2)
 				{
-					#ifdef PINGDEBUG
-					IPSCAN_LOG( LOGPREFIX "RESTART: magic data rxmagic2 (%d) != 210695\n", rxmagic2);
-					#endif
+					IPSCAN_LOG( LOGPREFIX "RESTART: RX magic data 2 (%d) != expected %d\n", rxmagic2, ICMPV6_MAGIC_VALUE2);
 					continue;
 				}
 
 				//
 				// if we get to this point then everything matches ...
 				//
-				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "Everything matches - it was our expected ICMPv6 ECHO_RESPONSE\n");
-				#endif
 				foundit = 1;
 			}
 			else
 			{
-				#ifdef PINGDEBUG
-				IPSCAN_LOG( LOGPREFIX "RESTART: magic data - number of parameters mismatched, got %d\n", rc);
-				#endif
+				IPSCAN_LOG( LOGPREFIX "RESTART: number of magic parameters mismatched, got %d, expected 4\n", rc);
 				continue;
 			}
 

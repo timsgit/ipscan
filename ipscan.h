@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.90"
+	#define IPSCAN_VER "0.91"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -77,6 +77,7 @@
 	// 0.88 ping logging improvements
 	// 0.89 further logging improvements for ICMPv6 responses
 	// 0.90 INNER ICMPv6 packet logging, checking and reporting
+	// 0.91 further default logging improvements
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -224,6 +225,13 @@
 
 	// Size to be allocated for transmit/receive buffer
 	#define ICMPV6_PACKET_BUFFER_SIZE 2048
+
+	// Magic constants intended to uniquify our packets;
+	// process id and session start time also included
+	#define ICMPV6_MAGIC_SEQ 12478
+	#define ICMPV6_MAGIC_VALUE1 1289
+	#define ICMPV6_MAGIC_VALUE2 12569
+
 
 	// Protocol mappings (stored in database)
 	#define IPSCAN_PROTO_TCP (0<<16)
