@@ -22,6 +22,7 @@
 // 0.02 - improved HTML (transition to styles, general compliance)
 // 0.03 - addition of ping functionality
 // 0.04 - addition of indirect host support
+// 0.05 - removal of empty HTML paragraph
 
 #include "ipscan.h"
 
@@ -305,7 +306,7 @@ void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint1
 	printf("</TR>\n");
 	printf("</TABLE>\n");
 
-	printf("<P> </P>\n");
+	printf("<P>Individual TCP port scan results:</P>\n");
 
 	// Start of table
 	printf("<TABLE border=\"1\">\n");

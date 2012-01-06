@@ -23,6 +23,7 @@
 // 0.03 - added syslog support
 // 0.04 - improved HTML (transition to styles, general compliance)
 // 0.05 - addition of ICMPv6 ECHO-REQUEST functionality
+// 0.06 - removal of empty HTML paragraph
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -55,7 +56,7 @@
 
 
 // Prototype declarations
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char * indirecthost);
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int summarise_db(void);
 int check_tcp_port(char * hostname, uint16_t port);
@@ -648,7 +649,7 @@ int main(void)
 			}
 			printf("</TR>\n");
 			printf("</TABLE>\n");
-			printf("<P> </P>\n");
+			printf("<P>Individual TCP port scan results:</P>\n");
 
 			// Start of table
 			printf("<TABLE border=\"1\">\n");

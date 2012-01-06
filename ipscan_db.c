@@ -24,6 +24,7 @@
 // 0.04 - improved HTML (transition to styles, general compliance)
 // 0.05 - addition of ping functionality (doc tidyup only)
 // 0.06 - addition of storage for indirect host responses
+// 0.07 - fix potential db query-string buffer overflow
 
 #include "ipscan.h"
 //
@@ -101,7 +102,7 @@ extern struct rslt_struc resultsstruct[];
 		return 0;
 	}
 
-	int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char * indirecthost)
+	int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char *indirecthost)
 	{
 		sqlite3 *db;
 		char *zErrMsg = 0;
@@ -194,8 +195,8 @@ extern struct rslt_struc resultsstruct[];
 			else
 			{
 				// write the data
-				rc = sprintf(query, "INSERT INTO r1 (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )\n", host_msb, host_lsb, timestamp, session, port, result, indirecthost);
-				if (rc > 0)
+				rc = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO r1 (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )\n", host_msb, host_lsb, timestamp, session, port, result, indirecthost);
+				if (rc > 0 && rc < MAXDBQUERYSIZE)
 				{
 
 					#ifdef DBDEBUG
@@ -219,7 +220,7 @@ extern struct rslt_struc resultsstruct[];
 				}
 				else
 				{
-						IPSCAN_LOG( LOGPREFIX "write_db: Failed to create SQL query for insert\n");
+						IPSCAN_LOG( LOGPREFIX "write_db: Failed to create SQL query for insert, return was %d\n", rc);
 						sqlite3_close(db);
 						return (4);
 				}
@@ -236,7 +237,7 @@ extern struct rslt_struc resultsstruct[];
 
 	// MYSQL version
 
-	int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char * indirecthost )
+	int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost )
 	{
 		// ID HOSTADDRESS DATE TIME SESSIONID PORT RESULT
 
@@ -260,7 +261,7 @@ extern struct rslt_struc resultsstruct[];
 
 		int rc;
 		unsigned int qrylen;
-		int retval = 0;
+		int retval = -1;
 		char query[MAXDBQUERYSIZE];
 		MYSQL *connection;
 		MYSQL *mysqlrc;
@@ -289,8 +290,8 @@ extern struct rslt_struc resultsstruct[];
 				}
 				else
 				{
-					qrylen = sprintf(query, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
-					if (qrylen > 0)
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
 						#ifdef DBDEBUG
 						IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
@@ -298,8 +299,8 @@ extern struct rslt_struc resultsstruct[];
 						rc = mysql_real_query(connection, query, qrylen);
 						if (rc == 0)
 						{
-							qrylen = sprintf(query, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
-							if (qrylen > 0)
+							qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
+							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 							{
 								#ifdef DBDEBUG
 								IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
@@ -318,7 +319,7 @@ extern struct rslt_struc resultsstruct[];
 							}
 							else
 							{
-								IPSCAN_LOG( LOGPREFIX "write_db: Failed to create insert query\n");
+								IPSCAN_LOG( LOGPREFIX "write_db: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
 								retval = 8;
 							}
 						}
@@ -331,7 +332,7 @@ extern struct rslt_struc resultsstruct[];
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "write_db: Failed to create create_table query\n");
+						IPSCAN_LOG( LOGPREFIX "write_db: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
 						retval = 5;
 					}
 				}
@@ -345,6 +346,9 @@ extern struct rslt_struc resultsstruct[];
 			mysql_commit(connection);
 			mysql_close(connection);
 		}
+	#ifdef PINGDEBUG
+	IPSCAN_LOG( LOGPREFIX "write_db: returning with retval = %d\n",retval);
+	#endif
 	return (retval);
 	}
 
@@ -467,9 +471,9 @@ extern struct rslt_struc resultsstruct[];
 
 				// int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session )
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
-				rc = sprintf(query, "SELECT * FROM r1 WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY ROWID;", host_msb, host_lsb, timestamp, session);
+				rc = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM r1 WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY ROWID;", host_msb, host_lsb, timestamp, session);
 
-				if (rc > 0)
+				if (rc > 0 && rc < MAXDBQUERYSIZE)
 				{
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "SQL Query is : %s\n", query);
@@ -505,7 +509,7 @@ extern struct rslt_struc resultsstruct[];
 				}
 				else
 				{
-						IPSCAN_LOG( LOGPREFIX "dump_db: Failed to create SQL query for dump\n");
+						IPSCAN_LOG( LOGPREFIX "dump_db: Failed to create SQL query for dump, return was %d\n", rc);
 						sqlite3_close(db);
 						return (6);
 				}
@@ -525,7 +529,7 @@ extern struct rslt_struc resultsstruct[];
 		int retval = 0;
 		unsigned int num_fields;
 		unsigned int qrylen;
-		int port, result;
+		int port, res;
 		char hostind[INET6_ADDRSTRLEN+1];
 		char query[MAXDBQUERYSIZE];
 		MYSQL *connection;
@@ -559,8 +563,8 @@ extern struct rslt_struc resultsstruct[];
 				{
 					// int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session )
 					// SELECT x FROM t1 WHERE a = b ORDER BY x;
-					qrylen = sprintf(query, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
-					if (qrylen > 0)
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
 
 						#ifdef DBDEBUG
@@ -583,15 +587,15 @@ extern struct rslt_struc resultsstruct[];
 									if (num_fields == 8) // now includes indirect host field
 									{
 										rc = sscanf(row[5], "%d", &port);
-										rc = sscanf(row[6], "%d", &result);
-										rc = sscanf(row[7], "%s", &hostind);
+										rc = sscanf(row[6], "%d", &res);
+										rc = sscanf(row[7], "%s", &hostind[0]);
 										if ( port == (0 + IPSCAN_PROTO_ICMPV6) )
 										{
-											printf("\"%s\", %d, ", hostind, result);
+											printf("\"%s\", %d, ", hostind, res);
 										}
 										else
 										{
-											printf("%d, ", result);
+											printf("%d, ", res);
 										}
 									}
 									else // original approach
@@ -753,8 +757,8 @@ extern struct rslt_struc resultsstruct[];
 
 				// int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session )
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
-				rc = sprintf(query, "SELECT hostmsb, hostlsb, createdate FROM r1 GROUP BY createdate ORDER BY createdate;\n" );
-				if (rc > 0)
+				rc = snprintf(query, MAXDBQUERYSIZE, "SELECT hostmsb, hostlsb, createdate FROM r1 GROUP BY createdate ORDER BY createdate;\n" );
+				if (rc > 0 && rc < MAXDBQUERYSIZE)
 				{
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "SQL Query is : %s\n", query);
@@ -791,7 +795,7 @@ extern struct rslt_struc resultsstruct[];
 				}
 				else
 				{
-						IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to create SQL query for dump\n");
+						IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to create SQL query for dump, return was %d\n", rc);
 						sqlite3_close(db);
 						return (6);
 				}
@@ -847,8 +851,8 @@ extern struct rslt_struc resultsstruct[];
 				else
 				{
 
-					qrylen = sprintf(query, "SELECT hostmsb, hostlsb, createdate FROM `%s` GROUP BY createdate ORDER BY createdate", MYSQL_TBLNAME);
-					if (qrylen > 0)
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT hostmsb, hostlsb, createdate FROM `%s` GROUP BY createdate ORDER BY createdate", MYSQL_TBLNAME);
+					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
 						#ifdef DBDEBUG
 						IPSCAN_LOG( LOGPREFIX "summarise_db: MySQL Query is : %s\n", query);

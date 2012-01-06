@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.91"
+	#define IPSCAN_VER "0.93"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -78,6 +78,8 @@
 	// 0.89 further logging improvements for ICMPv6 responses
 	// 0.90 INNER ICMPv6 packet logging, checking and reporting
 	// 0.91 further default logging improvements
+	// 0.92 removal of empty HTML paragraph
+	// 0.93 default to MySQL, potential query string overflow caught
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -184,7 +186,7 @@
 		#define SQLITE3BIN "/usr/bin/sqlite3"
 	#endif
 
-	#define MAXDBQUERYSIZE 255
+	#define MAXDBQUERYSIZE 512
 	#define DBACCESS_ATTEMPTS 5
 	#define BUSYHANDLERMAXCALLS 20
 

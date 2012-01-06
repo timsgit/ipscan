@@ -25,7 +25,10 @@ known to build on Opensuse versions 11.1, 11.4 and 12.1 and run alongside Apache
 
 IMPORTANT: when UPGRADING from versions before 0.90: a database change has occurred and consequently
 it is suggested that you remove your existing database prior to building and installing versions 0.90
-and later. For sqlite3 users ipscan.h has already been updated to use a different database file. 
+and later. For sqlite3 users ipscan.h has already been updated to use a different database file.
+
+MORE IMPORTANT: please consider the use of MySQL instead of sqlite whilst I investigate an issue with
+database locking during overlapping client scans. 
 
 Steps:
     1. edit the Makefile and adjust the following entries as required:
@@ -85,10 +88,10 @@ Steps:
        </Directory>
     
     7. Browse from a machine that you want testing towards your servers' IPv6 address, e.g.
-        w3m http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi  
+       w3m http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi  
 
     8. Check the apache access and error logs for messages. ipscan will place summary messages in the error log
-           for all scans.
+       for all scans.
     
 For those considering providing ipscan access on the public internet consider adding a landing page which will check for host IP address suitability prior to allowing access to the cgi script(s) - most (all?) search engine spiders currently only use IPv4. 
 It may be advisable to only offer direct links to the cgi scripts if the address checks were successful.

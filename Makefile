@@ -21,18 +21,19 @@
 # 0.01 - initial version
 # 0.02 - added MySQL support
 # 0.03 - addition of ping functionality (suid bit set)
+# 0.04 - default to MySQL
 
 # General build variables, including reference to the SQLITE3 library
 SHELL=/bin/sh
 LIBPATHS=-L/usr/lib
 INCLUDES=-I/usr/include
 LIBS=
-CC=gcc
+CC=gcc -g
 CFLAGS=-Wall
 
 # Determine the database backend type that we're going to use
 # 0 = sqlite ; 1 = mysql
-DBTYPE=0
+DBTYPE=1
 
 # Install location for the CGI files
 TARGETDIR=/srv/www/cgi-bin6

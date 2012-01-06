@@ -470,7 +470,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				// if a router replied instead of the host under test then size will be original packet plus an IPv6 header
 				if ( rxpacketsize == (sizeof(struct ip6_hdr) + 8 + sendsize) )
 				{
-					char ipv6address[INET6_ADDRSTRLEN], ipv6address2[INET6_ADDRSTRLEN];
+					char tx_dst_addr[INET6_ADDRSTRLEN], orig_src_addr[INET6_ADDRSTRLEN], orig_dst_addr[INET6_ADDRSTRLEN];
 					struct ip6_hdr *rx2ip6hdr_ptr;
 					struct icmp6_hdr *rx2icmp6hdr_ptr;
 					rx2ip6hdr_ptr = (struct ip6_hdr *)&rxpacket[sizeof(struct icmp6_hdr)];
@@ -479,25 +479,26 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 					struct in6_addr orig_src = rx2ip6hdr_ptr->ip6_src;
 					unsigned int nextheader = rx2ip6hdr_ptr->ip6_nxt;
 
-					inet_ntop(AF_INET6, &orig_src, ipv6address, INET6_ADDRSTRLEN);
+					inet_ntop(AF_INET6, &orig_src, orig_src_addr, INET6_ADDRSTRLEN);
 					// original source address would be our IPv6 address
 					// TODO - perhaps we should be checking this for completeness ...
 					#ifdef PINGDEBUG
-					IPSCAN_LOG( LOGPREFIX "INNER IPv6 hdr src address is: %s\n", ipv6address);
+					IPSCAN_LOG( LOGPREFIX "INNER IPv6 hdr src address is: %s\n", orig_src_addr);
 					#endif
 
-					inet_ntop(AF_INET6, &orig_dst, ipv6address, INET6_ADDRSTRLEN);
+					inet_ntop(AF_INET6, &orig_dst, orig_dst_addr, INET6_ADDRSTRLEN);
 					// original destination should match our transmitted destination address
 					#ifdef PINGDEBUG
-					IPSCAN_LOG( LOGPREFIX "INNER IPv6 hdr dst address is: %s\n", ipv6address);
+					IPSCAN_LOG( LOGPREFIX "INNER IPv6 hdr dst address is: %s\n", orig_dst_addr);
 					#endif
+
+					inet_ntop(AF_INET6, &(destination.sin6_addr), tx_dst_addr, INET6_ADDRSTRLEN);
 
 					// if addresses don't match then it was returned in response to another packet,
 					// so this packet is not relevant to us ...
 					if ( IN6_ARE_ADDR_EQUAL( &orig_dst, &(destination.sin6_addr) ) == 0)
 					{
-						inet_ntop(AF_INET6, &(destination.sin6_addr), ipv6address2, INET6_ADDRSTRLEN);
-						IPSCAN_LOG( LOGPREFIX "RESTART: INNER IPv6 hdr DST %s != TX DST %s\n", ipv6address, ipv6address2);
+						IPSCAN_LOG( LOGPREFIX "RESTART: INNER IPv6 hdr DST %s != TX DST %s\n", orig_dst_addr, tx_dst_addr);
 						continue;
 					}
 
@@ -573,7 +574,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 							// If we get to this point then the returned packet was in response to the packet we originally
 							// transmitted
 							//
-							IPSCAN_LOG( LOGPREFIX "INNER ICMPv6 was a successful match, so flagging INDIRECT response\n");
+							IPSCAN_LOG( LOGPREFIX "Packet from %s contained our tx ECHO-REQUEST, so flagging INDIRECT response\n", router);
 							indirect = IPSCAN_INDIRECT_RESPONSE;
 						}
 						else
