@@ -24,6 +24,7 @@
 // 0.04 - improved HTML (transition to styles, general compliance)
 // 0.05 - addition of ICMPv6 ECHO-REQUEST functionality
 // 0.06 - removal of empty HTML paragraph
+// 0.07 - further buffer overflow prevention measures
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -54,22 +55,35 @@
 	#include <syslog.h>
 #endif
 
-
+//
 // Prototype declarations
+//
+
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
-int summarise_db(void);
+
 int check_tcp_port(char * hostname, uint16_t port);
 int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
 void create_html_common_header(void);
 void create_json_header(void);
-void create_results_key_table(char * hostname, time_t timestamp);
 void create_html_header(char * servername, uint64_t session, time_t timestamp, uint16_t numports, uint16_t *portlist, char * reconquery);
 void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint16_t numports, uint16_t *portlist);
 void create_html_body_end(void);
 void create_html_form(uint16_t numports, uint16_t *portlist);
-// End of prototypes declarations
 
+// create_results_key_table is only referenced if creating the text-only version
+#if (TEXTMODE == 1)
+void create_results_key_table(char * hostname, time_t timestamp);
+#endif
+
+// summarise_db is only referenced if summary is enabled
+#if (SUMMARYENABLE == 1)
+int summarise_db(void);
+#endif
+
+//
+// End of prototypes declarations
+//
 
 // structure holding the potential results table - entries MUST be in montonically increasing enumerated returnval order
 struct rslt_struc resultsstruct[] =
@@ -108,7 +122,7 @@ int main(void)
 	#endif
 
 	int result, pingresult;
-	char remoteaddrstring[64];
+	char remoteaddrstring[INET6_ADDRSTRLEN];
 	char *remoteaddrvar;
 
 	// Storage for indirecthost address, in case required
@@ -143,7 +157,7 @@ int main(void)
 	unsigned int portsstats[ NUMRESULTTYPES ];
 
 	// Determine request method and query-string
-	char requestmethod[16];
+	char requestmethod[MAXREQMETHODLEN];
 	char thischar;
 	char *reqmethodvar;
 	char *querystringvar;
@@ -212,13 +226,20 @@ int main(void)
 	// QUERY_STRING = name1=value1&name2=value2 
 	reqmethodvar = getenv("REQUEST_METHOD");
 	querystringvar = getenv("QUERY_STRING");
+
+	// ensure length OK
 	if (NULL == reqmethodvar)
 	{
 		#ifdef DEBUG
 		IPSCAN_LOG( LOGPREFIX "Error in passing request-method from form to script.");
 		#endif
 	}
-	else if( sscanf(reqmethodvar,"%s",requestmethod) != 1 )
+	else if ( strlen(reqmethodvar) > MAXREQMETHODLEN )
+	{
+		//IPSCAN_LOG( LOGPREFIX "Request-method environment string is longer than allocated buffer\n");
+		//exit(CHECKTHELOGRC);
+	}
+	else if( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
 	{
 		#ifdef DEBUG
 		IPSCAN_LOG( LOGPREFIX "Invalid request-method scan.");
@@ -243,7 +264,12 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "Error in passing null query-string from form to script.\n");
 			}
-			else if( sscanf(querystringvar,"%s",querystring) != 1 )
+			else if ( strlen(querystringvar) > MAXQUERYSTRLEN)
+			{
+				IPSCAN_LOG( LOGPREFIX "Query-string environment string is longer than allocated buffer (%d)\n", MAXQUERYSTRLEN);
+				exit(CHECKTHELOGRC);
+			}
+			else if( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
 			{
 				#ifdef DEBUG
 				// No query string will get reported here ....
@@ -358,7 +384,12 @@ int main(void)
 	{
 		IPSCAN_LOG( LOGPREFIX "Error in passing remoteaddr data from form to script.\n");
 	}
-	else if( sscanf(remoteaddrvar,"%s",remoteaddrstring) != 1 )
+	else if (strlen(remoteaddrvar) > INET6_ADDRSTRLEN)
+	{
+		IPSCAN_LOG( LOGPREFIX "Host address length exceeds allocated buffer size (%d > %d)\n", strlen(remoteaddrvar), INET6_ADDRSTRLEN);
+		exit(CHECKTHELOGRC);
+	}
+	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
 	{
 		IPSCAN_LOG( LOGPREFIX "Invalid remoteaddr data.\n");
 	}
@@ -716,7 +747,7 @@ int main(void)
 					rc = snprintf(logbufferptr, logbuffersize, ", %d %s", portsstats[i], resultsstruct[i].label);
 				}
 
-				if (rc >= logbuffersize)
+				if (rc < 0 || rc >= logbuffersize)
 				{
 					IPSCAN_LOG( LOGPREFIX "logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
 					exit(CHECKTHELOGRC);
@@ -838,7 +869,7 @@ int main(void)
 					rc = snprintf(logbufferptr, logbuffersize, ", %d %s", portsstats[i], resultsstruct[i].label);
 				}
 
-				if (rc >= logbuffersize)
+				if (rc < 0 || rc >= logbuffersize)
 				{
 					IPSCAN_LOG( LOGPREFIX "logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
 					exit(CHECKTHELOGRC);

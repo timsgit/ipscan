@@ -20,35 +20,24 @@ along with ipscan. If not, see <http://www.gnu.org/licenses/>.
 ---
 
 ipscan requires a database and its development libraries to be installed on the server which will act as
-your scanner. ipscan currently supports two flavours of database backend - sqlite3 and MySQL. ipscan is 
+your scanner. ipscan supports MySQL as its' database backend. ipscan is 
 known to build on Opensuse versions 11.1, 11.4 and 12.1 and run alongside Apache version 2.2.
 
 IMPORTANT: when UPGRADING from versions before 0.90: a database change has occurred and consequently
 it is suggested that you remove your existing database prior to building and installing versions 0.90
-and later. For sqlite3 users ipscan.h has already been updated to use a different database file.
-
-MORE IMPORTANT: please consider the use of MySQL instead of sqlite whilst I investigate an issue with
-database locking during overlapping client scans. 
+and later.
 
 Steps:
     1. edit the Makefile and adjust the following entries as required:
-        a. DBTYPE - set to 1 if MySQL is to be used as the database backend, else 0 for sqlite3.
-        b. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
-        c. URLPATH - this is the URL by which the cgi files will be accessed from your webserver
+        a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
+        b. URLPATH - this is the URL by which the cgi files will be accessed from your webserver
                    e.g. http://ipv6.chappell-family.com/cgi-bin6/ipscan-js.cgi then set URLPATH=/cgi-bin6
-        d. SQLITE3BIN - if DBTYPE selects sqlite3 then this should be set to point to the location of 
-           your sqlite3 binary:
-                   (e.g. /usr/bin/sqlite3)
-        e. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
+        c. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
 
     2. edit ipscan.h and adjust *at least* the following entries:
         a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will 
                           be world-accessible
-        b. DBDIR        - if sqlite3 is in use then the sqlite3 database files will be created here.
-                          ensure the specified directory exists and has read/write/execute permissions 
-                          for apache!
-        c. MYSQL_XXXX   - if MySQL is in use then adjust the following constants to
-                          match the settings of your database server: 
+        b. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
                           MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
                           MYSQL_USER - the username used to access the ipscan database.
                           MYSQL_PASSWD - the password used to identify the MySQL user.
@@ -57,8 +46,8 @@ Steps:
 
     3. edit ipscan_portlist.h and change the list of ports to be tested, if required
     
-    4. if you are using MySQL as the database backend then you need to create the database and user and allocate 
-       appropriate user privileges, using the following commands within the mysql shell:
+    4. Create the database and user and allocate appropriate user privileges, using the following 
+       commands within the mysql shell:
        
        NB: adjust the host, user name, password and database name to match the globals you've edited above:
     

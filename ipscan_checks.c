@@ -24,6 +24,7 @@
 // 0.04 - reordered code to match calling order
 // 0.05 - add support for indirect ICMPv6 host responses
 // 0.06 - improved default ICMPv6 packet logging
+// 0.07 - further buffer overflow prevention
 
 #include "ipscan.h"
 //
@@ -139,8 +140,13 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	// Done with the address info now, so free the area
 	freeaddrinfo(res);
 
-	// Set default address to "unset"
-	snprintf(router, INET6_ADDRSTRLEN, "unset");
+	// Set default logged router address to "unset"
+	rc = snprintf(router, INET6_ADDRSTRLEN, "unset");
+	if (rc < 0 || rc >= INET6_ADDRSTRLEN)
+	{
+		IPSCAN_LOG( LOGPREFIX "Failed to unset logged router address, rc was %d\n", rc);
+		retval = PORTINTERROR;
+	}
 
 	// Get root privileges in order to create the raw socket
 
@@ -281,9 +287,9 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	#endif
 
 	rc = snprintf(&txpackdata[ICMP6DATAOFFSET],(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET),"%"PRId64" %"PRId64" %d %d", starttime, session, ICMPV6_MAGIC_VALUE1, ICMPV6_MAGIC_VALUE2);
-	if (rc < 0 || rc > (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET))
+	if (rc < 0 || rc >= (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET))
 	{
-		IPSCAN_LOG( LOGPREFIX "snprintf returned %d, expected >=0 but <= %d\n", rc, (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET));
+		IPSCAN_LOG( LOGPREFIX "snprintf returned %d, expected >=0 but < %d\n", rc, (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET));
 		retval = PORTINTERROR;
 		if (-1 != sock) close(sock); // close socket if appropriate
 		return(retval);
@@ -739,7 +745,13 @@ int check_tcp_port(char * hostname, uint16_t port)
 	// set return value to a known default
 	int retval = PORTUNKNOWN;
 
-	snprintf(portnum, 8,"%d", port);
+	error = snprintf(portnum, 8,"%d", port);
+	if (error < 0 || error >= 8)
+	{
+		IPSCAN_LOG( LOGPREFIX "Failed to write portnum, rc was %d\n", error);
+		retval = PORTINTERROR;
+	}
+
 	error = getaddrinfo(hostname, portnum, &hints, &res);
 	if (error != 0)
 	{

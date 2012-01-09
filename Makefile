@@ -22,18 +22,15 @@
 # 0.02 - added MySQL support
 # 0.03 - addition of ping functionality (suid bit set)
 # 0.04 - default to MySQL
+# 0.05 - remove sqlite support
 
-# General build variables, including reference to the SQLITE3 library
+# General build variables
 SHELL=/bin/sh
 LIBPATHS=-L/usr/lib
 INCLUDES=-I/usr/include
 LIBS=
-CC=gcc -g
+CC=gcc
 CFLAGS=-Wall
-
-# Determine the database backend type that we're going to use
-# 0 = sqlite ; 1 = mysql
-DBTYPE=1
 
 # Install location for the CGI files
 TARGETDIR=/srv/www/cgi-bin6
@@ -43,9 +40,6 @@ TARGETDIR=/srv/www/cgi-bin6
 # to provide CGI access via an alias. 
 # NB : the path should begin with a / but must NOT end with one ....
 URLPATH=/cgi-bin6
-
-# Define where the sqlite3 binary exists on your server
-SQLITE3BIN=/usr/bin/sqlite3
 
 # Text-version target executable name
 TXTTARGET=ipscan-txt.cgi
@@ -61,24 +55,18 @@ JSTARGET=ipscan-js.cgi
 
 # Determine the appropriate database related include/library paths
 # as well as any necessary libraries
-ifeq (${DBTYPE}, 0)
-LIBS+=-lsqlite3
-CFLAGS+=-O
-INCLUDES+=
-else
 LIBS+=$(shell mysql_config --libs)
 CFLAGS+=$(shell mysql_config --cflags)
 INCLUDES+=$(shell mysql_config --include)
-endif
 
 # Concatenate the necessary parameters for the two targets
 CMNPARAMS=-DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
-CMNPARAMS+= -DDIRPATH=\"$(URLPATH)\" -DSQLITE3BIN=\"$(SQLITE3BIN)\" -DDBTYPE=$(DBTYPE)
+CMNPARAMS+= -DDIRPATH=\"$(URLPATH)\"
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 $(CMNPARAMS)
 
 # Common header files which are always a dependancy
-HEADERFILES=ipscan.h ipscan_portlist.h Makefile
+HEADERFILES=ipscan.h ipscan_portlist.h
 # Any other files on which we depend
 DEPENDFILE=Makefile
 

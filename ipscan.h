@@ -17,8 +17,6 @@
 //    You should have received a copy of the GNU General Public License
 //    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
 
-
-
 #ifndef IPSCAN_H
 	#define IPSCAN_H 1
 	//
@@ -45,7 +43,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.93"
+	#define IPSCAN_VER "0.94"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -80,12 +78,10 @@
 	// 0.91 further default logging improvements
 	// 0.92 removal of empty HTML paragraph
 	// 0.93 default to MySQL, potential query string overflow caught
+	// 0.94 improve buffer overflow protection, remove SQLITE support
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
-
-		// Database results directory
-	#define DBDIR "/var/lib/ipscan"
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
@@ -129,12 +125,13 @@
 	#define MAXQUERYNAMELEN 32
 	#define MAXQUERYVALLEN 64
 
-	// Determine database type, should be determined in Makefile, but default to sqlite3
-	// There should be no need to change this setting.
-	// 0 = sqlite3 ; 1 = mysql
-	#ifndef DBTYPE
-		#define DBTYPE 0
-	#endif
+	// Maximum length of request-method string
+	// should be one of GET, HEADER, POST, OPTIONS, etc. so 16 sufficient
+	#define MAXREQMETHODLEN 16
+
+	// Magic to convert from #defined integers to strings (used to protect sscanf)
+	#define TOSTR1(i) #i
+	#define TO_STR(i) TOSTR1(i)
 
 	// Determine the executable CGI script filenames
 	// These SHOULD be defined in the makefile, but provide some defaults in case
@@ -145,21 +142,12 @@
 		#define EXEJSNAME "ipscan-js.cgi"
 	#endif
 
-	// Determine sqlite database filenames (updated names for version 0.90 onward)
-	#define DBTXTNAME "results-txtb.db"
-	#define DBJSNAME "results-jsb.db"
-
 	// Determine the executables' and database results' file names
 	#if (TEXTMODE == 1)
 		#define EXENAME EXETXTNAME
-		#define DATABASEFILE DBTXTNAME
 	#else
 		#define EXENAME EXEJSNAME
-		#define DATABASEFILE DBJSNAME
 	#endif
-
-	// Create a reference pointing to the sqlite results' database file
-	#define DBFILE DBDIR "/" DATABASEFILE
 
 	// Served HTTP URL directory path - needs leading /, but not a trailing one ...
 	// This SHOULD be defined in the makefile, but provide a default here just in case
@@ -181,14 +169,7 @@
 	// Database related
 	//
 
-	// Set an assumed location for the SQLITE3 binary in case the Makefile doesn't have one
-	#ifndef SQLITE3BIN
-		#define SQLITE3BIN "/usr/bin/sqlite3"
-	#endif
-
 	#define MAXDBQUERYSIZE 512
-	#define DBACCESS_ATTEMPTS 5
-	#define BUSYHANDLERMAXCALLS 20
 
 	// MySQL database-related globals
 
@@ -233,7 +214,6 @@
 	#define ICMPV6_MAGIC_SEQ 12478
 	#define ICMPV6_MAGIC_VALUE1 1289
 	#define ICMPV6_MAGIC_VALUE2 12569
-
 
 	// Protocol mappings (stored in database)
 	#define IPSCAN_PROTO_TCP (0<<16)
