@@ -19,12 +19,10 @@ along with ipscan. If not, see <http://www.gnu.org/licenses/>.
 
 ---
 
-ipscan requires a database and its development libraries to be installed on the server which will act as
-your scanner. ipscan supports MySQL as its' database backend. ipscan is 
+ipscan requires a database and its development libraries to be installed on the server which will act as your scanner. ipscan supports MySQL as its' database backend. ipscan is 
 known to build on Opensuse versions 11.1, 11.4 and 12.1 and run alongside Apache version 2.2.
 
-IMPORTANT: when UPGRADING from versions before 0.90: a database change has occurred and consequently
-it is suggested that you remove your existing database prior to building and installing versions 0.90
+IMPORTANT: when UPGRADING from versions before 0.90: a database change has occurred and consequently it is suggested that you remove your existing database prior to building and installing versions 0.90
 and later.
 
 Steps:
@@ -46,8 +44,7 @@ Steps:
 
     3. edit ipscan_portlist.h and change the list of ports to be tested, if required
     
-    4. Create the database and user and allocate appropriate user privileges, using the following 
-       commands within the mysql shell:
+    4. Create the database and user and allocate appropriate user privileges, using the following commands within the mysql shell:
        
        NB: adjust the host, user name, password and database name to match the globals you've edited above:
     
@@ -65,8 +62,7 @@ Steps:
        
     5. make && make install
     
-    6. make sure that the URL path directory (which may well be accessed via an Apache alias) 
-       is enabled to execute cgi:
+    6. make sure that the URL path directory (which may well be accessed via an Apache alias) is enabled to execute cgi:
     
        ScriptAlias /cgi-bin6/ "/srv/www/cgi-bin6/"
        <Directory "/srv/www/cgi-bin6">
@@ -79,8 +75,7 @@ Steps:
     7. Browse from a machine that you want testing towards your servers' IPv6 address, e.g.
        w3m http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi  
 
-    8. Check the apache access and error logs for messages. ipscan will place summary messages in the error log
-       for all scans.
+    8. Check the apache access and error logs for messages. ipscan will place summary messages in the error log for all scans.
     
 For those considering providing ipscan access on the public internet consider adding a landing page which will check for host IP address suitability prior to allowing access to the cgi script(s) - most (all?) search engine spiders currently only use IPv4. 
 It may be advisable to only offer direct links to the cgi scripts if the address checks were successful.
