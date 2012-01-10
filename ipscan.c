@@ -25,6 +25,7 @@
 // 0.05 - addition of ICMPv6 ECHO-REQUEST functionality
 // 0.06 - removal of empty HTML paragraph
 // 0.07 - further buffer overflow prevention measures
+// 0.08 - correct printf cast
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -236,7 +237,7 @@ int main(void)
 	}
 	else if ( strlen(reqmethodvar) > MAXREQMETHODLEN )
 	{
-		IPSCAN_LOG( LOGPREFIX "ATTACK?: Request-method environment string is longer than allocated buffer (%d > %d)\n", strlen(reqmethodvar), MAXREQMETHODLEN);
+		IPSCAN_LOG( LOGPREFIX "ATTACK?: Request-method environment string is longer than allocated buffer (%d > %d)\n", (int)strlen(reqmethodvar), MAXREQMETHODLEN);
 		// Create the header
 		create_html_common_header();
 		// Now finish the header
@@ -275,7 +276,7 @@ int main(void)
 			}
 			else if ( strlen(querystringvar) > MAXQUERYSTRLEN)
 			{
-				IPSCAN_LOG( LOGPREFIX "ATTACK?: Query-string environment string is longer than allocated buffer (%d > %d)\n", strlen(querystringvar), MAXQUERYSTRLEN);
+				IPSCAN_LOG( LOGPREFIX "ATTACK?: Query-string environment string is longer than allocated buffer (%d > %d)\n", (int)strlen(querystringvar), MAXQUERYSTRLEN);
 				// Create the header
 				create_html_common_header();
 				// Now finish the header
@@ -412,7 +413,7 @@ int main(void)
 	}
 	else if (strlen(remoteaddrvar) > INET6_ADDRSTRLEN)
 	{
-		IPSCAN_LOG( LOGPREFIX "Host address length exceeds allocated buffer size (%d > %d)\n", strlen(remoteaddrvar), INET6_ADDRSTRLEN);
+		IPSCAN_LOG( LOGPREFIX "Host address length exceeds allocated buffer size (%d > %d)\n", (int)strlen(remoteaddrvar), INET6_ADDRSTRLEN);
 		exit(CHECKTHELOGRC);
 	}
 	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )

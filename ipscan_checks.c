@@ -25,6 +25,7 @@
 // 0.05 - add support for indirect ICMPv6 host responses
 // 0.06 - improved default ICMPv6 packet logging
 // 0.07 - further buffer overflow prevention
+// 0.08 - correct printf cast
 
 #include "ipscan.h"
 //
@@ -289,7 +290,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	rc = snprintf(&txpackdata[ICMP6DATAOFFSET],(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET),"%"PRId64" %"PRId64" %d %d", starttime, session, ICMPV6_MAGIC_VALUE1, ICMPV6_MAGIC_VALUE2);
 	if (rc < 0 || rc >= (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET))
 	{
-		IPSCAN_LOG( LOGPREFIX "snprintf returned %d, expected >=0 but < %d\n", rc, (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET));
+		IPSCAN_LOG( LOGPREFIX "snprintf returned %d, expected >=0 but < %d\n", rc, (int)(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET));
 		retval = PORTINTERROR;
 		if (-1 != sock) close(sock); // close socket if appropriate
 		return(retval);
