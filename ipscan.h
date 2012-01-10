@@ -43,7 +43,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.94"
+	#define IPSCAN_VER "0.95"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -79,6 +79,7 @@
 	// 0.92 removal of empty HTML paragraph
 	// 0.93 default to MySQL, potential query string overflow caught
 	// 0.94 improve buffer overflow protection, remove SQLITE support
+	// 0.95 tidy up HTML error reporting for buffer overflow cases.
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"

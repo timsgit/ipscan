@@ -71,12 +71,12 @@ void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint1
 void create_html_body_end(void);
 void create_html_form(uint16_t numports, uint16_t *portlist);
 
-// create_results_key_table is only referenced if creating the text-only version
+// create_results_key_table is only referenced if creating the text-only version of the scanner
 #if (TEXTMODE == 1)
 void create_results_key_table(char * hostname, time_t timestamp);
 #endif
 
-// summarise_db is only referenced if summary is enabled
+// summarise_db is only referenced if summary reporting is enabled
 #if (SUMMARYENABLE == 1)
 int summarise_db(void);
 #endif
@@ -236,8 +236,17 @@ int main(void)
 	}
 	else if ( strlen(reqmethodvar) > MAXREQMETHODLEN )
 	{
-		//IPSCAN_LOG( LOGPREFIX "Request-method environment string is longer than allocated buffer\n");
-		//exit(CHECKTHELOGRC);
+		IPSCAN_LOG( LOGPREFIX "ATTACK?: Request-method environment string is longer than allocated buffer (%d > %d)\n", strlen(reqmethodvar), MAXREQMETHODLEN);
+		// Create the header
+		create_html_common_header();
+		// Now finish the header
+		printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+		printf("</HEAD>\n");
+		printf("<BODY>\n");
+		printf("<P>I was called with request-method longer than my allocated buffer. That is very disappointing.</P>\n");
+		// Finish the html
+		create_html_body_end();
+		exit(CHECKTHELOGRC);
 	}
 	else if( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
 	{
@@ -266,7 +275,16 @@ int main(void)
 			}
 			else if ( strlen(querystringvar) > MAXQUERYSTRLEN)
 			{
-				IPSCAN_LOG( LOGPREFIX "Query-string environment string is longer than allocated buffer (%d)\n", MAXQUERYSTRLEN);
+				IPSCAN_LOG( LOGPREFIX "ATTACK?: Query-string environment string is longer than allocated buffer (%d > %d)\n", strlen(querystringvar), MAXQUERYSTRLEN);
+				// Create the header
+				create_html_common_header();
+				// Now finish the header
+				printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+				printf("</HEAD>\n");
+				printf("<BODY>\n");
+				printf("<P>I was called with a query-string longer than my allocated buffer. That is very disappointing.</P>\n");
+				// Finish the html
+				create_html_body_end();
 				exit(CHECKTHELOGRC);
 			}
 			else if( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
@@ -324,8 +342,7 @@ int main(void)
 						valstring[valbyte]=0;
 						if (valbyte >= MAXQUERYVALLEN)
 						{
-							IPSCAN_LOG( LOGPREFIX "query parameter value string is too long for %s : %s\n", \
-									query[numqueries].varname, querystring);
+							IPSCAN_LOG( LOGPREFIX "query parameter value string is too long for %s : %s\n", query[numqueries].varname, querystring);
 						}
 						rc = sscanf(valstring,"%"SCNd64, &varval );
 						if (rc == 1)
@@ -373,7 +390,16 @@ int main(void)
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "Unsupported request method: %s.\n", requestmethod);
+			IPSCAN_LOG( LOGPREFIX "WARNING: called with an unsupported request method: %s.\n", requestmethod);
+			// Create the header
+			create_html_common_header();
+			// Now finish the header
+			printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("</HEAD>\n");
+			printf("<BODY>\n");
+			printf("<P>I was called with an unsupported request-method. That is very disappointing.</P>\n");
+			// Finish the html
+			create_html_body_end();
 			exit(CHECKTHELOGRC);
 		}
 	}
@@ -781,7 +807,7 @@ int main(void)
 			rc = dump_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "dump_db rc was %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "dump_db return code was %d (expected 0)\n", rc);
 				exit(CHECKTHELOGRC);
 			}
 		}
