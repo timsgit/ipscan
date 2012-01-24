@@ -36,11 +36,11 @@ CFLAGS=-Wall
 # Install location for the CGI files
 TARGETDIR=/srv/www/cgi-bin6
 
-# HTTP URL PATH by which external hosts will access the CGI files.
+# HTTP URI PATH by which external hosts will access the CGI files.
 # This may well be unrelated to the installation path if Apache is configured
 # to provide CGI access via an alias. 
 # NB : the path should begin with a / but must NOT end with one ....
-URLPATH=/cgi-bin6
+URIPATH=/cgi-bin6
 
 # Text-version target executable name
 TXTTARGET=ipscan-txt.cgi
@@ -62,7 +62,7 @@ INCLUDES+=$(shell mysql_config --include)
 
 # Concatenate the necessary parameters for the two targets
 CMNPARAMS=-DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
-CMNPARAMS+= -DDIRPATH=\"$(URLPATH)\"
+CMNPARAMS+= -DURIPATH=\"$(URIPATH)\"
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 $(CMNPARAMS)
 

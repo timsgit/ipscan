@@ -26,6 +26,7 @@
 // 0.06 - removal of empty HTML paragraph
 // 0.07 - further buffer overflow prevention measures
 // 0.08 - correct printf cast
+// 0.09 - tidy up exit calls and verbosity support
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -247,7 +248,7 @@ int main(void)
 		printf("<P>I was called with request-method longer than my allocated buffer. That is very disappointing.</P>\n");
 		// Finish the html
 		create_html_body_end();
-		exit(CHECKTHELOGRC);
+		exit(EXIT_FAILURE);
 	}
 	else if( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
 	{
@@ -286,7 +287,7 @@ int main(void)
 				printf("<P>I was called with a query-string longer than my allocated buffer. That is very disappointing.</P>\n");
 				// Finish the html
 				create_html_body_end();
-				exit(CHECKTHELOGRC);
+				exit(EXIT_FAILURE);
 			}
 			else if( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
 			{
@@ -387,7 +388,7 @@ int main(void)
         		printf("</HEAD>\n");
 		        printf("</HTML>\n");
 			IPSCAN_LOG( LOGPREFIX "HEAD request method, sending headers only\n");
-			exit(0);
+			exit(EXIT_SUCCESS);
 		}
 		else
 		{
@@ -401,7 +402,7 @@ int main(void)
 			printf("<P>I was called with an unsupported request-method. That is very disappointing.</P>\n");
 			// Finish the html
 			create_html_body_end();
-			exit(CHECKTHELOGRC);
+			exit(EXIT_FAILURE);
 		}
 	}
 
@@ -414,7 +415,7 @@ int main(void)
 	else if (strlen(remoteaddrvar) > INET6_ADDRSTRLEN)
 	{
 		IPSCAN_LOG( LOGPREFIX "Host address length exceeds allocated buffer size (%d > %d)\n", (int)strlen(remoteaddrvar), INET6_ADDRSTRLEN);
-		exit(CHECKTHELOGRC);
+		exit(EXIT_FAILURE);
 	}
 	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
 	{
@@ -427,7 +428,7 @@ int main(void)
 		if (rc <= 0)
 		{
 			IPSCAN_LOG( LOGPREFIX "Unparseable IPv6 host address : %s\n", remoteaddrstring);
-			exit(CHECKTHELOGRC);
+			exit(EXIT_FAILURE);
 		}
 		else
 		{
@@ -512,15 +513,13 @@ int main(void)
 			if (reconquerysize <= 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
-				exit(CHECKTHELOGRC);
+				exit(EXIT_FAILURE);
 			}
 		}
 		else
 		{
-			#ifdef DEBUG
 			IPSCAN_LOG( LOGPREFIX "attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
-			#endif
-			exit(CHECKTHELOGRC);
+			exit(EXIT_FAILURE);
 		}
 
 		// Determine whether existing ports are to be included in the tested list or not:
@@ -569,13 +568,13 @@ int main(void)
 							if (reconquerysize <= 0)
 							{
 								IPSCAN_LOG( LOGPREFIX "run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
-								exit(CHECKTHELOGRC);
+								exit(EXIT_FAILURE);
 							}
 						}
 						else
 						{
 							IPSCAN_LOG( LOGPREFIX "customport%d reconstitution failed, due to unexpected size.\n", customport);
-							exit(CHECKTHELOGRC);
+							exit(EXIT_FAILURE);
 						}
 					}
 				}
@@ -675,7 +674,9 @@ int main(void)
 			printf("<BODY>\n");
 			printf("<H3 style=\"color:red\">IPv6 Universal TCP Port Scanner by Tim Chappell</H3>\n");
 			printf("<P>Results for host : %s</P>\n\n", remoteaddrstring);
+			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
+			#endif
 			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
 					asctime(localtime(&starttime)), (numports * TIMEOUTSECS));
 
@@ -683,8 +684,8 @@ int main(void)
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, starttime, session, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 
-			#ifdef PINGDEBUG
-			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d, indirect host %s\n",remoteaddrstring, pingresult, indirecthost);
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#endif
 
 			portsstats[result]++ ;
@@ -777,7 +778,7 @@ int main(void)
 				if (rc < 0 || rc >= logbuffersize)
 				{
 					IPSCAN_LOG( LOGPREFIX "logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
-					exit(CHECKTHELOGRC);
+					exit(EXIT_FAILURE);
 				}
 
 				logbufferptr += rc ;
@@ -785,7 +786,9 @@ int main(void)
 				position ++ ;
 				if ( position >= LOGMAXCOLS || i == (NUMRESULTTYPES -1) )
 				{
+					#if (IPSCAN_LOGVERBOSITY == 1)
 					IPSCAN_LOG( LOGPREFIX "%s\n", logbuffer);
+					#endif
 					logbufferptr = &logbuffer[0];
 					logbuffersize = LOGENTRYLEN;
 					position = 0;
@@ -809,7 +812,7 @@ int main(void)
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "dump_db return code was %d (expected 0)\n", rc);
-				exit(CHECKTHELOGRC);
+				exit(EXIT_FAILURE);
 			}
 		}
 
@@ -820,7 +823,9 @@ int main(void)
 		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && fetch == 0)
 		{
 
+			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
+			#endif
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
 			create_html_common_header();
@@ -830,16 +835,16 @@ int main(void)
 
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
-			#ifdef PINGDEBUG
-			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d, indirect host %s\n",remoteaddrstring, pingresult, indirecthost);
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#endif
 			portsstats[result]++ ;
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "write_db for ping result returned : %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "write_db for ping result returned non-zero: %d\n", rc);
 				create_html_body_end();
-				exit(CHECKTHELOGRC);
+				exit(EXIT_FAILURE);
 			}
 
 			for (portindex= 0; portindex < numports ; portindex++)
@@ -868,7 +873,7 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "write_db inside scan routine returned : %d\n", rc);
 					create_html_body_end();
-					exit(CHECKTHELOGRC);
+					exit(EXIT_FAILURE);
 				}
 			}
 
@@ -899,7 +904,7 @@ int main(void)
 				if (rc < 0 || rc >= logbuffersize)
 				{
 					IPSCAN_LOG( LOGPREFIX "logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
-					exit(CHECKTHELOGRC);
+					exit(EXIT_FAILURE);
 				}
 
 				logbufferptr += rc ;
@@ -907,7 +912,9 @@ int main(void)
 				position ++ ;
 				if ( position >= LOGMAXCOLS || i == (NUMRESULTTYPES -1) )
 				{
+					#if (IPSCAN_LOGVERBOSITY == 1)
 					IPSCAN_LOG( LOGPREFIX "%s\n", logbuffer);
+					#endif
 					logbufferptr = &logbuffer[0];
 					logbuffersize = LOGENTRYLEN;
 					position = 0;
@@ -922,7 +929,9 @@ int main(void)
 
 		else if (numqueries >= (NUMUSERDEFPORTS + 1) && includeexisting != 0 && beginscan == 0 && fetch == 0)
 		{
+			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "Creating the standard web results page start point\n");
+			#endif
 			starttime = time(0);
 			session = (uint64_t) getpid();
 			// Create the header
@@ -973,5 +982,5 @@ int main(void)
 					querysession, querystarttime, numports);
 		}
 	}
-	exit(0);
+	exit(EXIT_SUCCESS);
 }

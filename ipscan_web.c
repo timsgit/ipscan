@@ -23,6 +23,7 @@
 // 0.03 - addition of ping functionality
 // 0.04 - addition of indirect host support
 // 0.05 - removal of empty HTML paragraph
+// 0.06 - tidy up URIPATH and comparisons
 
 #include "ipscan.h"
 
@@ -76,7 +77,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("var initreq = \"\";\n");
 	printf("var updateurl = \"\";\n");
 	printf("var lastupdate = 0;\n");
-	printf("var starturl = \""DIRPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\";\n",\
+	printf("var starturl = \""URIPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\";\n",\
 			MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
 	// create a prefilled array containing the list of ports to be tested
 	printf("var portlist = [");
@@ -100,21 +101,21 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("var retvals = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
-		if (i == 0) printf(" %d",resultsstruct[i].returnval); else printf(" ,%d",resultsstruct[i].returnval);
+		if (0 == i) printf(" %d",resultsstruct[i].returnval); else printf(" ,%d",resultsstruct[i].returnval);
 	}
 	printf(" ];\n");
 	// create a prefilled array containing the text label (shorthand) describing each of the potential states returned for each port
 	printf("var labels = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
-		if (i == 0) printf(" \"%s\"",resultsstruct[i].label); else printf(" ,\"%s\"",resultsstruct[i].label);
+		if (0 == i) printf(" \"%s\"",resultsstruct[i].label); else printf(" ,\"%s\"",resultsstruct[i].label);
 	}
 	printf(" ];\n");
 	// create a prefilled array containing the colour to be applied to each of the potential states returned for each port
 	printf("var colours = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
-		if (i == 0) printf(" \"%s\"",resultsstruct[i].colour); else printf(" ,\"%s\"",resultsstruct[i].colour);
+		if (0 == i) printf(" \"%s\"",resultsstruct[i].colour); else printf(" ,\"%s\"",resultsstruct[i].colour);
 	}
 	printf(" ];\n");
 	// create an HTTP object which copes with each of the various browser vagaries
@@ -159,7 +160,7 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("{\n");
 	printf("var i = 0;\n");
 	printf("++fetches;\n");
-	printf("updateurl = \""DIRPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches;\n", session,\
+	printf("updateurl = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches;\n", session,\
 			(uint32_t)timestamp,reconquery);
 	printf("if (fetches >%d)\n",(int)( (6 + (numports*TIMEOUTSECS) / JSONFETCHEVERY )) );
 	printf("{\n");
@@ -289,7 +290,7 @@ void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint1
 	printf("<NOSCRIPT>\n<HR>\n");
 	printf("<H3 style=\"color:red\">Your browser does not support Javascript, or else it is disabled.</H3>\n");
 	printf("<P>An alternative version of this IPv6 TCP port scanner which does not use Javascript is available from ");
-	printf("the following <A href=\"%s/%s\">link.</A></P>\n", DIRPATH, EXETXTNAME);
+	printf("the following <A href=\"%s/%s\">link.</A></P>\n", URIPATH, EXETXTNAME);
 	printf("<P>This alternative version does not support realtime in-browser updates and will take up to ");
 	printf("%d seconds to return the results.</P>\n", (numports * TIMEOUTSECS) );
 	printf("<HR>\n");
@@ -378,7 +379,7 @@ void create_html_form(uint16_t numports, uint16_t *portlist)
 	printf("<BR>\n");
 	printf("<P style=\"font-weight:bold\">1. Select whether to include the default list of ports, or not:</P>\n");
 
-	printf("<FORM action=\""DIRPATH"/"EXENAME"\" accept-charset=\"ISO-8859-1\" method=\"GET\">\n");
+	printf("<FORM action=\""URIPATH"/"EXENAME"\" accept-charset=\"ISO-8859-1\" method=\"GET\">\n");
 //	printf("<P>\n");
 	printf("<INPUT type=\"radio\" name=\"includeexisting\" value=\"1\" checked> Include default ports listed above in the scan<BR>\n");
 	printf("<INPUT type=\"radio\" name=\"includeexisting\" value=\"-1\"> Exclude default ports, test only those specified below<BR><BR>\n");

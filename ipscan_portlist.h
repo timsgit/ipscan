@@ -36,4 +36,4 @@
 	// Calculate and record the number of default ports to be tested
 	#define DEFNUMPORTS ( sizeof(defportlist) / sizeof(uint16_t) )
 
-#endif /* IPSCAN_PORTLIST_H_ */
+#endif /* IPSCAN_PORTLIST_H */

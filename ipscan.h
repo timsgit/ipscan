@@ -19,17 +19,26 @@
 
 #ifndef IPSCAN_H
 	#define IPSCAN_H 1
-	//
-	// TEXTMODE == 1 => Text Browser compatible
+
+    // Build-mode for executable
+    // Note this is controlled by the makefile, but a default is defined here for safety
+    //
+	// TEXTMODE == 1 => Text Browser compatible (e.g. lynx or w3m)
 	// TEXTMODE == 0 => Browser supports Javascript
 	//
 	#ifndef TEXTMODE
 		#define TEXTMODE 0
 	#endif
 
-	// DEBUG build options - enabling these will result in copious amounts of information
+	// DEBUG build options - uncommenting these #defines will result in copious amounts of information
+    //
+    // general debug:
 	// #define DEBUG 1
+    //
+    // database related debug:
 	// #define DBDEBUG 1
+    //
+    // ICMPv6 ping related debug:
 	// #define PINGDEBUG 1
 
 	// Determine which logging target to use stderr (0) or syslog(1)
@@ -43,7 +52,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.96"
+	#define IPSCAN_VER "0.97"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -81,6 +90,13 @@
 	// 0.94 improve buffer overflow protection, remove SQLITE support
 	// 0.95 tidy up HTML error reporting for buffer overflow cases.
 	// 0.96 fix some printf casts
+	// 0.97 slight improvement to logging for ICMPv6 cases
+
+	//
+    // Logging verbosity
+	//
+    // (1) Normal - port scan summary is logged; (0) Quiet - program/unexpected response errors only
+	#define IPSCAN_LOGVERBOSITY 1
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -89,7 +105,7 @@
 	// This is a potential security risk, so use cautiously and definitely choose
 	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
     // available using an URL similar to:
-	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=-999123
+	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
 	// *** PLEASE CHANGE THIS MAGICSUMMARY VALUE BEFORE ENABLING ***
@@ -151,10 +167,10 @@
 		#define EXENAME EXEJSNAME
 	#endif
 
-	// Served HTTP URL directory path - needs leading /, but not a trailing one ...
+	// Served HTTP URI directory path - needs a leading /, but not a trailing one ...
 	// This SHOULD be defined in the makefile, but provide a default here just in case
-	#ifndef DIRPATH
-		#define DIRPATH "/cgi-bin6"
+	#ifndef URIPATH
+		#define URIPATH "/cgi-bin6"
 	#endif
 
 	// Maximum number of user-defined TCP ports
@@ -164,13 +180,12 @@
 		// Logging prefix (goes into apache error_log or syslog)
 	#define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
 
-	// returncode which the cgi program returns on an unhandled error - check the apache error log in this case
-	#define CHECKTHELOGRC 999
-
 	//
 	// Database related
 	//
 
+	// Determine the maximum length of the query-string which is used to insert and select
+	// results into/out of the database. Currently queries are slightly in excess of 250 characters.
 	#define MAXDBQUERYSIZE 512
 
 	// MySQL database-related globals
@@ -198,7 +213,7 @@
 	// mysql> exit
 	// Bye
 
-	// Timeout for port response
+	// Timeout for port response (in seconds)
 	#define TIMEOUTSECS 1
 
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
@@ -212,7 +227,7 @@
 	#define ICMPV6_PACKET_BUFFER_SIZE 2048
 
 	// Magic constants intended to uniquify our packets;
-	// process id and session start time also included
+	// process id and session start time are also included
 	#define ICMPV6_MAGIC_SEQ 12478
 	#define ICMPV6_MAGIC_VALUE1 1289
 	#define ICMPV6_MAGIC_VALUE2 12569
@@ -222,6 +237,7 @@
 	#define IPSCAN_PROTO_ICMPV6 (1<<16)
 
 	// Flag indicating that the response was indirect rather than from the host under test
+	// This may be the case if the host under test is behind a firewall or router
 	#define IPSCAN_INDIRECT_RESPONSE 256
 
 	// Mapping for connection attempt results

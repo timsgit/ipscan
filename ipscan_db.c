@@ -27,6 +27,7 @@
 // 0.07 - fix potential db query-string buffer overflow
 // 0.08 - fix potential sscanf buffer overflow
 // 0.09 - remove sqlite3 support
+// 0.10 - tidy up comparisons and correct debug logging
 
 #include "ipscan.h"
 //
@@ -124,7 +125,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 					IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 					#endif
 					rc = mysql_real_query(connection, query, qrylen);
-					if (rc == 0)
+					if (0 == rc)
 					{
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
 						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -133,7 +134,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 							IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 							#endif
 							rc = mysql_real_query(connection, query, qrylen);
-							if (rc == 0)
+							if (0 == rc)
 							{
 								retval = 0;
 							}
@@ -173,7 +174,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 		mysql_commit(connection);
 		mysql_close(connection);
 	}
-#ifdef PINGDEBUG
+#ifdef DBDEBUG
 IPSCAN_LOG( LOGPREFIX "write_db: returning with retval = %d\n",retval);
 #endif
 return (retval);
@@ -270,6 +271,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								else // original approach
 								{
 									printf("%s, ", row[num_fields-1]);
+									IPSCAN_LOG( LOGPREFIX "ERROR - you NEED to update to the new database format - please see the README for details!\n");
 								}
 							}
 							printf(" -9999 ]\n");
