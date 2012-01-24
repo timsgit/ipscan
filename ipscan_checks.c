@@ -379,7 +379,9 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		}
 		else if (rc == 0)
 		{
+			#ifdef PINGDEBUG
 			IPSCAN_LOG( LOGPREFIX "RESTART: poll returned 0 results\n");
+			#endif
 			continue;
 		}
 
