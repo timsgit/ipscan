@@ -52,7 +52,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.97"
+	#define IPSCAN_VER "0.98"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -91,6 +91,7 @@
 	// 0.95 tidy up HTML error reporting for buffer overflow cases.
 	// 0.96 fix some printf casts
 	// 0.97 slight improvement to logging for ICMPv6 cases
+	// 0.98 tweaks for FreeBSD9 support (build under gmake)
 
 	//
     // Logging verbosity

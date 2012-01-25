@@ -27,6 +27,7 @@
 // 0.07 - further buffer overflow prevention
 // 0.08 - correct printf cast
 // 0.09 - yet more ICMPv6 logging improvements
+// 0.10 - minor include correction for FreeBSD support
 
 #include "ipscan.h"
 //
@@ -38,7 +39,6 @@
 #include <errno.h>
 #include <netdb.h>
 #include <unistd.h>
-#include <arpa/inet.h>
 #include <time.h>
 
 // IPv6 address conversion
@@ -54,6 +54,11 @@
 
 // Include resultsstruct
 extern struct rslt_struc resultsstruct[];
+
+// Others that FreeBSD highlighted
+#include <netinet/in.h>
+#include <stdint.h>
+#include <inttypes.h>
 
 // Other IPv6 related
 #include <netinet/ip6.h>

@@ -27,6 +27,7 @@
 // 0.07 - further buffer overflow prevention measures
 // 0.08 - correct printf cast
 // 0.09 - tidy up exit calls and verbosity support
+// 0.10 - minor include correction for FreeBSD support
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -42,6 +43,9 @@
 #include <inttypes.h>
 // toupper/tolower routines
 #include <ctype.h>
+
+// Others that FreeBSD highlighted
+#include <netinet/in.h>
 
 // IPv6 address conversion
 #include <arpa/inet.h>

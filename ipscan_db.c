@@ -28,6 +28,7 @@
 // 0.08 - fix potential sscanf buffer overflow
 // 0.09 - remove sqlite3 support
 // 0.10 - tidy up comparisons and correct debug logging
+// 0.11 - minor include correction for FreeBSD support
 
 #include "ipscan.h"
 //
@@ -42,6 +43,8 @@
 #include <time.h>
 #include <inttypes.h>
 
+// Others that FreeBSD highlighted
+#include <netinet/in.h>
 
 // MySQL Database includes
 #include <my_global.h>
