@@ -29,6 +29,7 @@
 // 0.09 - remove sqlite3 support
 // 0.10 - tidy up comparisons and correct debug logging
 // 0.11 - minor include correction for FreeBSD support
+// 0.12 - add read_db_result() function
 
 #include "ipscan.h"
 //
@@ -186,7 +187,7 @@ return (retval);
 
 // ----------------------------------------------------------------------------------------
 //
-// Functions to dump the database
+// Function to dump the database
 //
 // ----------------------------------------------------------------------------------------
 
@@ -264,7 +265,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									}
 									else if (rcres == 1 && rcport == 1 && (port != (0 + IPSCAN_PROTO_ICMPV6)) )
 									{
-										printf("%d, ", res);
+										printf("%d, %d, ", port, res);
 									}
 									else
 									{
@@ -277,7 +278,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									IPSCAN_LOG( LOGPREFIX "ERROR - you NEED to update to the new database format - please see the README for details!\n");
 								}
 							}
-							printf(" -9999 ]\n");
+							printf(" -9999, -9999 ]\n");
 							mysql_free_result(result);
 						}
 						else
@@ -457,4 +458,127 @@ int summarise_db(void)
 	}
 
 return (retval);
+}
+
+
+//
+// Fetch a single result
+//
+
+int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port)
+{
+
+	int rc;
+	int rcres, dbres;
+	int retres = PORTUNKNOWN;
+	unsigned int num_fields;
+	unsigned int qrylen;
+	char query[MAXDBQUERYSIZE];
+	MYSQL *connection;
+	MYSQL *mysqlrc;
+	MYSQL_RES *result;
+	MYSQL_ROW row;
+
+	connection = mysql_init(NULL);
+	if (NULL == connection)
+	{
+		IPSCAN_LOG( LOGPREFIX "read_db_result: Failed to initialise MySQL\n");
+		retres = PORTINTERROR;
+	}
+	else
+	{
+		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
+		// in the my.cnf file which ensures that your program works, even if someone has set
+		// up MySQL in some nonstandard way.
+		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
+		if (0 == rc)
+		{
+
+			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			if (NULL == mysqlrc)
+			{
+				IPSCAN_LOG( LOGPREFIX "read_db_result: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+				IPSCAN_LOG( LOGPREFIX "read_db_result: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				retres = PORTINTERROR;
+			}
+			else
+			{
+				// int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session )
+				// SELECT x FROM t1 WHERE a = b ORDER BY x;
+				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				{
+
+					#ifdef DBDEBUG
+					IPSCAN_LOG( LOGPREFIX "read_db_result: MySQL Query is : %s\n", query);
+					#endif
+					rc = mysql_real_query(connection, query, qrylen);
+					if (0 == rc)
+					{
+						result = mysql_store_result(connection);
+						if (result)
+						{
+							num_fields = mysql_num_fields(result);
+							#ifdef DBDEBUG
+							IPSCAN_LOG( LOGPREFIX "read_db_result: MySQL returned num_fields : %d\n", num_fields);
+							#endif
+							while ((row = mysql_fetch_row(result)))
+							{
+								if (num_fields == 8) // database includes indirect host field
+								{
+									rcres = sscanf(row[6], "%d", &dbres);
+									if ( rcres == 1)
+									{
+										// Set the return result
+										retres = dbres;
+									}
+									else
+									{
+										IPSCAN_LOG( LOGPREFIX "read_db_result: Unexpected row scan results - rcres = %d\n", rcres);
+									}
+								}
+								else
+								{
+									IPSCAN_LOG( LOGPREFIX "read_db_result: Unexpected row scan results - num_fields = %d\n", num_fields);
+								}
+							}
+							mysql_free_result(result);
+						}
+						else
+						{
+							// Didn't get any results, so check if we should have got some
+							if (mysql_field_count(connection) == 0)
+							{
+								IPSCAN_LOG( LOGPREFIX "read_db_result: surprisingly mysql_field_count() expected to return 0 fields\n");
+							}
+							else
+							{
+								IPSCAN_LOG( LOGPREFIX "read_db_result: mysql_store_result() error : %s\n", mysql_error(connection));
+								retres = PORTINTERROR;
+							}
+						}
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "read_db_result: Failed to execute select query\n");
+						retres = PORTINTERROR;
+					}
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "read_db_result: Failed to create select query\n");
+					retres = PORTINTERROR;
+				}
+			}
+			mysql_commit(connection);
+			mysql_close(connection);
+		}
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "read_db_result: mysql_options() failed - check your my.cnf file\n");
+			retres = PORTINTERROR;
+		}
+	}
+return (retres);
 }

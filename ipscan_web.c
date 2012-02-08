@@ -24,6 +24,7 @@
 // 0.04 - addition of indirect host support
 // 0.05 - removal of empty HTML paragraph
 // 0.06 - tidy up URIPATH and comparisons
+// 0.07 - move to JSON array which supports port number and result
 
 #include "ipscan.h"
 
@@ -52,7 +53,7 @@ void create_html_common_header(void)
 		printf("<META NAME=\"AUTHOR\" CONTENT=\"Tim Chappell\">\n");
 		printf("<META HTTP-EQUIV=\"CACHE-CONTROL\" CONTENT=\"NO-STORE, NO-CACHE, MUST-REVALIDATE, MAX-AGE=0\">\n");
 		printf("<META HTTP-EQUIV=\"PRAGMA\" CONTENT=\"NO-CACHE\">\n");
-		printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011 Tim Chappell.\">\n");
+		printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2012 Tim Chappell.\">\n");
 
 }
 
@@ -63,7 +64,7 @@ void create_json_header(void)
 
 void create_html_header(char * servername, uint64_t session, time_t timestamp, uint16_t numports, uint16_t *portlist, char * reconquery)
 {
-	uint16_t port,portindex,i;
+	uint16_t i;
 
 	create_html_common_header();
 
@@ -79,24 +80,6 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("var lastupdate = 0;\n");
 	printf("var starturl = \""URIPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\";\n",\
 			MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
-	// create a prefilled array containing the list of ports to be tested
-	printf("var portlist = [");
-	printf("\"indhost\", %d", (0+IPSCAN_PROTO_ICMPV6));
-	for (portindex=0; portindex<numports; portindex++)
-	{
-		port=portlist[portindex];
-		printf(" ,%d", port);
-	}
-	printf(" ];\n");
-	// create a prefilled array containing the testing state of each port to be tested, defaults to PORTUNKNOWN
-	printf("var state = [");
-	printf(" \"indhost\", %d", PORTUNKNOWN);
-	for (portindex=0; portindex<numports; portindex++)
-	{
-		port=portlist[portindex];
-		printf(" ,%d", PORTUNKNOWN);
-	}
-	printf(" ];\n");
 	// create a prefilled array containing the potential states returned for each port
 	printf("var retvals = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
@@ -175,62 +158,57 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("	if (request.readyState == 4 && request.status == 200)\n");
 	printf("	{\n");
 	printf(" 		var lateststate = eval( '(' + request.responseText + ')' );\n");
-	printf("		if (lateststate.length > 1)\n");
+	printf("		if (lateststate.length > 2)\n");
 	printf("		{\n");
 	// if we've received a complete set of results for the ports under test then stop the periodic tasks
-	printf("			if (lateststate.length > portlist.length)\n");
+	// we expect (PING+NUMPORTS)*2+2 (final 2 are end of JSON array dummies) results
+	printf("			if (lateststate.length >= %d)\n", 2+((numports+1)*2) );
 	printf("			{\n");
 	printf("				window.clearInterval(myInterval);\n");
 	printf("				window.clearInterval(myBlink);\n");
 	printf("			}\n");
-	printf("			for (i = 0 ; i < (lateststate.length -1); i++)\n");
+	// go around the latest received state and update display as required
+	printf("			for (i = 0 ; i < (lateststate.length-2); i+=2)\n");
 	printf("			{\n");
-	printf("				state[i] = lateststate[i];\n");
-	printf("			}\n");
-	printf("		}\n");
-	// go around all ports
-	printf("		for (i = 1; i <= %d ; i++)\n", (numports+1));
-	printf("		{\n");
-	printf("			var textupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].label);
-	printf("			var colourupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].colour);
-	printf("			var findstate = state[i];\n");
-	printf("			var elemid = \"pingstate\";\n");
-	printf("			if (i > 1) elemid = \"port\" + portlist[i];\n");
-	printf("			if (i == 1 && findstate>=%d) findstate = state[i] - %d;\n", IPSCAN_INDIRECT_RESPONSE, IPSCAN_INDIRECT_RESPONSE);
-	// find a matching return value and select the appropriate label and colour code
-	printf("			for (j = 0; j < retvals.length; j++)\n");
-	printf("			{\n");
-	printf("				if (retvals[j] == findstate)\n");
+	printf("				var textupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].label);
+	printf("				var colourupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].colour);
+	printf("				var elemid = \"pingstate\";\n");
+	printf("				if (i > 1) elemid = \"port\" + lateststate[i];\n");
+	printf("				for (j = 0; j < retvals.length; j++)\n");
 	printf("				{\n");
-	printf("					textupdate = \"Port \" + portlist[i] + \" = \" + labels[j];\n");
-	// ICMPv6 PING case requires the port status (or indirect host) to be returned
-	printf("					if (i==1)\n");
+
+	printf("					if (retvals[j] == (lateststate[i+1] & %d))\n",IPSCAN_INDIRECT_MASK);
 	printf("					{\n");
-	printf("						if (state[i]>=%d)\n", IPSCAN_INDIRECT_RESPONSE);
+	printf("						textupdate = \"Port \" + lateststate[i] + \" = \" + labels[j];\n");
+	// ICMPv6 PING case requires the port status (or indirect host) to be returned
+	printf("						if (i<2)\n");
 	printf("						{\n");
-	printf("							textupdate = \"INDIRECT-\" + labels[j] + \" (from \" + state[0] + \")\";\n");
+	printf("							if (lateststate[1]>=%d)\n", IPSCAN_INDIRECT_RESPONSE);
+	printf("							{\n");
+	printf("								textupdate = \"INDIRECT-\" + labels[j] + \" (from \" + lateststate[0] + \")\";\n");
+	printf("							}\n");
+	printf("							else\n");
+	printf("							{\n");
+	printf("								textupdate = labels[j];\n");
+	printf("							}\n");
 	printf("						}\n");
-	printf("						else\n");
-	printf("						{\n");
-	printf("							textupdate = labels[j];\n");
-	printf("						}\n");
-	printf("					}\n");
 	// Colour setting
-	printf("					colourupdate = colours[j];\n");
+	printf("						colourupdate = colours[j];\n");
+	printf("					}\n");
 	printf("				}\n");
-	printf("			}\n");
 	// update the text on the page ....
-	printf("			document.getElementById( elemid ).innerHTML = textupdate;\n");
-	printf("			document.getElementById( elemid ).style.backgroundColor=colourupdate;\n");
-	printf("		}\n");
-	// update the page to reflect the fact we've finished
-	printf("		if (lateststate.length > portlist.length)\n");
-	printf("		{\n");
-	printf("			document.getElementById(\"scanstate\").innerHTML = \"COMPLETE.\";\n");
-	printf("			document.getElementById(\"scanstate\").style.color=\"black\";\n");
+	printf("				document.getElementById( elemid ).innerHTML = textupdate;\n");
+	printf("				document.getElementById( elemid ).style.backgroundColor=colourupdate;\n");
+	printf("			}\n");
+	// if we have finished then update the page to reflect the fact
+	printf("			if (lateststate.length >= %d)\n",2+((numports+1)*2) );
+	printf("			{\n");
+	printf("				document.getElementById(\"scanstate\").innerHTML = \"COMPLETE.\";\n");
+	printf("				document.getElementById(\"scanstate\").style.color=\"black\";\n");
+	printf("			}\n");
 	printf("		}\n");
 	// handle failure to complete the scan in the allocated number of updates
-	printf("		else if (lateststate.length <= portlist.length && lastupdate == 1)\n");
+	printf("		else if (lateststate.length < %d && lastupdate == 1)\n",2+((numports+1)*2));
 	printf("		{\n");
 	printf("			window.clearInterval(myBlink);\n");
 	printf("			document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";\n");
@@ -299,7 +277,7 @@ void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint1
 	printf("<H3>IPv6 TCP Port Scan Results</H3>\n");
 	printf("<P>Results for host : %s</P>\n\n", hostname);
 
-	printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", asctime(localtime(&timestamp)), numports);
+	printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", asctime(localtime(&timestamp)), (int)(4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)) );
 
 	printf("<TABLE border=\"1\">\n");
 	printf("<TR style=\"text-align:left\">\n");

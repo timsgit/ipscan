@@ -28,6 +28,7 @@
 // 0.08 - correct printf cast
 // 0.09 - tidy up exit calls and verbosity support
 // 0.10 - minor include correction for FreeBSD support
+// 0.11 - add parallel port scan function
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -61,15 +62,20 @@
 	#include <syslog.h>
 #endif
 
+// Parallel processing related
+#include <sys/wait.h>
+
 //
 // Prototype declarations
 //
 
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
+int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
 
 int check_tcp_port(char * hostname, uint16_t port);
 int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
+int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session,uint16_t *portlist);
 void create_html_common_header(void);
 void create_json_header(void);
 void create_html_header(char * servername, uint64_t session, time_t timestamp, uint16_t numports, uint16_t *portlist, char * reconquery);
@@ -116,6 +122,8 @@ struct rslt_struc resultsstruct[] =
 	{ PORTEOL,			-101,	-101,			"EOL",				"black",	"End of list marker."}
 };
 
+
+
 int main(void)
 {
 
@@ -127,7 +135,11 @@ int main(void)
 	int last = 0;
 	#endif
 
+	// List of ports to be tested and their results
+	uint16_t portlist[MAXPORTS];
+
 	int result, pingresult;
+	int resultlist[MAXPORTS];
 	char remoteaddrstring[INET6_ADDRSTRLEN];
 	char *remoteaddrvar;
 
@@ -142,13 +154,17 @@ int main(void)
 
 	// the session starttime, used as an unique index for the database
 	time_t   starttime;
+	// the query derived starttime
 	int64_t  querystarttime;
 
 	uint16_t port;
 	uint16_t portindex;
 
-	// List of ports to be tested
-	uint16_t portlist[MAXPORTS];
+	// Parallel scanning related
+	int numchildren;
+	int remaining;
+	int childstatus;
+	int porti;
 
 	// Ports to be tested
 	uint16_t numports = 0;
@@ -211,6 +227,11 @@ int main(void)
 	for (i = 0; i < DEFNUMPORTS; i++)
 	{
 		portlist[i] = defportlist[i];
+	}
+	// Initialise the result list to indicate internal error
+	for (i = 0; i < MAXPORTS; i++)
+	{
+		resultlist[i] = PORTINTERROR;
 	}
 
 	// Clear out the port result type statistics
@@ -668,6 +689,7 @@ int main(void)
 
 			// Take current time/PID for database logging purposes
 			starttime = time(0);
+			time_t scanstart = starttime;
 			session = (uint64_t) getpid();
 
 			// Create the header
@@ -682,7 +704,7 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
 			#endif
 			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
-					asctime(localtime(&starttime)), (numports * TIMEOUTSECS));
+					asctime(localtime(&starttime)), (int)(4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)) );
 
 			// Ping the remote host and store the result ...
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, starttime, session, indirecthost);
@@ -694,7 +716,7 @@ int main(void)
 
 			portsstats[result]++ ;
 
-			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
+			rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "WARNING : write_db for ping result returned : %d\n", rc);
@@ -714,23 +736,51 @@ int main(void)
 			printf("</TABLE>\n");
 			printf("<P>Individual TCP port scan results:</P>\n");
 
-			// Start of table
+			// Scan the ports in parallel
+			remaining = numports;
+			porti = 0;
+			numchildren = 0;
+			while (remaining > 0 || numchildren > 0)
+			{
+				while (remaining > 0)
+				{
+					if (numchildren < MAXCHILDREN && remaining > 0)
+					{
+						int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : remaining;
+						#ifdef PARLLDEBUG
+						IPSCAN_LOG( LOGPREFIX "INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						#endif
+						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &portlist[0]);
+						porti += todo;
+						numchildren ++;
+						remaining = (numports - porti);
+					}
+					if (numchildren == MAXCHILDREN && remaining > 0)
+					{
+						int pid = wait(&childstatus);
+						numchildren--;
+						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					}
+				}
+				while (numchildren > 0)
+				{
+					int pid = wait(&childstatus);
+					numchildren--;
+					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+				}
+			}
+
+			// Start of port scan results table
 			printf("<TABLE border=\"1\">\n");
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex];
 				last = (portindex == (numports-1)) ? 1 : 0 ;
-				result = check_tcp_port(remoteaddrstring, port);
+				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_TCP));
 
 				#ifdef DEBUG
 				IPSCAN_LOG( LOGPREFIX "INFO: port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
 				#endif
-
-				rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_TCP), result, "unused" );
-				if (rc != 0)
-				{
-					IPSCAN_LOG( LOGPREFIX "WARNING : write_db returned %d\n", rc);
-				}
 
 				// Start of a new row, so insert the appropriate tag if required
 				if (position ==0) printf("<TR>");
@@ -757,13 +807,18 @@ int main(void)
 			}
 			printf("</TABLE>\n");
 
-			starttime = time(0);
-			printf("<P>Scan of %d ports complete at: %s.</P>\n", numports, asctime(localtime(&starttime)));
+			time_t nowtime = time(0);
+			printf("<P>Scan of %d ports complete at: %s.</P>\n", numports, asctime(localtime(&nowtime)));
 
 			// Create results key table
 			create_results_key_table(remoteaddrstring, starttime);
 			// Finish the output
 			create_html_body_end();
+
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			time_t scancomplete = time(0);
+			IPSCAN_LOG( LOGPREFIX "INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
+			#endif
 
 			// Log the summary of results internally
 			i = 0;
@@ -799,7 +854,6 @@ int main(void)
 				}
 				i++ ;
 			}
-
 		}
 		#else
 
@@ -827,6 +881,8 @@ int main(void)
 		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && fetch == 0)
 		{
 
+			time_t scanstart = time(0);
+
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
 			#endif
@@ -851,10 +907,45 @@ int main(void)
 				exit(EXIT_FAILURE);
 			}
 
+			// Scan the ports in parallel
+			remaining = numports;
+			porti = 0;
+			numchildren = 0;
+			while (remaining > 0 || numchildren > 0)
+			{
+				while (remaining > 0)
+				{
+					if (numchildren < MAXCHILDREN && remaining > 0)
+					{
+						int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : remaining;
+						#ifdef PARLLDEBUG
+						IPSCAN_LOG( LOGPREFIX "INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						#endif
+						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, &portlist[0]);
+						porti += todo;
+						numchildren ++;
+						remaining = (numports - porti);
+					}
+					if (numchildren == MAXCHILDREN && remaining > 0)
+					{
+						int pid = wait(&childstatus);
+						numchildren--;
+						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					}
+				}
+				while (numchildren > 0)
+				{
+					int pid = wait(&childstatus);
+					numchildren--;
+					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+				}
+			}
+
+			// Generate the stats
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex];
-				result = check_tcp_port(remoteaddrstring, port);
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_TCP));
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
@@ -868,17 +959,6 @@ int main(void)
 					IPSCAN_LOG( LOGPREFIX "WARNING scan of port %d returned : %d\n", port, result);
 					portsstats[PORTUNKNOWN]++;
 				}
-
-				//
-				// Put result into database:
-				//
-				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_TCP), result, "unused");
-				if (rc != 0)
-				{
-					IPSCAN_LOG( LOGPREFIX "write_db inside scan routine returned : %d\n", rc);
-					create_html_body_end();
-					exit(EXIT_FAILURE);
-				}
 			}
 
 			#ifdef DEBUG
@@ -890,6 +970,11 @@ int main(void)
 
 			// Finish the output
 			create_html_body_end();
+
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			time_t scancomplete = time(0);
+			IPSCAN_LOG( LOGPREFIX "INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
+			#endif
 
 			// Log the summary of results internally
 			i = 0;

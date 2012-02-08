@@ -28,11 +28,13 @@
 // 0.08 - correct printf cast
 // 0.09 - yet more ICMPv6 logging improvements
 // 0.10 - minor include correction for FreeBSD support
+// 0.11 - add parallel port scan function
 
 #include "ipscan.h"
 //
 #include <stdlib.h>
 #include <strings.h>
+#include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -52,7 +54,7 @@
 	#include <syslog.h>
 #endif
 
-// Include resultsstruct
+// Include externals : resultsstruct, portlist and resultlist
 extern struct rslt_struc resultsstruct[];
 
 // Others that FreeBSD highlighted
@@ -67,9 +69,16 @@ extern struct rslt_struc resultsstruct[];
 //Poll support
 #include <poll.h>
 
+// Parallel processing related
+#include <sys/wait.h>
+
 // Define offset into ICMPv6 packet where user-defined data resides
 #define ICMP6DATAOFFSET sizeof(struct icmp6_hdr)
 
+//
+// Prototype declarations
+//
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost );
 
 //
 // Send an ICMPv6 ECHO-REQUEST and see whether we receive an ECHO-REPLY in response
@@ -944,6 +953,43 @@ int check_tcp_port(char * hostname, uint16_t port)
 }
 
 
-
+int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint16_t *portlist)
+{
+	int i,rc,result;
+	pid_t childpid = fork();
+	if (childpid > 0)
+	{
+		// parent
+		#ifdef PARLLDEBUG
+		IPSCAN_LOG( LOGPREFIX "INFO: check_tcp_ports_parll() forked and started child PID=%d\n",childpid);
+		#endif
+	}
+	else if (childpid == 0)
+	{
+		#ifdef PARLLDEBUG
+		IPSCAN_LOG( LOGPREFIX "INFO: startindex %d, todo %d\n",portindex,todo);
+		#endif
+		// child - actually do the work here - and then exit successfully
+		for (i = 0 ; i <todo ; i++)
+		{
+			uint16_t port = portlist[portindex+i];
+			result = check_tcp_port(hostname, port);
+			// Put results into database and resultlist array
+			rc = write_db(host_msb, host_lsb, timestamp, session, (port + IPSCAN_PROTO_TCP), result, "unused" );
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "WARNING : check_tcp_port_parll() write_db returned %d\n", rc);
+			}
+		}
+		// Usual practive to have children _exit() whilst the parent calls exit()
+		_exit(EXIT_SUCCESS);
+	}
+	else
+	{
+		IPSCAN_LOG( LOGPREFIX "fork() failed childpid=%d, errno=%d(%s)\n", childpid, errno, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	return( (int)childpid );
+}
 
 

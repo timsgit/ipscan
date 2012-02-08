@@ -40,6 +40,9 @@
     //
     // ICMPv6 ping related debug:
 	// #define PINGDEBUG 1
+	//
+	// Parallel processing related debug:
+	// #define PARLLDEBUG 1
 
 	// Determine which logging target to use stderr (0) or syslog(1)
 	#define LOGMODE 0
@@ -52,7 +55,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.98"
+	#define IPSCAN_VER "0.99"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -92,6 +95,7 @@
 	// 0.96 fix some printf casts
 	// 0.97 slight improvement to logging for ICMPv6 cases
 	// 0.98 tweaks for FreeBSD9 support (build under gmake)
+	// 0.99 first build supporting parallel port scanning
 
 	//
     // Logging verbosity
@@ -181,6 +185,17 @@
 		// Logging prefix (goes into apache error_log or syslog)
 	#define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
 
+    //
+	// Parallel port scanning related
+	//
+
+	// Determine the maximum number of children and therefore the maximum number of
+	// port scans that can be running in parallel
+	#define MAXCHILDREN 6
+	//
+	// Determine the maximum number of port scans that can be allocated to each child
+	#define MAXPORTSPERCHILD 9
+
 	//
 	// Database related
 	//
@@ -218,7 +233,7 @@
 	#define TIMEOUTSECS 1
 
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
-	#define JSONFETCHEVERY 4
+	#define JSONFETCHEVERY 3
 
 	// ICMPv6 ECHO REQUEST packet size - suggest larger than 64 byte minimum is sensible, but as a minimum
 	// needs to support magic string insertion anyway
@@ -240,6 +255,8 @@
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router
 	#define IPSCAN_INDIRECT_RESPONSE 256
+	// Mask to extract the response code
+	#define IPSCAN_INDIRECT_MASK 255
 
 	// Mapping for connection attempt results
 	// To add a new entry first insert a new internal state in the PORTSTATE enumeration and then add a
