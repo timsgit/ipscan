@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011 Tim Chappell.
+//    Copyright (C) 2011-2012 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -29,6 +29,7 @@
 // 0.09 - yet more ICMPv6 logging improvements
 // 0.10 - minor include correction for FreeBSD support
 // 0.11 - add parallel port scan function
+// 0.12 - fix some mis-signed comparisons, unused variables and parameters
 
 #include "ipscan.h"
 //
@@ -54,7 +55,7 @@
 	#include <syslog.h>
 #endif
 
-// Include externals : resultsstruct, portlist and resultlist
+// Include externals : resultsstruct
 extern struct rslt_struc resultsstruct[];
 
 // Others that FreeBSD highlighted
@@ -303,7 +304,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	#endif
 
 	rc = snprintf(&txpackdata[ICMP6DATAOFFSET],(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET),"%"PRId64" %"PRId64" %d %d", starttime, session, ICMPV6_MAGIC_VALUE1, ICMPV6_MAGIC_VALUE2);
-	if (rc < 0 || rc >= (ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET))
+	if (rc < (int)0 || rc >= (int)(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET))
 	{
 		IPSCAN_LOG( LOGPREFIX "snprintf returned %d, expected >=0 but < %d\n", rc, (int)(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET));
 		retval = PORTINTERROR;
@@ -348,7 +349,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		return(retval);
 	}
 
-	if (rc != sendsize)
+	if (rc != (int)sendsize)
 	{
 		IPSCAN_LOG( LOGPREFIX"requested sendmsg sent %d chars to %s but sendmsg returned %d\n", sendsize, hostname, rc);
 		retval = PORTINTERROR;
@@ -495,7 +496,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				#endif
 
 				// if a router replied instead of the host under test then size will be original packet plus an IPv6 header
-				if ( rxpacketsize == (sizeof(struct ip6_hdr) + 8 + sendsize) )
+				if ( rxpacketsize == (int)(sizeof(struct ip6_hdr) + 8 + sendsize) )
 				{
 					char tx_dst_addr[INET6_ADDRSTRLEN], orig_src_addr[INET6_ADDRSTRLEN], orig_dst_addr[INET6_ADDRSTRLEN];
 					struct ip6_hdr *rx2ip6hdr_ptr;
@@ -970,12 +971,13 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		IPSCAN_LOG( LOGPREFIX "INFO: startindex %d, todo %d\n",portindex,todo);
 		#endif
 		// child - actually do the work here - and then exit successfully
-		for (i = 0 ; i <todo ; i++)
+		char unusedfield[8] = "unused";
+		for (i = 0 ; i <(int)todo ; i++)
 		{
 			uint16_t port = portlist[portindex+i];
 			result = check_tcp_port(hostname, port);
-			// Put results into database and resultlist array
-			rc = write_db(host_msb, host_lsb, timestamp, session, (port + IPSCAN_PROTO_TCP), result, "unused" );
+			// Put results into database
+			rc = write_db(host_msb, host_lsb, timestamp, session, (port + IPSCAN_PROTO_TCP), result, unusedfield );
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "WARNING : check_tcp_port_parll() write_db returned %d\n", rc);

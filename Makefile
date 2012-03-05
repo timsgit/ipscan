@@ -1,6 +1,6 @@
 #    ipscan - an http-initiated IPv6 port scanner.
 #
-#    (C) Copyright 2011 Tim Chappell.
+#    (C) Copyright 2011-2012 Tim Chappell.
 #
 #    This file is part of ipscan.
 #
@@ -25,6 +25,7 @@
 # 0.05 - remove sqlite support
 # 0.06 - move $(LIBS) to the end of each link line
 # 0.07 - minor corrections to support FreeBSD gmake builds
+# 0.08 - add extra compiler checks
 
 # General build variables
 SHELL=/bin/sh
@@ -32,7 +33,7 @@ LIBPATHS=-L/usr/lib
 INCLUDES=-I/usr/include
 LIBS=
 CC=gcc
-CFLAGS=-Wall
+CFLAGS=-Wall -Wextra -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O2 -fstack-protector
 
 # Install location for the CGI files
 TARGETDIR=/srv/www/cgi-bin6

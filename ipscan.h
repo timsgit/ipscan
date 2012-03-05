@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011 Tim Chappell.
+//    Copyright (C) 2011-2012 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "0.99"
+	#define IPSCAN_VER "1.00"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -96,6 +96,7 @@
 	// 0.97 slight improvement to logging for ICMPv6 cases
 	// 0.98 tweaks for FreeBSD9 support (build under gmake)
 	// 0.99 first build supporting parallel port scanning
+	// 1.00 further code improvements, add HTTP-EQUIV to force IE7 mimicry
 
 	//
     // Logging verbosity
@@ -295,9 +296,9 @@
 		int returnval;
 		int connrc;
 		int connerrno;
-		char *label;
-		char *colour;
-		char *description;
+		char label[32];
+		char colour[32];
+		char description[256];
 	};
 
 	// End of defines

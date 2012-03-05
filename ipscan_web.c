@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011 Tim Chappell.
+//    Copyright (C) 2011-2012 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -25,6 +25,8 @@
 // 0.05 - removal of empty HTML paragraph
 // 0.06 - tidy up URIPATH and comparisons
 // 0.07 - move to JSON array which supports port number and result
+// 0.08 - remove unused parameters
+// 0.09 - add HTTP-EQUIV to force IE7 mimicry
 
 #include "ipscan.h"
 
@@ -49,6 +51,8 @@ void create_html_common_header(void)
 		printf("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n");
 		printf("<HTML lang=\"en\">\n");
 		printf("<HEAD>\n");
+		// Force later IE browsers to mimic IE7 as detailed in http://msdn.microsoft.com/library/cc288325.aspx
+		printf("<meta http-equiv=\"X-UA-Compatible\" content=\"IE=EmulateIE7\">\n");
 		printf("<META HTTP-EQUIV=\"Content-type\" CONTENT=\"text/html;charset=UTF-8\">\n");
 		printf("<META NAME=\"AUTHOR\" CONTENT=\"Tim Chappell\">\n");
 		printf("<META HTTP-EQUIV=\"CACHE-CONTROL\" CONTENT=\"NO-STORE, NO-CACHE, MUST-REVALIDATE, MAX-AGE=0\">\n");
@@ -62,13 +66,13 @@ void create_json_header(void)
 		printf("%s%c%c\n","Content-Type:text/html;charset=iso-8859-1",13,10);
 }
 
-void create_html_header(char * servername, uint64_t session, time_t timestamp, uint16_t numports, uint16_t *portlist, char * reconquery)
+void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, char * reconquery)
 {
 	uint16_t i;
 
 	create_html_common_header();
 
-	printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+	printf("<TITLE>IPv6 TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 	printf("<SCRIPT type = \"text/javascript\" language=\"javascript\">\n");
 	printf("<!--  to hide script contents from old browsers\n");
 	printf("var myInterval = 0;\n");
@@ -197,8 +201,8 @@ void create_html_header(char * servername, uint64_t session, time_t timestamp, u
 	printf("					}\n");
 	printf("				}\n");
 	// update the text on the page ....
-	printf("				document.getElementById( elemid ).innerHTML = textupdate;\n");
-	printf("				document.getElementById( elemid ).style.backgroundColor=colourupdate;\n");
+	printf("				document.getElementById(elemid).innerHTML = textupdate;\n");
+	printf("				document.getElementById(elemid).style.backgroundColor = colourupdate;\n");
 	printf("			}\n");
 	// if we have finished then update the page to reflect the fact
 	printf("			if (lateststate.length >= %d)\n",2+((numports+1)*2) );
@@ -256,7 +260,7 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	printf(" than the host under test. In this case the address of the responding host is also displayed.</P>\n");
 }
 
-void create_html_body(char * hostname, uint64_t session, time_t timestamp, uint16_t numports, uint16_t *portlist)
+void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t *portlist)
 {
 	uint16_t portindex;
 	uint16_t port;
@@ -331,10 +335,10 @@ void create_html_form(uint16_t numports, uint16_t *portlist)
 	int position = 0;
 	int last = 0;
 
-	printf("<TITLE>IPv6 Universal TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+	printf("<TITLE>IPv6 TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 	printf("</HEAD>\n");
 	printf("<BODY>\n");
-	printf("<H3 style=\"color:red\">IPv6 Universal TCP Port Scanner by Tim Chappell</H3>\n");
+	printf("<H3 style=\"color:red\">IPv6 TCP Port Scanner by Tim Chappell</H3>\n");
 
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
 	printf("<P>The default list of TCP ports that will be tested are:</P>\n");
