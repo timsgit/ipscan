@@ -1,39 +1,79 @@
 #!/usr/bin/perl -wT
 use strict;
 use DBI;
-#
+####################################################################
 # Adjust these variables to match your database configuration:
 #
-my $DB_NAME='ipscan';
-my $DB_HOST='localhost';
-my $DB_USER='ipscan-user';
-my $DB_PASSWORD='ipscan-passwd';
-my $DB_TABLE='results';
+my $MYSQL_DBNAME='ipscan';
+my $MYSQL_HOST='localhost';
+my $MYSQL_USER='ipscan-user';
+my $MYSQL_PASSWD='ipscan-passwd';
+my $MYSQL_TBLNAME='results';
 #
+####################################################################
+#
+####################################################################
+# To run every 5 minutes a typical cron job would look like this:
+#
+# */5 * * * * /path/to/sqltidy.pl 2>&1
+#
+####################################################################
+#
+####################################################################
 # Nothing below this line should require user servicing!
+####################################################################
 #
-# Enable debug (1) - dumps number of deleted records
+# Set to 1 to enable debug - dumps number of deleted records
 my $DB_DEBUG = 0;
-# This should be scheduled to run every 5 minutes so calculate time 
-# 10m00s to 14m59s ago and then select and delete those rows
 #
-# Typical cron job:
+####################################################################
+# This script should be scheduled to run every 5 minutes. Calculate 
+# the times which bound the entries that we're going to delete:
+# $earliest is 10m00s ago
+# $latest is   05m01s ago
+####################################################################
 #
-# */5     *       *       *       *       /path/to/sqltidy.pl 2>&1
+# It is not recommended that you change runperiod but if you do
+# then it MUST divide exactly into 1 hour (3600 seconds). The script
+# is intended to delete records which are no longer required and since
+# no scan is intended to take more than 1 minute then a 5 minute
+# runperiod is a reasonable compromise. It also ties in well with
+# the Munin-node update period if you want to log the number of scans
+# which have been run. runperiod is measured in seconds. 
+#
+my $runperiod = 5*60;
+#
+# Determine current time, then split into runperiod chunks:
 #
 my $now = time();
-my $now5minutes = int($now / 300);
-my $earliest = ($now5minutes - 2) * 300;
-my $latest = ($earliest + 299);
-my $dbh = DBI->connect("DBI:mysql:database=$DB_NAME;host=$DB_HOST","$DB_USER","$DB_PASSWORD") or die "Cannot connect: " . $DBI::errstr;
-my $sql = qq"DELETE FROM $DB_TABLE WHERE createdate >= $earliest AND createdate <= $latest";
+my $nowXminutes = int($now / $runperiod);
+#
+# Subtract two runperiod chunks and then convert back to seconds:
+#
+my $earliest = ($nowXminutes - 2) * $runperiod;
+#
+# latest is 1 run period chunk later than earliest, minus 1 second:
+#
+my $latest = ($earliest + $runperiod - 1);
+#
+# Now open the database using the parameters defined above
+#
+my $dbh = DBI->connect("DBI:mysql:database=$MYSQL_DBNAME;host=$MYSQL_HOST","$MYSQL_USER","$MYSQL_PASSWD") or die "Cannot connect: " . $DBI::errstr;
+#
+# Select and delete the entries bound by the times we calculated above
+#
+my $sql = qq"DELETE FROM $MYSQL_TBLNAME WHERE createdate >= $earliest AND createdate <= $latest";
 my $sth = $dbh->prepare($sql) or die "Cannot prepare: " . $dbh->errstr();
 $sth->execute() or die "Cannot execute: " . $sth->errstr();
+#
+# If debug is enabled and some rows were deleted then report this to stdout
+#
 if ($DB_DEBUG == 1 && $sth->rows > 0)
 {
-	print "Now      = ".localtime($now)."\n";
-	print "Earliest = ".localtime($earliest)."\n";
-	print "Latest   = ".localtime($latest)."\n";
+	print "Runperiod = ".$runperiod." seconds\n";
+	print "Now       = ".localtime($now)."\n";
+	print "Earliest  = ".localtime($earliest)."\n";
+	print "Latest    = ".localtime($latest)."\n";
 	print "Rows deleted : ".$sth->rows."\n";
 }
 $sth->finish();
