@@ -26,6 +26,7 @@
 # 0.06 - move $(LIBS) to the end of each link line
 # 0.07 - minor corrections to support FreeBSD gmake builds
 # 0.08 - add extra compiler checks
+# 0.09 - add 'running as root' check for install
 
 # General build variables
 SHELL=/bin/sh
@@ -62,6 +63,9 @@ LIBS+=$(shell mysql_config --libs)
 CFLAGS+=$(shell mysql_config --cflags)
 INCLUDES+=$(shell mysql_config --include)
 
+# Determine effective user-id - likely to work in all shells
+MYEUID=$(shell id -u)
+
 # Concatenate the necessary parameters for the two targets
 CMNPARAMS=-DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
 CMNPARAMS+= -DURIPATH=\"$(URIPATH)\"
@@ -97,10 +101,17 @@ $(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
 # optionally set setuid bit on targets if required
 .PHONY: install
 install : $(TXTTARGET) $(JSTARGET)
+ifeq ($(MYEUID),0)
 	cp $(TXTTARGET) $(TARGETDIR)
 	cp $(JSTARGET) $(TARGETDIR)
 	chmod 4555 $(TARGETDIR)/$(TXTTARGET)
 	chmod 4555 $(TARGETDIR)/$(JSTARGET)
+else
+	@echo 
+	@echo ERROR: install must be run as root in order to setuid.
+	@echo ERROR: user-id is currently $(MYEUID)
+	@echo 
+endif
 	
 # Rule to clean the source directory	
 .PHONY: clean
