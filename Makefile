@@ -26,7 +26,7 @@
 # 0.06 - move $(LIBS) to the end of each link line
 # 0.07 - minor corrections to support FreeBSD gmake builds
 # 0.08 - add extra compiler checks
-# 0.09 - add 'running as root' check for install
+# 0.09 - add 'running as root' check for install step
 
 # General build variables
 SHELL=/bin/sh

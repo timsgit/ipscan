@@ -16,6 +16,14 @@
 //
 //    You should have received a copy of the GNU General Public License
 //    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
+//
+// Version	Change
+// 0.01		Original
+// 0.02		Added additional Windows related ports
+//			2869 - SSDP event notification
+//			5357 - WSDAPI HTTP
+//			10243 - WMP HTTP
+
 
 #include <stdlib.h>
 #include <inttypes.h>
@@ -29,8 +37,8 @@
 	{
 		7, 21, 22, 23, 25, 37, 53, 79, 80, 88, 110, 111, 113, 119, 123,\
 		135, 137, 138, 139, 143, 311, 389, 427, 443, 445, 514, 543, 544,\
-		548, 631, 749, 873, 993, 1025, 1026, 1029, 1030, 1080,\
-		1720, 1812, 3128, 3306, 3389, 3689, 5000, 5100, 5900, 8080, 9090
+		548, 631, 749, 873, 993, 1025, 1026, 1029, 1030, 1080,1720, 1812, 2869,\
+		3128, 3306, 3389, 3689, 5000, 5100, 5357, 5900, 8080, 9090, 10243
 	};
 
 	// Calculate and record the number of default ports to be tested

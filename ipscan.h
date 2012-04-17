@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.00"
+	#define IPSCAN_VER "1.01"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -97,6 +97,7 @@
 	// 0.98 tweaks for FreeBSD9 support (build under gmake)
 	// 0.99 first build supporting parallel port scanning
 	// 1.00 further code improvements, add HTTP-EQUIV to force IE7 mimicry
+	// 1.01 Minor tweak to add further windows related ports
 
 	//
     // Logging verbosity
@@ -192,7 +193,7 @@
 
 	// Determine the maximum number of children and therefore the maximum number of
 	// port scans that can be running in parallel
-	#define MAXCHILDREN 6
+	#define MAXCHILDREN 7
 	//
 	// Determine the maximum number of port scans that can be allocated to each child
 	#define MAXPORTSPERCHILD 9

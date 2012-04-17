@@ -851,7 +851,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 			// If this is not an IPv6 address then skip
 			if (aip->ai_family != AF_INET6)
 			{
-				// printf("Skipping, because family = %d\n",aip->ai_family);
+				// IPSCAN_LOG( LOGPREFIX "Skipping, because ai_family != AF_INET6 (actually %d)\n",aip->ai_family);
 				continue;
 			}
 
