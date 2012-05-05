@@ -27,6 +27,7 @@
 // 0.07 - move to JSON array which supports port number and result
 // 0.08 - remove unused parameters
 // 0.09 - add HTTP-EQUIV to force IE7 mimicry
+// 0.10 - minor tweak to expected run-time for non-javascript browser message
 
 #include "ipscan.h"
 
@@ -274,7 +275,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	printf("<P>An alternative version of this IPv6 TCP port scanner which does not use Javascript is available from ");
 	printf("the following <A href=\"%s/%s\">link.</A></P>\n", URIPATH, EXETXTNAME);
 	printf("<P>This alternative version does not support realtime in-browser updates and will take up to ");
-	printf("%d seconds to return the results.</P>\n", (numports * TIMEOUTSECS) );
+	printf("%d seconds to return the results.</P>\n", (int)(4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)) );
 	printf("<HR>\n");
 	printf("</NOSCRIPT>\n");
 
