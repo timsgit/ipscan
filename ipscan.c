@@ -30,6 +30,7 @@
 // 0.10 - minor include correction for FreeBSD support
 // 0.11 - add parallel port scan function
 // 0.12 - remove unused parameters
+// 0.13 - specifically count number of customport parameters
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -182,6 +183,7 @@ int main(void)
 	char *querystringvar;
 	char querystring[ (MAXQUERYSTRLEN + 1) ];
 
+
 	// buffer for reconstituted querystring
 	int reconquerysize = MAXQUERYSTRLEN;
 	char reconquery[ (MAXQUERYSTRLEN + 1) ];
@@ -316,7 +318,7 @@ int main(void)
 			else
 			{
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "Query-string name  : %s\n", querystring);
+				IPSCAN_LOG( LOGPREFIX "DEBUG info: Query-string : %s\n", querystring);
 				#endif
 
 
@@ -555,23 +557,37 @@ int main(void)
 		IPSCAN_LOG( LOGPREFIX "numports is initially found to be %d\n", numports);
 		#endif
 
+		//
 		// Add in the custom ports if they're valid and NOT already present in the portlist ...
+		//
 
 		int customport = 0;
 		char cpnum[16];
 		int cplen;
+
+		// Counter holding the number of received customportN statements
+		unsigned int numcustomports = 0;
 
 		while (customport < NUMUSERDEFPORTS)
 		{
 			cplen = snprintf(cpnum, 16, "customport%d", customport);
 			i = 0;
 			while (i < numqueries && strncmp(cpnum,query[i].varname,cplen)!= 0) i++;
+
+			// If customportN parameter exists then increment the counter, irrespective of whether
+			// the parameter was valid or not
+			if (i < numqueries) numcustomports++;
+
+			// If the parameter is valid then perform further checks
 			if (i < numqueries && query[i].valid == 1)
 			{
+				// Check the port number is in the valid range
 				if (query[i].varval >=MINVALIDPORT && query[i].varval <= MAXVALIDPORT)
 				{
 					j = 0;
 					while (j < numports && portlist[j] != query[i].varval) j++;
+					// if this customport is not one of the ports already destined for checking then
+					// add it to the port list
 					if (j == numports)
 					{
 						portlist[numports] = query[i].varval;
@@ -651,12 +667,15 @@ int main(void)
 			fetch = (query[i].varval >0) ? 1 : 0;
 		}
 
-
+		// Dump the variables resulting from the query-string parsing
 		#ifdef DEBUG
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: numqueries = %d,\n", numqueries);
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d.\n", \
+			IPSCAN_LOG( LOGPREFIX "DEBUG info: numqueries = %d\n", numqueries);
+			IPSCAN_LOG( LOGPREFIX "DEBUG info: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
+			IPSCAN_LOG( LOGPREFIX "DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", \
 					session, (uint64_t)starttime, numports);
+			IPSCAN_LOG( LOGPREFIX "DEBUG info: querysession = %"PRId64" querystarttime = %"PRId64" magic = %"PRId64"\n", querysession, querystarttime, magic );
+			IPSCAN_LOG( LOGPREFIX "DEBUG info: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
+			IPSCAN_LOG( LOGPREFIX "DEBUG info: reconstituted query string = %s\n", reconquery );
 		#endif
 
 		//
@@ -675,8 +694,9 @@ int main(void)
 		// *IF* we have everything we need to initiate the scan/results page then we
 		// should have been passed (1+NUMUSERDEFPORTS) queries
 		// i.e. includeexisting (either +1 or -1) and customports 0 thru n params
+		// TJC was without numcustomports check
 
-		if ( numqueries >= (NUMUSERDEFPORTS + 1) && includeexisting != 0 )
+		if ( numqueries >= (NUMUSERDEFPORTS + 1) && (numcustomports == NUMUSERDEFPORTS) && includeexisting != 0 )
 		{
 
 			// Take current time/PID for database logging purposes
@@ -850,7 +870,7 @@ int main(void)
 		#else
 
 		// *IF* we have everything we need to query the database ...
-		// session, starttime, fetch and includeexisting
+		// session, starttime, fetch and includeexisting. Could also have one or more customports
 		// was numqueries >= 4, without includeexisting check - but javascript updateurl always minimally includes includeexisting
 
 		if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0)
@@ -868,9 +888,10 @@ int main(void)
 
 
 		// *IF* we have everything we need to initiate the scan
-		// session, starttime, beginscan, includeexisting and userdefined ports [NOTE: no fetch]
+		// session, starttime, beginscan, includeexisting and >=0 userdefined ports [NOTE: no fetch]
+		// TJC was without includeexisting check
 
-		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && fetch == 0)
+		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && includeexisting != 0 && fetch == 0)
 		{
 
 			time_t scanstart = time(0);
@@ -957,6 +978,7 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "rmthost        was : %"PRIx64":%"PRIx64"\n", remotehost_msb, remotehost_lsb);
 			IPSCAN_LOG( LOGPREFIX "querystarttime was : %"PRId64"\n", querystarttime);
 			IPSCAN_LOG( LOGPREFIX "querysession   was : %"PRId64"\n", querysession);
+			IPSCAN_LOG( LOGPREFIX "numcustomports was : %d\n", numcustomports);
 			#endif
 
 
@@ -1004,11 +1026,12 @@ int main(void)
 			}
 		}
 
-		// *IF* we have everything we need to initiate create the standard results page
-		// should have been passed (1+NUMUSERDEFPORTS) queries
+		// *IF* we have everything we need to create the standard results page
+		// We should have been passed (1+NUMUSERDEFPORTS) queries
 		// i.e. includeexisting (either +1 or -1) and customports 0 thru n params
+		// TJC was without numcustomports check
 
-		else if (numqueries >= (NUMUSERDEFPORTS + 1) && includeexisting != 0 && beginscan == 0 && fetch == 0)
+		else if (numqueries >= (NUMUSERDEFPORTS + 1) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 && fetch == 0)
 		{
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "Creating the standard web results page start point\n");
@@ -1059,8 +1082,8 @@ int main(void)
 			create_html_body_end();
 			IPSCAN_LOG( LOGPREFIX "Something untoward happened, numqueries = %d, magic = %"PRId64"\n", numqueries, magic);
 			IPSCAN_LOG( LOGPREFIX "includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
-			IPSCAN_LOG( LOGPREFIX "querysession = %"PRId64" querystarttime = %"PRId64" and numports = %d.\n", \
-					querysession, querystarttime, numports);
+			IPSCAN_LOG( LOGPREFIX "querysession = %"PRId64" querystarttime = %"PRId64" numports = %d and numcustomports = %d.\n", \
+					querysession, querystarttime, numports, numcustomports);
 		}
 	}
 	exit(EXIT_SUCCESS);

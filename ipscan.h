@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.02"
+	#define IPSCAN_VER "1.03"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -99,6 +99,7 @@
 	// 1.00 further code improvements, add HTTP-EQUIV to force IE7 mimicry
 	// 1.01 Minor tweak to add further windows related ports
 	// 1.02 Minor tweak to non-javascript browser message
+	// 1.03 Minor tweak to add further parameter checking for customports
 
 	//
     // Logging verbosity
