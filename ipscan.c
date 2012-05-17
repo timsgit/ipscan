@@ -31,6 +31,7 @@
 // 0.11 - add parallel port scan function
 // 0.12 - remove unused parameters
 // 0.13 - specifically count number of customport parameters
+// 0.14 - add service names to results table (modification to portlist, now structure)
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -77,13 +78,13 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 
 int check_tcp_port(char * hostname, uint16_t port);
 int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
-int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session,uint16_t *portlist);
+int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
 void create_html_common_header(void);
 void create_json_header(void);
 void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, char * reconquery);
-void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t *portlist);
+void create_html_body(char * hostname, time_t timestamp, uint16_t numports, struct portlist_struc *portlist);
 void create_html_body_end(void);
-void create_html_form(uint16_t numports, uint16_t *portlist);
+void create_html_form(uint16_t numports, struct portlist_struc *portlist);
 
 // create_results_key_table is only referenced if creating the text-only version of the scanner
 #if (TEXTMODE == 1)
@@ -135,7 +136,7 @@ int main(void)
 	#endif
 
 	// List of ports to be tested and their results
-	uint16_t portlist[MAXPORTS];
+	struct portlist_struc portlist[MAXPORTS];
 
 	int result, pingresult;
 	char remoteaddrstring[INET6_ADDRSTRLEN];
@@ -585,12 +586,17 @@ int main(void)
 				if (query[i].varval >=MINVALIDPORT && query[i].varval <= MAXVALIDPORT)
 				{
 					j = 0;
-					while (j < numports && portlist[j] != query[i].varval) j++;
+					while (j < numports && portlist[j].port_num != query[i].varval) j++;
 					// if this customport is not one of the ports already destined for checking then
 					// add it to the port list
 					if (j == numports)
 					{
-						portlist[numports] = query[i].varval;
+						portlist[numports].port_num = query[i].varval;
+						rc = snprintf(&portlist[numports].port_desc[0], PORTDESCSIZE, "User-specified: %d",(int)query[i].varval);
+						if (rc < 0 || rc >= PORTDESCSIZE)
+						{
+							IPSCAN_LOG( LOGPREFIX "WARNING: failed to write user-specified port description, does PORTDESCSIZE (%d) need increasing?\n", PORTDESCSIZE);
+						}
 						numports ++;
 						rc = snprintf(reconptr, reconquerysize, "&customport%d=%d", customport, (int)query[i].varval);
 						// &customport (11); cpnum (1-5) ; = (1) ; portnum (1-5)
@@ -694,7 +700,6 @@ int main(void)
 		// *IF* we have everything we need to initiate the scan/results page then we
 		// should have been passed (1+NUMUSERDEFPORTS) queries
 		// i.e. includeexisting (either +1 or -1) and customports 0 thru n params
-		// TJC was without numcustomports check
 
 		if ( numqueries >= (NUMUSERDEFPORTS + 1) && (numcustomports == NUMUSERDEFPORTS) && includeexisting != 0 )
 		{
@@ -738,11 +743,11 @@ int main(void)
 			printf("<TR style=\"text-align:left\">\n");
 			if (pingresult >= IPSCAN_INDIRECT_RESPONSE)
 			{
-				printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">INDIRECT-%s (from %s)</TD>\n",resultsstruct[result].colour,resultsstruct[result].label, indirecthost);
+				printf("<TD TITLE=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">INDIRECT-%s (from %s)</TD>\n",resultsstruct[result].colour,resultsstruct[result].label, indirecthost);
 			}
 			else
 			{
-				printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">%s</TD>\n",resultsstruct[result].colour,resultsstruct[result].label);
+				printf("<TD TITLE=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">%s</TD>\n",resultsstruct[result].colour,resultsstruct[result].label);
 			}
 			printf("</TR>\n");
 			printf("</TABLE>\n");
@@ -786,7 +791,7 @@ int main(void)
 			printf("<TABLE border=\"1\">\n");
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
-				port = portlist[portindex];
+				port = portlist[portindex].port_num;
 				last = (portindex == (numports-1)) ? 1 : 0 ;
 				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_TCP));
 
@@ -803,11 +808,11 @@ int main(void)
 				if (result == resultsstruct[i].returnval)
 				{
 					portsstats[result]++ ;
-					printf("<TD style=\"background-color:%s\">Port %d = %s</TD>", resultsstruct[i].colour, port, resultsstruct[i].label);
+					printf("<TD TITLE=\"%s\" style=\"background-color:%s\">Port %d = %s</TD>", portlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
 				}
 				else
 				{
-					printf("<TD style=\"background-color:white\">Port %d = BAD</TD>",port);
+					printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", portlist[portindex].port_desc, port);
 					IPSCAN_LOG( LOGPREFIX "WARNING: Unknown result for port %d is %d\n",port,result);
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
@@ -889,7 +894,6 @@ int main(void)
 
 		// *IF* we have everything we need to initiate the scan
 		// session, starttime, beginscan, includeexisting and >=0 userdefined ports [NOTE: no fetch]
-		// TJC was without includeexisting check
 
 		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && includeexisting != 0 && fetch == 0)
 		{
@@ -957,7 +961,7 @@ int main(void)
 			// Generate the stats
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
-				port = portlist[portindex];
+				port = portlist[portindex].port_num;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_TCP));
 
 				// Find a matching returnval, or else flag it as unknown
@@ -1029,7 +1033,6 @@ int main(void)
 		// *IF* we have everything we need to create the standard results page
 		// We should have been passed (1+NUMUSERDEFPORTS) queries
 		// i.e. includeexisting (either +1 or -1) and customports 0 thru n params
-		// TJC was without numcustomports check
 
 		else if (numqueries >= (NUMUSERDEFPORTS + 1) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 && fetch == 0)
 		{

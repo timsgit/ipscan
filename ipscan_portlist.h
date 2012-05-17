@@ -23,8 +23,9 @@
 //			2869 - SSDP event notification
 //			5357 - WSDAPI HTTP
 //			10243 - WMP HTTP
+// 0.03 - add service names to results table (modification to portlist, now structure)
 
-
+#include "ipscan.h"
 #include <stdlib.h>
 #include <inttypes.h>
 #include <errno.h>
@@ -33,15 +34,69 @@
 	#define IPSCAN_PORTLIST_H 1
 
 	// Determine the default list of ports to be tested
-	uint16_t defportlist[] =
+	// Note: each entry includes its port number followed by
+	// a text description (up to PORTDESCSIZE-1 characters long)
+	//
+	struct portlist_struc defportlist[] =
 	{
-		7, 21, 22, 23, 25, 37, 53, 79, 80, 88, 110, 111, 113, 119, 123,\
-		135, 137, 138, 139, 143, 311, 389, 427, 443, 445, 514, 543, 544,\
-		548, 631, 749, 873, 993, 1025, 1026, 1029, 1030, 1080,1720, 1812, 2869,\
-		3128, 3306, 3389, 3689, 5000, 5100, 5357, 5900, 8080, 9090, 10243
+		{    7, "Echo"},\
+		{   21, "FTP" },\
+		{   22, "SSH" },\
+		{   23, "Telnet" },\
+		{   25, "SMTP" },\
+		{   37, "Time" },\
+		{   53, "DNS" },\
+		{   79, "Finger" },\
+		{   80, "HTTP" },\
+		{   88, "Kerberos" },\
+		{  110, "POP3" },\
+		{  111, "SUN-RPC" },\
+		{  113, "Ident, Auth" },\
+		{  119, "NNTP" },\
+		{  123, "NTP" },\
+		{  135, "Microsoft-EPMAP" },\
+		{  137, "NetBIOS Naming" },\
+		{  138, "NetBIOS Datagram" },\
+		{  139, "NetBIOS Session" },\
+		{  143, "IMAP" },\
+		{  311, "Apple-WebAdmin" },\
+		{  389, "LDAP" },\
+		{  427, "SLP" },\
+		{  443, "HTTPS" },\
+		{  445, "Microsoft-DS" },\
+		{  514, "Shell" },\
+		{  543, "Kerberos Login" },\
+		{  544, "Kerberos RSH" },\
+		{  548, "Apple-File" },\
+		{  631, "IPP" },\
+		{  749, "Kerberos Admin" },\
+		{  873, "Rsync" },\
+		{  993, "IMAPS" },\
+		{ 1025, "Blackjack, NFS, IIS or RFS" },\
+		{ 1026, "CAP, Microsoft DCOM" },\
+		{ 1029, "Microsoft DCOM" },\
+		{ 1030, "BBN IAD" },\
+		{ 1080, "Socks" },\
+		{ 1720, "H323, Microsoft Netmeeting" },\
+		{ 1812, "RADIUS" },\
+		{ 2869, "SSDP Event Notification" },\
+		{ 3128, "Active API, or Squid Proxy" },\
+		{ 3306, "MySQL" },\
+		{ 3389, "Microsoft RDP" },\
+		{ 3689, "DAAP, iTunes" },\
+		{ 5000, "UPNP" },\
+		{ 5060, "SIP" },\
+		{ 5100, "Service Mux, Yahoo Messenger" },\
+		{ 5357, "WSDAPI HTTP" },\
+		{ 5900, "VNC" },\
+		{ 8080, "HTTP alternate" },\
+		{ 9090, "WebSM" },\
+		{10243, "Microsoft WMP HTTP"}\
 	};
 
+
 	// Calculate and record the number of default ports to be tested
-	#define DEFNUMPORTS ( sizeof(defportlist) / sizeof(uint16_t) )
+	#define DEFNUMPORTS ( sizeof(defportlist) / sizeof(struct portlist_struc) )
+
 
 #endif /* IPSCAN_PORTLIST_H */

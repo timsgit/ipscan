@@ -17,6 +17,9 @@
 //    You should have received a copy of the GNU General Public License
 //    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
 
+#include <stdlib.h>
+#include <inttypes.h>
+
 #ifndef IPSCAN_H
 	#define IPSCAN_H 1
 
@@ -55,7 +58,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.03"
+	#define IPSCAN_VER "1.05"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -100,6 +103,8 @@
 	// 1.01 Minor tweak to add further windows related ports
 	// 1.02 Minor tweak to non-javascript browser message
 	// 1.03 Minor tweak to add further parameter checking for customports
+	// 1.04 Include port descriptive text
+	// 1.05 Compress kickoff form
 
 	//
     // Logging verbosity
@@ -302,6 +307,22 @@
 		char label[32];
 		char colour[32];
 		char description[256];
+	};
+
+	// Default ports structure
+	//
+	// This constant defines the maximum port description size. Bear in mind, irrespective of the
+	// description used in ipscan_portlist.h it also needs to support the text inserted for
+	// user specified ports "User-specified: %d" (21 characters plus trailing \0), and so should not be
+	// reduced below 22.
+	#define PORTDESCSIZE 48
+	//
+	// the structure - consists of a port number and a text description
+	//
+	struct portlist_struc
+	{
+		uint16_t port_num;
+		char port_desc[PORTDESCSIZE];
 	};
 
 	// End of defines

@@ -28,6 +28,8 @@
 // 0.08 - remove unused parameters
 // 0.09 - add HTTP-EQUIV to force IE7 mimicry
 // 0.10 - minor tweak to expected run-time for non-javascript browser message
+// 0.11 - add service names to results table (modification to portlist, now structure)
+// 0.12 - compress form vertically
 
 #include "ipscan.h"
 
@@ -261,7 +263,7 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	printf(" than the host under test. In this case the address of the responding host is also displayed.</P>\n");
 }
 
-void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t *portlist)
+void create_html_body(char * hostname, time_t timestamp, uint16_t numports, struct portlist_struc *portlist)
 {
 	uint16_t portindex;
 	uint16_t port;
@@ -286,22 +288,22 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 
 	printf("<TABLE border=\"1\">\n");
 	printf("<TR style=\"text-align:left\">\n");
-	printf("<TD>ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\" id=\"pingstate\">%s</TD>\n",resultsstruct[PORTUNKNOWN].colour,resultsstruct[PORTUNKNOWN].label);
+	printf("<TD TITLE=\"IPv6 Ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\" id=\"pingstate\">%s</TD>\n",resultsstruct[PORTUNKNOWN].colour,resultsstruct[PORTUNKNOWN].label);
 	printf("</TR>\n");
 	printf("</TABLE>\n");
 
-	printf("<P>Individual TCP port scan results:</P>\n");
+	printf("<P>Individual TCP port scan results (hover for service names):</P>\n");
 
 	// Start of table
 	printf("<TABLE border=\"1\">\n");
 
 	for (portindex= 0; portindex < numports ; portindex++)
 	{
-		port = portlist[portindex];
+		port = portlist[portindex].port_num;
 		last = (portindex == (numports-1)) ? 1 : 0 ;
 
 		if (position ==0) printf("<TR style=\"text-align:center\">\n");;
-		printf("<TD width=\"%d%%\" style=\"background-color:%s\" id=\"port%d\">Port %d = %s</TD>\n",COLUMNPCT,resultsstruct[PORTUNKNOWN].colour, \
+		printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d\">Port %d = %s</TD>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
 				port, port, resultsstruct[PORTUNKNOWN].label );
 		position++;
 		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
@@ -329,7 +331,7 @@ void create_html_body_end(void)
 	printf("</HTML>\n");
 }
 
-void create_html_form(uint16_t numports, uint16_t *portlist)
+void create_html_form(uint16_t numports, struct portlist_struc *portlist)
 {
 	int i;
 	uint16_t port,portindex;
@@ -348,11 +350,11 @@ void create_html_form(uint16_t numports, uint16_t *portlist)
 	printf("<TABLE border=\"1\">\n");
 	for (portindex= 0; portindex < numports ; portindex++)
 	{
-		port = portlist[portindex];
+		port = portlist[portindex].port_num;
 		last = (portindex == (numports-1)) ? 1 : 0 ;
 
-		if (position ==0) printf("<TR style=\"text-align:center\">\n");
-		printf("<TD width=\"%d%%\">Port %d</TD>\n",COLUMNPCT,port);
+		if (position == 0) printf("<TR style=\"text-align:center\">\n");
+		printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNPCT, portlist[portindex].port_desc, port);
 		position++;
 		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
 	}
@@ -363,15 +365,25 @@ void create_html_form(uint16_t numports, uint16_t *portlist)
 	printf("<P style=\"font-weight:bold\">1. Select whether to include the default list of ports, or not:</P>\n");
 
 	printf("<FORM action=\""URIPATH"/"EXENAME"\" accept-charset=\"ISO-8859-1\" method=\"GET\">\n");
-//	printf("<P>\n");
 	printf("<INPUT type=\"radio\" name=\"includeexisting\" value=\"1\" checked> Include default ports listed above in the scan<BR>\n");
 	printf("<INPUT type=\"radio\" name=\"includeexisting\" value=\"-1\"> Exclude default ports, test only those specified below<BR><BR>\n");
 	printf("<P style=\"font-weight:bold\">2. Enter any custom TCP ports you wish to scan (%d-%d inclusive). Duplicate or invalid ports will be removed:</P>\n", MINVALIDPORT, MAXVALIDPORT);
 
+	printf("<TABLE>\n");
+	position = 0;
 	for (i = 0; i < NUMUSERDEFPORTS ; i++)
 	{
-		printf("<INPUT type=\"text\" value=\"\" size=\"5\" maxlength=\"5\" alt=\"Custom TCP port #%d\" name=\"customport%d\"><BR>\n", i, i);
+		// Start of a new row, so insert the appropriate tag if required
+		last = (i == (NUMUSERDEFPORTS-1)) ? 1 : 0;
+		if (position == 0) printf("<TR style=\"text-align:center\">\n");
+
+		printf("<TD width=\"%d%%\"><INPUT type=\"text\" value=\"\" size=\"5\" maxlength=\"5\" alt=\"Custom TCP port #%d\" name=\"customport%d\"></TD>\n", COLUMNPCT, i, i);
+
+		// Get ready for the next cell, add the end of row tag if required
+		position++;
+		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
 	}
+	printf("</TABLE>\n");
 	printf("<P style=\"font-weight:bold\">3. and finally click on the Begin scan button:</P>\n");
 
 	printf("<INPUT type=\"submit\" value=\"Begin scan\">\n");

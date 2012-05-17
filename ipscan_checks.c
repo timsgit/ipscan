@@ -30,6 +30,7 @@
 // 0.10 - minor include correction for FreeBSD support
 // 0.11 - add parallel port scan function
 // 0.12 - fix some mis-signed comparisons, unused variables and parameters
+// 0.13 - add service names to results table (modification to portlist, now structure)
 
 #include "ipscan.h"
 //
@@ -954,7 +955,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 }
 
 
-int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint16_t *portlist)
+int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist)
 {
 	int i,rc,result;
 	pid_t childpid = fork();
@@ -974,7 +975,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		char unusedfield[8] = "unused";
 		for (i = 0 ; i <(int)todo ; i++)
 		{
-			uint16_t port = portlist[portindex+i];
+			uint16_t port = portlist[portindex+i].port_num;
 			result = check_tcp_port(hostname, port);
 			// Put results into database
 			rc = write_db(host_msb, host_lsb, timestamp, session, (port + IPSCAN_PROTO_TCP), result, unusedfield );
