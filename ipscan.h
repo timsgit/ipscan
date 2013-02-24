@@ -58,7 +58,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.05"
+	#define IPSCAN_VER "1.06"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -105,6 +105,7 @@
 	// 1.03 Minor tweak to add further parameter checking for customports
 	// 1.04 Include port descriptive text
 	// 1.05 Compress kickoff form
+	// 1.06 Correct requestmethod declaration
 
 	//
     // Logging verbosity

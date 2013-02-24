@@ -32,6 +32,7 @@
 // 0.12 - remove unused parameters
 // 0.13 - specifically count number of customport parameters
 // 0.14 - add service names to results table (modification to portlist, now structure)
+// 0.15 - tidy up requestmethod declaration
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -178,7 +179,7 @@ int main(void)
 	unsigned int portsstats[ NUMRESULTTYPES ];
 
 	// Determine request method and query-string
-	char requestmethod[MAXREQMETHODLEN];
+	char requestmethod[ (MAXREQMETHODLEN + 1) ];
 	char thischar;
 	char *reqmethodvar;
 	char *querystringvar;
