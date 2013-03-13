@@ -1,6 +1,6 @@
 #    ipscan - an http-initiated IPv6 port scanner.
 #
-#    (C) Copyright 2011-2012 Tim Chappell.
+#    (C) Copyright 2011-2013 Tim Chappell.
 #
 #    This file is part of ipscan.
 #
@@ -108,7 +108,7 @@ ifeq ($(MYEUID),0)
 	chmod 4555 $(TARGETDIR)/$(JSTARGET)
 else
 	@echo 
-	@echo ERROR: install must be run as root in order to setuid.
+	@echo ERROR: install must be run as ROOT in order to setuid.
 	@echo ERROR: user-id is currently $(MYEUID)
 	@echo 
 endif

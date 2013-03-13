@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2012 Tim Chappell.
+//    Copyright (C) 2011-2013 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -30,6 +30,8 @@
 // 0.10 - tidy up comparisons and correct debug logging
 // 0.11 - minor include correction for FreeBSD support
 // 0.12 - add read_db_result() function
+// 0.13 - change dump_db() to extend json results to report port, result and "address"
+//      - necessary for UDP support
 
 #include "ipscan.h"
 //
@@ -259,14 +261,17 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									rcport = sscanf(row[5], "%d", &port);
 									rcres = sscanf(row[6], "%d", &res);
 									rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
-									if ( rcres == 1 && rchost == 1 && rcport == 1 && port == (0 + IPSCAN_PROTO_ICMPV6) )
+
+									if ( rcres == 1 && rchost == 1 && rcport == 1 )
 									{
-										printf("\"%s\", %d, ", hostind, res);
+										printf("%d, %d, \"%s\", ", port, res, hostind);
 									}
-									else if (rcres == 1 && rcport == 1 && (port != (0 + IPSCAN_PROTO_ICMPV6)) )
+
+								/*	else if (rcres == 1 && rcport == 1 && (port != (0 + IPSCAN_PROTO_ICMPV6)) )
 									{
 										printf("%d, %d, ", port, res);
-									}
+									} */
+
 									else
 									{
 										IPSCAN_LOG( LOGPREFIX "dump_db: Unexpected row scan results - rcport = %d, rcres = %d, rchost = %d, port = %d\n", rcport, rcres, rchost, port);
@@ -278,7 +283,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									IPSCAN_LOG( LOGPREFIX "ERROR - you NEED to update to the new database format - please see the README for details!\n");
 								}
 							}
-							printf(" -9999, -9999 ]\n");
+							printf(" -9999, -9999, \"::1\" ]\n");
 							mysql_free_result(result);
 						}
 						else

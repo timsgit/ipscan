@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2012 Tim Chappell.
+//    Copyright (C) 2011-2013 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -24,11 +24,9 @@
 //			5357 - WSDAPI HTTP
 //			10243 - WMP HTTP
 // 0.03 - add service names to results table (modification to portlist, now structure)
+// 0.04 - add UDP ports and service names
 
 #include "ipscan.h"
-#include <stdlib.h>
-#include <inttypes.h>
-#include <errno.h>
 
 #ifndef IPSCAN_PORTLIST_H
 	#define IPSCAN_PORTLIST_H 1
@@ -98,5 +96,14 @@
 	// Calculate and record the number of default ports to be tested
 	#define DEFNUMPORTS ( sizeof(defportlist) / sizeof(struct portlist_struc) )
 
+	struct portlist_struc udpportlist[] =
+		{
+			{   53, "DNS" },\
+			{   69, "TFTP" },\
+			{  123, "NTP" },\
+			{ 1900, "UPnP SSDP" },\
+		};
+
+	#define NUMUDPPORTS ( sizeof(udpportlist) / sizeof(struct portlist_struc) )
 
 #endif /* IPSCAN_PORTLIST_H */

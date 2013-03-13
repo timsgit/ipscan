@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2012 Tim Chappell.
+//    Copyright (C) 2011-2013 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -46,6 +46,9 @@
 	//
 	// Parallel processing related debug:
 	// #define PARLLDEBUG 1
+	//
+	// UDP checks related debug:
+	// #define UDPDEBUG 1
 
 	// Determine which logging target to use stderr (0) or syslog(1)
 	#define LOGMODE 0
@@ -58,14 +61,14 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.06"
+	#define IPSCAN_VER "1.07"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
 	// 0.63 further response states
 	// 0.64 Open, Closed or detailed response names
 	// 0.65 Added results key
-	// 0.66 Added Prohibited failure case (ICMPv6 administratively prohibited
+	// 0.66 Added Prohibited failure case (ICMPv6 administratively prohibited)
 	// 0.67 Add ability to create database directory path assuming only 1 additional directory is required to be created
 	// 0.68 Added unreachable icmpv6 type 1 code 0
 	// 0.69 Add unreachable stats
@@ -105,21 +108,27 @@
 	// 1.03 Minor tweak to add further parameter checking for customports
 	// 1.04 Include port descriptive text
 	// 1.05 Compress kickoff form
-	// 1.06 Correct requestmethod declaration
+	// 1.06 Tidy up requestmethod declaration
+	// 1.07 Introduction of UDP port scans
 
 	//
-    // Logging verbosity
+    	// Logging verbosity
 	//
-    // (1) Normal - port scan summary is logged; (0) Quiet - program/unexpected response errors only
+    	// (1) Normal - port scan summary is logged; (0) Quiet - program/unexpected response errors only
 	#define IPSCAN_LOGVERBOSITY 1
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
 
+	// Determine whether to include terms of use link (0 = don't include; 1 = include)
+	#define INCLUDETERMSOFUSE 0
+	// Link for terms of use - please update to reference a page from your website
+	#define TERMSOFUSEURL "http://ipv6.chappell-family.com/termsofuse"
+
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
 	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
-    // available using an URL similar to:
+    	// available using an URL similar to:
 	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
@@ -140,16 +149,27 @@
 	#define MAXVALIDPORT 65535
 
 	// Number of columns for HTML output:
-	#define MAXCOLS 4
+	#define MAXCOLS 6
 	#define COLUMNPCT (100/MAXCOLS)
 
 	// Number of columns for text-only browser output case
-	#define TXTMAXCOLS 3
+	#define TXTMAXCOLS 4
 
-	// Number of columns in log outputs
+	// Number of columns per line in log outputs
 	#define LOGMAXCOLS 4
+
 	// Maximum size for buffer used to assemble log entries, 20 characters per "column" should be plenty
 	#define LOGENTRYLEN (20* LOGMAXCOLS)
+
+	// Number of octets per line in log outputs
+	#define LOGMAXOCTETS 16
+
+	// Maximum size for buffer used to assemble UDP packet debug entries
+	#define LOGENTRYSIZE (64 + (4 * LOGMAXOCTETS))
+
+	// Maximum number of octets of any UDP packet that can be logged when
+	// in UDPDEBUG mode and IPSCAN_LOGVERBOSITY = 1
+	#define UDPMAXLOGOCTETS 128
 
 	// Maximum number of supported query parameters
 	// Must ensure MAXQUERIES exceeds NUMUSERDEFPORTS by sufficient amount!
@@ -192,10 +212,10 @@
 	// Must ensure MAXQUERIES exceeds NUMUSERDEFPORTS by sufficient amount!
 	#define NUMUSERDEFPORTS 4
 
-		// Logging prefix (goes into apache error_log or syslog)
+	// Logging prefix (goes into apache error_log or syslog)
 	#define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
 
-    //
+    	//
 	// Parallel port scanning related
 	//
 
@@ -258,9 +278,27 @@
 	#define ICMPV6_MAGIC_VALUE1 1289
 	#define ICMPV6_MAGIC_VALUE2 12569
 
+	// UDP buffer size
+	#define UDP_BUFFER_SIZE 512
+
+	// UDP timeout (seconds)
+	#define UDPTIMEOUTSECS 2
+
+	// An estimate of the time to perform the test
+	#define ESTIMATEDTIMETORUN ((numudpports * UDPTIMEOUTSECS) + (4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)))
+
+	// NTP constants - setup as client (mode 3), unsynchronised, poll interval 8, precision 1 second
+	#define NTP_LI 0
+	#define NTP_VN 4
+	#define NTP_MODE 3
+	#define NTP_STRATUM 16
+	#define NTP_POLL 8
+	#define NTP_PRECISION 2
+
 	// Protocol mappings (stored in database)
 	#define IPSCAN_PROTO_TCP (0<<16)
 	#define IPSCAN_PROTO_ICMPV6 (1<<16)
+	#define IPSCAN_PROTO_UDP (2<<16)
 
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router
@@ -288,6 +326,9 @@
 		PORTPARAMPROB,
 		ECHONOREPLY,
 		ECHOREPLY,
+		/* Addition for UDP port respond/doesn't */
+		UDPRESP,
+		UDPNORESP,
 		/* Unexpected and Unknown error response cases, do NOT change */
 		PORTUNEXPECTED,
 		PORTUNKNOWN,

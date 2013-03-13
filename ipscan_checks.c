@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2012 Tim Chappell.
+//    Copyright (C) 2011-2013 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -31,6 +31,7 @@
 // 0.11 - add parallel port scan function
 // 0.12 - fix some mis-signed comparisons, unused variables and parameters
 // 0.13 - add service names to results table (modification to portlist, now structure)
+// 0.14 - add UDP support
 
 #include "ipscan.h"
 //
@@ -657,7 +658,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 			}
 
-            //
+            		//
 			// Check what type of ICMPv6 packet we received and set return value appropriately ...
 			//
 			if (rxicmp6_type == ICMP6_ECHO_REPLY)
@@ -995,4 +996,377 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 	return( (int)childpid );
 }
 
+/***************************************************************************************************************
+ * UDP
+ *
+ **************************************************************************************************************/
+int check_udp_port(char * hostname, uint16_t port)
+{
+	char txmessage[UDP_BUFFER_SIZE],rxmessage[UDP_BUFFER_SIZE];
+	struct sockaddr_in6 remoteaddr;
+	struct timeval timeout;
+	int rc = 0, i;
+	int fd = -1;
 
+	// buffer for logging entries
+	#ifdef UDPDEBUG
+	int udplogbuffersize = LOGENTRYSIZE;
+	char udplogbuffer[ (LOGENTRYSIZE + 1) ];
+	char *udplogbufferptr = &udplogbuffer[0];
+	#endif
+
+	// Holds length of transmitted UDP packet, which since they are representative packets, depends on the port being tested
+	int len = 0;
+
+	// set return value to a known default
+	int retval = PORTUNKNOWN;
+
+	rc = inet_pton(AF_INET6, hostname, &(remoteaddr.sin6_addr));
+	if (rc != 1)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad inet_pton() call, returned %d with errno %d (%s)\n", rc, errno, strerror(errno));
+		retval = PORTINTERROR;
+	}
+	remoteaddr.sin6_port = htons(port);
+	remoteaddr.sin6_family = AF_INET6;
+	remoteaddr.sin6_flowinfo = 0;
+
+	// Attempt to create a socket
+	if (retval == PORTUNKNOWN)
+	{
+		fd = socket(AF_INET6, SOCK_DGRAM, 0);
+		if (fd == -1)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad socket call, returned %d (%s)\n", errno, strerror(errno));
+			retval = PORTINTERROR;
+		}
+		else
+		{
+			bzero(&timeout, sizeof(timeout));
+			timeout.tv_sec = UDPTIMEOUTSECS;
+			timeout.tv_usec = 0;
+
+			rc = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+			if (rc < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errno, strerror(errno));
+				retval = PORTINTERROR;
+			}
+		}
+	}
+
+	if (retval == PORTUNKNOWN) // continue
+	{
+		bzero(&timeout, sizeof(timeout));
+		timeout.tv_sec = UDPTIMEOUTSECS;
+		timeout.tv_usec = 0;
+
+		rc = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+		if (rc < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errno, strerror(errno));
+			retval = PORTINTERROR;
+		}
+	}
+
+	if (retval == PORTUNKNOWN)
+	{
+		// Need to connect, since otherwise asynchronous ICMPv6 responses will not be delivered to us
+		rc = connect( fd, (struct sockaddr *)&remoteaddr, sizeof(remoteaddr) );
+		if (rc < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad connect() attempt, returned %d (%s)\n", errno, strerror(errno));
+			retval = PORTINTERROR;
+		}
+	}
+
+
+	if (retval == PORTUNKNOWN)
+	{
+		// Fill the txmessage with the appropriate message (depends on service)
+		switch (port)
+		{
+
+			// DNS query
+			case 53:
+			{
+				/*
+				Header - 12 bytes
+				Contains fields that describe the type of message and provide important information about it.
+				Also contains fields that indicate the number of entries in the other sections of the message.
+				Question carries one or more “questions”, that is, queries for information being sent to a DNS name server.
+				Answer carries one or more resource records that answer the question(s) indicated in the Question section above.
+				Authority contains one or more resource records that point to authoritative name servers that can be used to
+				continue the resolution process.
+				Additional conveys one or more resource records that contain additional information related to the query that
+				is not strictly necessary to answer the queries (questions) in the message.
+				*/
+				// ID - identifier - 16 bit field
+				txmessage[0]= 21;
+				txmessage[1]= 06;
+				// QR - query/response flag - 0=query. 1 bit field
+				// OP - opcode - 0=query,2=status. 4 bit field
+				// AA - Authoritative Answer flag. 1 bit field
+				// TC - truncation flag. 1 bit field
+				// RD - recursion desired - 0=not desired, 1=desired. 1 bit field
+				// RA - recursion available. 1 bit field
+				// Z  - reserved. 3 bit field
+				// Rcode - result code - 0=no error, 4=not implemented
+				txmessage[2]= 16; // 16 for server status query
+				txmessage[3]= 0;
+				// QDCOUNT - question count - 16 bit field
+				txmessage[4]= 0;
+				txmessage[5]= 1;
+				// ANCOUNT - answer record count - 16 bit field
+				txmessage[6]= 0;
+				txmessage[7]= 0;
+				// NSCOUNT - authority record count (NS=name server) - 16 bit field
+				txmessage[8]= 0;
+				txmessage[9]= 0;
+				// ARCOUNT - 16 bit field
+				txmessage[10]= 0;
+				txmessage[11]= 0;
+				// Question section
+				txmessage[12]= 4;
+				// Need one extra octet for trailing 0, however this will be overwritten
+				// by the length of the next part of the host name in standard DNS format
+				rc = snprintf(&txmessage[13], 5, "%s", "www4");
+				txmessage[17]= 4;
+				rc = snprintf(&txmessage[18], 5, "%s", "ipv6");
+				txmessage[22]= 15;
+				rc = snprintf(&txmessage[23], 16, "%s", "chappell-family");
+				txmessage[38]= 3;
+				rc = snprintf(&txmessage[39], 4, "%s", "com");
+				txmessage[42]= 0;
+				// Question type - 1 = host address, 2=NS, 255 is request all
+				txmessage[43] = 0;
+				txmessage[44] = 255;
+				// Qclass - 1=INternet
+				txmessage[45] = 0;
+				txmessage[46] = 1;
+				len=47;
+				break;
+			}
+
+			case 69:
+			{
+				/* TFTP
+				TFTP supports five types of packets, all of which have been mentioned
+				   above:
+
+				          opcode  operation
+				            1     Read request (RRQ)
+				            2     Write request (WRQ)
+				            3     Data (DATA)
+				            4     Acknowledgment (ACK)
+				            5     Error (ERROR)
+
+				   The TFTP header of a packet contains the  opcode  associated  with
+				   that packet.
+
+				            2 bytes     string    1 byte     string   1 byte
+				            ------------------------------------------------
+				           | Opcode |  Filename  |   0  |    Mode    |   0  |
+				            ------------------------------------------------
+
+				                       Figure 5-1: RRQ/WRQ packet
+
+				    The mode field contains the string "netascii", "octet", or "mail"
+				    (or any combination of upper and lower case, such as "NETASCII",
+				    NetAscii", etc.) in netascii indicating the three modes defined in
+				    the protocol.                                                   */
+
+				// Create a pseudo-random filename based on the current pid
+				len = snprintf(&txmessage[0], UDP_BUFFER_SIZE, "%c%c%s%d%coctet%c",0,1,"/filename_tjc_",getpid(),0,0);
+				if (len < 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for tftp, returned %d\n", len);
+					len = 0;
+					retval = PORTINTERROR;
+				}
+				break;
+			}
+
+
+
+			case 123:
+			{
+			/* NTP
+			 * from RFC4330
+								1                   2                   3
+				  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9  0  1
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				 |LI | VN  |Mode |    Stratum    |     Poll      |   Precision    |
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				 |                          Root  Delay                           |
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				 |                       Root  Dispersion                         |
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				 |                     Reference Identifier                       |
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				 |                                                                |
+				 |                    Reference Timestamp (64)                    |
+				 |                                                                |
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				 |                                                                |
+				 |                    Originate Timestamp (64)                    |
+				 |                                                                |
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				 |                                                                |
+				 |                     Receive Timestamp (64)                     |
+				 |                                                                |
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				 |                                                                |
+				 |                     Transmit Timestamp (64)                    |
+				 |                                                                |
+				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  */
+
+				txmessage[0] = ((NTP_LI << 5) + (NTP_VN << 3) + ( NTP_MODE ));
+				txmessage[1] = NTP_STRATUM;
+				txmessage[2] = NTP_POLL;
+				txmessage[3] = NTP_PRECISION;
+				// Clear out 11 32-bit words (Root Delay through transmit timestamp)
+				bzero(&txmessage[4], 44);
+				len = 48;
+				break;
+			}
+
+
+			case 1900:
+			{
+				// UPnP
+				// taken from http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf
+				//
+				len = snprintf(&txmessage[0], UDP_BUFFER_SIZE, \
+				"M-SEARCH * HTTP/1.1\r\nHost:[%s]:1900\r\nMan: \"ssdp:discover\"\r\nMX:1\r\nST: \"ssdp:all\"\r\nUSER-AGENT: linux/2.6 UPnP/1.1 TimsTester/1.0\r\n\r\n", hostname);
+				if (len < 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for upnp, returned %d\n", len);
+					len = 0;
+					retval = PORTINTERROR;
+				}
+
+				break;
+			}
+
+
+
+			default:
+			{
+				// Unhandled port
+				retval = PORTINTERROR;
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: FATAL ERROR - Request for unhandled UDP port %d\n", port);
+				break;
+			}
+		}
+	}
+
+	if (retval == PORTUNKNOWN)
+	{
+		rc = write(fd,&txmessage,len);
+		if (rc < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad write() attempt, returned %d (%s)\n", errno, strerror(errno));
+			retval = PORTINTERROR;
+		}
+		else
+		{
+			#ifdef UDPDEBUG
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: write() returned %d\n", rc);
+			#endif
+		}
+	}
+
+	if (retval == PORTUNKNOWN)
+	{
+		rc=read(fd,&rxmessage,UDP_BUFFER_SIZE);
+		if (rc < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad read(), returned %d (%s)\n", errno, strerror(errno));
+
+			int errsv = errno ;
+			// cycle through the expected list of results
+			for (i = 0; PORTEOL != resultsstruct[i].returnval && PORTUNKNOWN == retval ; i++)
+			{
+
+				// Find a matching connect returncode and also errno, if appropriate
+				if (resultsstruct[i].connrc == rc)
+				{
+					// Set the returnvalue if we find a match
+					if ( rc == -1 && resultsstruct[i].connerrno == errsv )
+					{
+						retval = resultsstruct[i].returnval;
+					}
+				}
+			}
+
+			#ifdef UDPDEBUG
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: found port %d returned read = %d, errsv = %d(%s)\n",port, rc, errsv, strerror(errsv));
+			#endif
+
+			// If we haven't found a matching returncode/errno then log this ....
+			if (PORTUNKNOWN == retval)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: read() unexpected response, errno is : %d (%s) for host %s port %d\n", \
+						errsv, strerror(errsv), hostname, port);
+				retval = PORTUNEXPECTED;
+			}
+		}
+		else
+		{
+			retval = UDPRESP;
+
+			#ifdef UDPDEBUG
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: good read(), returned %d bytes\n", rc);
+			// Log the summary of results internally - but only if LOGVERBOSITY is set to 1
+			int rxlength = ( rc < UDPMAXLOGOCTETS ) ? rc : UDPMAXLOGOCTETS;
+			int i = 0;
+			int position = 0;
+			while (i < rxlength)
+			{
+				if (position == 0)
+				{
+					rc = snprintf(udplogbufferptr, udplogbuffersize, "Found response packet for port %d: %02x", port, (rxmessage[i] & 0xff) );
+				}
+				else
+				{
+					rc = snprintf(udplogbufferptr, udplogbuffersize, " %02x", (rxmessage[i] & 0xff) );
+				}
+
+				if (rc < 0 || rc >= udplogbuffersize)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: logbuffer write truncated, increase LOGENTRYSIZE (currently %d) and recompile.\n", LOGENTRYSIZE);
+					exit(EXIT_FAILURE);
+				}
+
+				udplogbufferptr += rc ;
+				udplogbuffersize -= rc;
+				position ++ ;
+				if ( position >= LOGMAXOCTETS || i == (rxlength-1) )
+				{
+					#if (IPSCAN_LOGVERBOSITY == 1)
+					IPSCAN_LOG( LOGPREFIX "%s\n", udplogbuffer);
+					#endif
+					udplogbufferptr = &udplogbuffer[0];
+					udplogbuffersize = LOGENTRYSIZE;
+					position = 0;
+				}
+				i++ ;
+			}
+			#endif
+		}
+	}
+
+	if (-1 != fd)
+	{
+		rc = close(fd);
+		if (rc == -1)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: close of fd %d caused unexpected failure : %d (%s)\n", fd, errno, strerror(errno));
+			retval = PORTINTERROR;
+		}
+	}
+
+
+	return (retval);
+}

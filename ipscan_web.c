@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2012 Tim Chappell.
+//    Copyright (C) 2011-2013 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -30,6 +30,7 @@
 // 0.10 - minor tweak to expected run-time for non-javascript browser message
 // 0.11 - add service names to results table (modification to portlist, now structure)
 // 0.12 - compress form vertically
+// 0.13 - introduce UDP support
 
 #include "ipscan.h"
 
@@ -43,7 +44,6 @@
 #include <netdb.h>
 #include <time.h>
 #include <inttypes.h>
-
 
 // Include resultsstruct in order to generate some of the html content
 extern struct rslt_struc resultsstruct[];
@@ -60,7 +60,7 @@ void create_html_common_header(void)
 		printf("<META NAME=\"AUTHOR\" CONTENT=\"Tim Chappell\">\n");
 		printf("<META HTTP-EQUIV=\"CACHE-CONTROL\" CONTENT=\"NO-STORE, NO-CACHE, MUST-REVALIDATE, MAX-AGE=0\">\n");
 		printf("<META HTTP-EQUIV=\"PRAGMA\" CONTENT=\"NO-CACHE\">\n");
-		printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2012 Tim Chappell.\">\n");
+		printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2013 Tim Chappell.\">\n");
 
 }
 
@@ -69,13 +69,13 @@ void create_json_header(void)
 		printf("%s%c%c\n","Content-Type:text/html;charset=iso-8859-1",13,10);
 }
 
-void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, char * reconquery)
+void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, uint16_t numudpports, char * reconquery)
 {
 	uint16_t i;
 
 	create_html_common_header();
 
-	printf("<TITLE>IPv6 TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+	printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 	printf("<SCRIPT type = \"text/javascript\" language=\"javascript\">\n");
 	printf("<!--  to hide script contents from old browsers\n");
 	printf("var myInterval = 0;\n");
@@ -165,57 +165,90 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, c
 	printf("	if (request.readyState == 4 && request.status == 200)\n");
 	printf("	{\n");
 	printf(" 		var lateststate = eval( '(' + request.responseText + ')' );\n");
-	printf("		if (lateststate.length > 2)\n");
+	printf("		if (lateststate.length > 3)\n");
 	printf("		{\n");
 	// if we've received a complete set of results for the ports under test then stop the periodic tasks
-	// we expect (PING+NUMPORTS)*2+2 (final 2 are end of JSON array dummies) results
-	printf("			if (lateststate.length >= %d)\n", 2+((numports+1)*2) );
+	// we expect (numudpports+PING+numports)*3+3 (final 3 are end of JSON array dummies) results
+	printf("			if (lateststate.length >= %d)\n", 3+((numudpports+1+numports)*3) );
 	printf("			{\n");
 	printf("				window.clearInterval(myInterval);\n");
 	printf("				window.clearInterval(myBlink);\n");
 	printf("			}\n");
 	// go around the latest received state and update display as required
-	printf("			for (i = 0 ; i < (lateststate.length-2); i+=2)\n");
+	printf("			for (i = 0 ; i < (lateststate.length-3); i+=3)\n");
 	printf("			{\n");
+	printf("				var proto = %d;\n", IPSCAN_PROTO_TCP);
 	printf("				var textupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].label);
 	printf("				var colourupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].colour);
 	printf("				var elemid = \"pingstate\";\n");
-	printf("				if (i > 1) elemid = \"port\" + lateststate[i];\n");
+	printf("				var port = lateststate[i];\n");
+	printf("				var result = lateststate[i+1];\n");
+	printf("				var host = lateststate[i+2];\n");
+
+	printf("				if (port >= %d)\n", IPSCAN_PROTO_UDP);
+	printf("				{\n");
+	printf("					proto = %d;\n", IPSCAN_PROTO_UDP);
+	printf("					port = port - %d;\n", IPSCAN_PROTO_UDP);
+	printf("					elemid = \"udpport\" + port;\n");
+	printf("				}\n");
+	printf("				else if (port >= %d)\n", IPSCAN_PROTO_ICMPV6);
+	printf("				{\n");
+	printf("					proto = %d;\n", IPSCAN_PROTO_ICMPV6);
+	printf("					port = port - %d;\n", IPSCAN_PROTO_ICMPV6);
+	printf("					elemid = \"pingstate\";\n");
+	printf("				}\n");
+	printf("				else\n");
+	printf("				{\n");
+	printf("					elemid = \"port\" + port;\n");
+	printf("				}\n");
+
 	printf("				for (j = 0; j < retvals.length; j++)\n");
 	printf("				{\n");
-
-	printf("					if (retvals[j] == (lateststate[i+1] & %d))\n",IPSCAN_INDIRECT_MASK);
+	printf("					if (retvals[j] == (result & %d))\n", IPSCAN_INDIRECT_MASK);
 	printf("					{\n");
-	printf("						textupdate = \"Port \" + lateststate[i] + \" = \" + labels[j];\n");
-	// ICMPv6 PING case requires the port status (or indirect host) to be returned
-	printf("						if (i<2)\n");
+	printf("						switch(proto)\n");
 	printf("						{\n");
-	printf("							if (lateststate[1]>=%d)\n", IPSCAN_INDIRECT_RESPONSE);
+	printf("							case %d:\n", IPSCAN_PROTO_ICMPV6);
+	printf("							if (result>=%d)\n", IPSCAN_INDIRECT_RESPONSE);
 	printf("							{\n");
-	printf("								textupdate = \"INDIRECT-\" + labels[j] + \" (from \" + lateststate[0] + \")\";\n");
+	printf("								textupdate = \"INDIRECT-\" + labels[j] + \" (from \" + host + \")\";\n");
 	printf("							}\n");
 	printf("							else\n");
 	printf("							{\n");
 	printf("								textupdate = labels[j];\n");
 	printf("							}\n");
+	printf("							break;\n");
+	printf("							case %d:\n", IPSCAN_PROTO_UDP);
+	printf("							if (result>=%d)\n", IPSCAN_INDIRECT_RESPONSE);
+	printf("							{\n");
+	printf("								textupdate = \"Port \" + port + \" = INDIRECT-\" + labels[j] + \" (from \" + host + \")\";\n");
+	printf("							}\n");
+	printf("							else\n");
+	printf("							{\n");
+	printf("								textupdate = \"Port \" + port + \" = \" + labels[j];\n");
+	printf("							}\n");
+	printf("							break;\n");
+	printf("							default:\n"); // TCP
+	printf("								textupdate = \"Port \" + port + \" = \" + labels[j];\n");
+	printf("							break;\n");
 	printf("						}\n");
 	// Colour setting
 	printf("						colourupdate = colours[j];\n");
 	printf("					}\n");
 	printf("				}\n");
-	// update the text on the page ....
+	// update the selected text on the page ....
 	printf("				document.getElementById(elemid).innerHTML = textupdate;\n");
 	printf("				document.getElementById(elemid).style.backgroundColor = colourupdate;\n");
 	printf("			}\n");
 	// if we have finished then update the page to reflect the fact
-	printf("			if (lateststate.length >= %d)\n",2+((numports+1)*2) );
+	printf("			if (lateststate.length >= %d)\n",3+((numudpports+numports+1)*3) );
 	printf("			{\n");
 	printf("				document.getElementById(\"scanstate\").innerHTML = \"COMPLETE.\";\n");
 	printf("				document.getElementById(\"scanstate\").style.color=\"black\";\n");
 	printf("			}\n");
 	printf("		}\n");
 	// handle failure to complete the scan in the allocated number of updates
-	printf("		else if (lateststate.length < %d && lastupdate == 1)\n",2+((numports+1)*2));
+	printf("		else if (lateststate.length < %d && lastupdate == 1)\n",3+((numudpports+numports+1)*3));
 	printf("		{\n");
 	printf("			window.clearInterval(myBlink);\n");
 	printf("			document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";\n");
@@ -263,7 +296,7 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	printf(" than the host under test. In this case the address of the responding host is also displayed.</P>\n");
 }
 
-void create_html_body(char * hostname, time_t timestamp, uint16_t numports, struct portlist_struc *portlist)
+void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist)
 {
 	uint16_t portindex;
 	uint16_t port;
@@ -277,14 +310,14 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, stru
 	printf("<P>An alternative version of this IPv6 TCP port scanner which does not use Javascript is available from ");
 	printf("the following <A href=\"%s/%s\">link.</A></P>\n", URIPATH, EXETXTNAME);
 	printf("<P>This alternative version does not support realtime in-browser updates and will take up to ");
-	printf("%d seconds to return the results.</P>\n", (int)(4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)) );
+	printf("%d seconds to return the results.</P>\n", (int)ESTIMATEDTIMETORUN );
 	printf("<HR>\n");
 	printf("</NOSCRIPT>\n");
 
-	printf("<H3>IPv6 TCP Port Scan Results</H3>\n");
+	printf("<H3>IPv6 UDP and TCP Port Scan Results</H3>\n");
 	printf("<P>Results for host : %s</P>\n\n", hostname);
 
-	printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", asctime(localtime(&timestamp)), (int)(4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)) );
+	printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", asctime(localtime(&timestamp)), (int)ESTIMATEDTIMETORUN );
 
 	printf("<TABLE border=\"1\">\n");
 	printf("<TR style=\"text-align:left\">\n");
@@ -292,10 +325,28 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, stru
 	printf("</TR>\n");
 	printf("</TABLE>\n");
 
-	printf("<P>Individual TCP port scan results (hover for service names):</P>\n");
+	printf("<P>Individual IPv6 UDP port scan results (hover for service names):</P>\n");
+	// Start of UDP table
+	printf("<TABLE border=\"1\">\n");
 
+	for (portindex= 0; portindex < numudpports ; portindex++)
+	{
+		port = udpportlist[portindex].port_num;
+		last = (portindex == (numports-1)) ? 1 : 0 ;
+
+		if (position ==0) printf("<TR style=\"text-align:center\">\n");;
+		printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d\">Port %d = %s</TD>\n",COLUMNPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
+				port, port, resultsstruct[PORTUNKNOWN].label );
+		position++;
+		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
+	}
+	// end of table
+	printf("</TABLE>\n");
+
+	printf("<P>Individual IPv6 TCP port scan results (hover for service names):</P>\n");
 	// Start of table
 	printf("<TABLE border=\"1\">\n");
+	position = 0;
 
 	for (portindex= 0; portindex < numports ; portindex++)
 	{
@@ -307,7 +358,6 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, stru
 				port, port, resultsstruct[PORTUNKNOWN].label );
 		position++;
 		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
-
 	}
 
 	// end of table
@@ -331,23 +381,43 @@ void create_html_body_end(void)
 	printf("</HTML>\n");
 }
 
-void create_html_form(uint16_t numports, struct portlist_struc *portlist)
+void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist)
 {
 	int i;
 	uint16_t port,portindex;
 	int position = 0;
 	int last = 0;
 
-	printf("<TITLE>IPv6 TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+	printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 	printf("</HEAD>\n");
 	printf("<BODY>\n");
-	printf("<H3 style=\"color:red\">IPv6 TCP Port Scanner by Tim Chappell</H3>\n");
+	printf("<H3 style=\"color:red\">IPv6 UDP, ICMPv6 and TCP Port Scanner by Tim Chappell</H3>\n");
+
+	printf("<P>Please note that this test may take up to %d seconds to complete.</P>\n", (int) ESTIMATEDTIMETORUN);
+	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
+	printf("<P>The list of UDP ports that will be tested are:</P>\n");
+
+	// Start of table
+	printf("<TABLE border=\"1\">\n");
+	for (portindex= 0; portindex < numudpports ; portindex++)
+	{
+		port = udpportlist[portindex].port_num;
+		last = (portindex == (numudpports-1)) ? 1 : 0 ;
+
+		if (position == 0) printf("<TR style=\"text-align:center\">\n");
+		printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNPCT, udpportlist[portindex].port_desc, port);
+		position++;
+		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
+	}
+	// end of table
+	printf("</TABLE>\n");
 
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
 	printf("<P>The default list of TCP ports that will be tested are:</P>\n");
 
 	// Start of table
 	printf("<TABLE border=\"1\">\n");
+	position = 0;
 	for (portindex= 0; portindex < numports ; portindex++)
 	{
 		port = portlist[portindex].port_num;
@@ -361,13 +431,12 @@ void create_html_form(uint16_t numports, struct portlist_struc *portlist)
 	// end of table
 	printf("</TABLE>\n");
 
-	printf("<BR>\n");
-	printf("<P style=\"font-weight:bold\">1. Select whether to include the default list of ports, or not:</P>\n");
+	printf("<P style=\"font-weight:bold\">1. Select whether to include the default list of TCP ports, or not:</P>\n");
 
 	printf("<FORM action=\""URIPATH"/"EXENAME"\" accept-charset=\"ISO-8859-1\" method=\"GET\">\n");
-	printf("<INPUT type=\"radio\" name=\"includeexisting\" value=\"1\" checked> Include default ports listed above in the scan<BR>\n");
-	printf("<INPUT type=\"radio\" name=\"includeexisting\" value=\"-1\"> Exclude default ports, test only those specified below<BR><BR>\n");
-	printf("<P style=\"font-weight:bold\">2. Enter any custom TCP ports you wish to scan (%d-%d inclusive). Duplicate or invalid ports will be removed:</P>\n", MINVALIDPORT, MAXVALIDPORT);
+	printf("<INPUT type=\"radio\" name=\"includeexisting\" value=\"1\" checked> Include default TCP ports listed above in the scan<BR>\n");
+	printf("<INPUT type=\"radio\" name=\"includeexisting\" value=\"-1\"> Exclude default TCP ports, test only those specified below<BR>\n");
+	printf("<P style=\"font-weight:bold\">2. Enter any custom TCP ports you wish to scan (%d-%d inclusive). Duplicate or invalid ports will be discarded:</P>\n", MINVALIDPORT, MAXVALIDPORT);
 
 	printf("<TABLE>\n");
 	position = 0;
@@ -384,9 +453,12 @@ void create_html_form(uint16_t numports, struct portlist_struc *portlist)
 		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
 	}
 	printf("</TABLE>\n");
-	printf("<P style=\"font-weight:bold\">3. and finally click on the Begin scan button:</P>\n");
+	#if (INCLUDETERMSOFUSE != 0)
+	printf("<P style=\"font-weight:bold\">3. and finally, confirming that you accept the <A href=\"%s\" target=\"_blank\"> terms of usage</A>, please click on the Begin scan button:</P>\n", TERMSOFUSEURL);
+	#else
+	printf("<P style=\"font-weight:bold\">3. and finally, please click on the Begin scan button:</P>\n");
+	#endif
 
 	printf("<INPUT type=\"submit\" value=\"Begin scan\">\n");
-//	printf("</P>\n");
 	printf("</FORM>\n");
 }
