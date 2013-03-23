@@ -27,6 +27,7 @@
 # 0.07 - minor corrections to support FreeBSD gmake builds
 # 0.08 - add extra compiler checks
 # 0.09 - add 'running as root' check for install step
+# 0.10 - strip symbols from the final objects
 
 # General build variables
 SHELL=/bin/sh
@@ -102,13 +103,14 @@ $(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
 .PHONY: install
 install : $(TXTTARGET) $(JSTARGET)
 ifeq ($(MYEUID),0)
+	strip --strip-unneeded $(TXTTARGET) $(JSTARGET)
 	cp $(TXTTARGET) $(TARGETDIR)
 	cp $(JSTARGET) $(TARGETDIR)
 	chmod 4555 $(TARGETDIR)/$(TXTTARGET)
 	chmod 4555 $(TARGETDIR)/$(JSTARGET)
 else
 	@echo 
-	@echo ERROR: install must be run as ROOT in order to setuid.
+	@echo ERROR: install must be run as root in order to setuid.
 	@echo ERROR: user-id is currently $(MYEUID)
 	@echo 
 endif

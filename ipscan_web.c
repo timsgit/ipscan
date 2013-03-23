@@ -152,7 +152,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("++fetches;\n");
 	printf("updateurl = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches;\n", session,\
 			(uint32_t)timestamp,reconquery);
-	printf("if (fetches >%d)\n",(int)( (6 + (numports*TIMEOUTSECS) / JSONFETCHEVERY )) );
+	printf("if (fetches >%d)\n",(int)( ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )) );
 	printf("{\n");
 	printf("	window.clearInterval(myInterval);\n");
 	printf("	lastupdate = 1;\n");
@@ -335,10 +335,10 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 		last = (portindex == (numports-1)) ? 1 : 0 ;
 
 		if (position ==0) printf("<TR style=\"text-align:center\">\n");;
-		printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d\">Port %d = %s</TD>\n",COLUMNPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
+		printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d\">Port %d = %s</TD>\n",COLUMNUDPPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
 				port, port, resultsstruct[PORTUNKNOWN].label );
 		position++;
-		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
+		if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
 	}
 	// end of table
 	printf("</TABLE>\n");
@@ -405,9 +405,9 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 		last = (portindex == (numudpports-1)) ? 1 : 0 ;
 
 		if (position == 0) printf("<TR style=\"text-align:center\">\n");
-		printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNPCT, udpportlist[portindex].port_desc, port);
+		printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port);
 		position++;
-		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
+		if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
 	}
 	// end of table
 	printf("</TABLE>\n");

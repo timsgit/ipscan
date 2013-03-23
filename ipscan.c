@@ -34,6 +34,7 @@
 // 0.14 - add service names to results table (modification to portlist, now structure)
 // 0.15 - fix length of requestmethod to prevent potential overflow
 // 0.16 - add UDP port scan support
+// 0.17 - add parallel UDP port scan support
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -82,6 +83,8 @@ int check_tcp_port(char * hostname, uint16_t port);
 int check_udp_port(char * hostname, uint16_t port);
 int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
+int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
+
 void create_html_common_header(void);
 void create_json_header(void);
 void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, uint16_t numudpports, char * reconquery);
@@ -121,8 +124,8 @@ struct rslt_struc resultsstruct[] =
 	{ PORTPARAMPROB, 	-1, 	EPROTO, 		"PRMPRB", 			"yellow",	"A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
 	{ ECHONOREPLY, 		-96, 	-96,	 		"ECHO NO REPLY",	"green",	"No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
 	{ ECHOREPLY, 		-97, 	-97,	 		"ECHO REPLY", 		"yellow",	"An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
-	{ UDPRESP,			-95,	-95,			"UDPRSPNS",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-	{ UDPNORESP,		-1,		EAGAIN,			"NORSPNS",			"green",	"No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
+	{ UDPOPEN,			-95,	-95,			"UDPOPEN",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
+	{ UDPSTEALTH,		-1,		EAGAIN,			"UDPSTEALTH",		"green",	"No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
 	/* Unexpected and unknown error response cases, do NOT change */
 	{ PORTUNEXPECTED,	-98,	-98,			"UNXPCT",			"white",	"An unexpected response was received to the connect attempt."},
 	{ PORTUNKNOWN, 		-99,	-99, 			"UNKWN", 			"white",	"An unknown error response was received, or the port is yet to be tested."},
@@ -745,16 +748,37 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "WARNING : write_db for ping result returned : %d\n", rc);
 			}
 
-			// Scan UDP ports
-			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
+			// Scan the UDP ports in parallel
+			remaining = numudpports;
+			porti = 0;
+			numchildren = 0;
+			while (remaining > 0 || numchildren > 0)
 			{
-				port = udpportlist[portindex].port_num;
-				result = check_udp_port(remoteaddrstring, port);
-
-				rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_UDP), result, indirecthost);
-				if (rc != 0)
+				while (remaining > 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "WARNING : write_db for UDP result returned : %d\n", rc);
+					if (numchildren < MAXUDPCHILDREN && remaining > 0)
+					{
+						int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : remaining;
+						#ifdef UDPPARLLDEBUG
+						IPSCAN_LOG( LOGPREFIX "INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						#endif
+						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &udpportlist[0]);
+						porti += todo;
+						numchildren ++;
+						remaining = (numudpports - porti);
+					}
+					if (numchildren == MAXUDPCHILDREN && remaining > 0)
+					{
+						int pid = wait(&childstatus);
+						numchildren--;
+						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: UDP ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					}
+				}
+				while (numchildren > 0)
+				{
+					int pid = wait(&childstatus);
+					numchildren--;
+					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
 
@@ -812,7 +836,7 @@ int main(void)
 
 			printf("<P>Individual TCP port scan results:</P>\n");
 
-			// Scan the ports in parallel
+			// Scan the TCP ports in parallel
 			remaining = numports;
 			porti = 0;
 			numchildren = 0;
@@ -983,18 +1007,41 @@ int main(void)
 				exit(EXIT_FAILURE);
 			}
 
-			// UDP ports
-			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
+			// Scan the UDP ports in parallel
+			remaining = numudpports;
+			porti = 0;
+			numchildren = 0;
+			while (remaining > 0 || numchildren > 0)
 			{
-				port = udpportlist[portindex].port_num;
-				result = check_udp_port(remoteaddrstring, port);
-
-				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_UDP), result, indirecthost);
-				if (rc != 0)
+				while (remaining > 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "WARNING : write_db for UDP result returned : %d\n", rc);
+					if (numchildren < MAXUDPCHILDREN && remaining > 0)
+					{
+						int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : remaining;
+						#ifdef UDPPARLLDEBUG
+						IPSCAN_LOG( LOGPREFIX "INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						#endif
+						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, &udpportlist[0]);
+						porti += todo;
+						numchildren ++;
+						remaining = (numudpports - porti);
+					}
+					if (numchildren == MAXUDPCHILDREN && remaining > 0)
+					{
+						int pid = wait(&childstatus);
+						numchildren--;
+						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: UDP ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					}
+				}
+				while (numchildren > 0)
+				{
+					int pid = wait(&childstatus);
+					numchildren--;
+					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
+
+
 
 			// Scan the TCP ports in parallel
 			remaining = numports;

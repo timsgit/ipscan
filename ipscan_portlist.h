@@ -25,6 +25,7 @@
 //			10243 - WMP HTTP
 // 0.03 - add service names to results table (modification to portlist, now structure)
 // 0.04 - add UDP ports and service names
+// 0.05 - add SNMP (UDP port 161) support
 
 #include "ipscan.h"
 
@@ -101,6 +102,7 @@
 			{   53, "DNS" },\
 			{   69, "TFTP" },\
 			{  123, "NTP" },\
+			{  161, "SNMP" },\
 			{ 1900, "UPnP SSDP" },\
 		};
 

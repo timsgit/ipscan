@@ -49,6 +49,10 @@
 	//
 	// UDP checks related debug:
 	// #define UDPDEBUG 1
+	//
+	// UDP Parallel processing related debug:
+	// #define UDPPARLLDEBUG 1
+
 
 	// Determine which logging target to use stderr (0) or syslog(1)
 	#define LOGMODE 0
@@ -61,7 +65,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.07"
+	#define IPSCAN_VER "1.10"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -110,11 +114,14 @@
 	// 1.05 Compress kickoff form
 	// 1.06 Tidy up requestmethod declaration
 	// 1.07 Introduction of UDP port scans
+	// 1.08 Estimated run time improvement
+	// 1.09 UDP responses renamed for improved consistency, ipscan_checks.c split
+	// 1.10 Parallel UDP processing support added
 
 	//
-    	// Logging verbosity
+    // Logging verbosity
 	//
-    	// (1) Normal - port scan summary is logged; (0) Quiet - program/unexpected response errors only
+    // (1) Normal - port scan summary is logged; (0) Quiet - program/unexpected response errors only
 	#define IPSCAN_LOGVERBOSITY 1
 
 	// Email address
@@ -128,7 +135,7 @@
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
 	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
-    	// available using an URL similar to:
+    // available using an URL similar to:
 	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
@@ -151,6 +158,10 @@
 	// Number of columns for HTML output:
 	#define MAXCOLS 6
 	#define COLUMNPCT (100/MAXCOLS)
+
+	// Number of columns for UDP HTML output:
+	#define MAXUDPCOLS 4
+	#define COLUMNUDPPCT (100/MAXCOLS)
 
 	// Number of columns for text-only browser output case
 	#define TXTMAXCOLS 4
@@ -212,10 +223,10 @@
 	// Must ensure MAXQUERIES exceeds NUMUSERDEFPORTS by sufficient amount!
 	#define NUMUSERDEFPORTS 4
 
-	// Logging prefix (goes into apache error_log or syslog)
+		// Logging prefix (goes into apache error_log or syslog)
 	#define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
 
-    	//
+    //
 	// Parallel port scanning related
 	//
 
@@ -225,6 +236,13 @@
 	//
 	// Determine the maximum number of port scans that can be allocated to each child
 	#define MAXPORTSPERCHILD 9
+
+	// Determine the maximum number of children and therefore the maximum number of
+	// UDP port scans that can be running in parallel
+	#define MAXUDPCHILDREN 7
+	//
+	// Determine the maximum number of UDP port scans that can be allocated to each child
+	#define MAXUDPPORTSPERCHILD 2
 
 	//
 	// Database related
@@ -281,11 +299,11 @@
 	// UDP buffer size
 	#define UDP_BUFFER_SIZE 512
 
-	// UDP timeout (seconds)
+	// UDP timeout (seconds) - needs to exceed UPnP/SSDP response request time (MX field) which is 1
 	#define UDPTIMEOUTSECS 2
 
 	// An estimate of the time to perform the test
-	#define ESTIMATEDTIMETORUN ((numudpports * UDPTIMEOUTSECS) + (4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)))
+	#define ESTIMATEDTIMETORUN ( (4+((2 + numudpports * UDPTIMEOUTSECS) / MAXCHILDREN)) + (4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)) )
 
 	// NTP constants - setup as client (mode 3), unsynchronised, poll interval 8, precision 1 second
 	#define NTP_LI 0
@@ -327,8 +345,8 @@
 		ECHONOREPLY,
 		ECHOREPLY,
 		/* Addition for UDP port respond/doesn't */
-		UDPRESP,
-		UDPNORESP,
+		UDPOPEN,
+		UDPSTEALTH,
 		/* Unexpected and Unknown error response cases, do NOT change */
 		PORTUNEXPECTED,
 		PORTUNKNOWN,
