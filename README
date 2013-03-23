@@ -71,7 +71,7 @@ Installation Steps:
        
     5. make && make install
        Given that the suid bit is set on the installed executables, in order to support raw sockets for ICMPv6 testing, it is necessary to perform the 'make install' stage as root user. 
-       Note: when updating an existing installation to version 1.10 and beyond it may be necessary to manually remove the ipscan_checks.c file, if it remains in your install directory, prior to building. The functionality within ipscan_checks.c has been redistributed to separate files which handlie tcp, udp and icmpv6 testing.
+       Note: when updating an existing installation to version 1.10 and beyond it may be necessary to manually remove the ipscan_checks.c file, if it remains in your install directory, prior to building. The functionality within ipscan_checks.c has been redistributed to separate files which handle tcp, udp and icmpv6 testing.
        
        Note: please use gmake under FreeBSD.
     
