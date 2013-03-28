@@ -19,6 +19,7 @@
 
 // ipscan_tcp.c 	version
 // 0.01  			initial version after split from ipscan_checks.c
+// 0.02				tidy up logging prefixes
 
 #include "ipscan.h"
 //
@@ -95,14 +96,14 @@ int check_tcp_port(char * hostname, uint16_t port)
 	error = snprintf(portnum, 8,"%d", port);
 	if (error < 0 || error >= 8)
 	{
-		IPSCAN_LOG( LOGPREFIX "Failed to write portnum, rc was %d\n", error);
+		IPSCAN_LOG( LOGPREFIX "check_tcp_port: Failed to write portnum, rc was %d\n", error);
 		retval = PORTINTERROR;
 	}
 
 	error = getaddrinfo(hostname, portnum, &hints, &res);
 	if (error != 0)
 	{
-		IPSCAN_LOG( LOGPREFIX "getaddrinfo: %s for host %s port %d\n", gai_strerror(error), hostname, port);
+		IPSCAN_LOG( LOGPREFIX "check_tcp_port: getaddrinfo: %s for host %s port %d\n", gai_strerror(error), hostname, port);
 		retval = PORTINTERROR;
 	}
 	else
@@ -123,7 +124,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 			if (sock == -1)
 			{
 				int errsv = errno ;
-				IPSCAN_LOG( LOGPREFIX "Bad socket call, returned %d (%s)\n", errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "check_tcp_port: Bad socket call, returned %d (%s)\n", errsv, strerror(errsv));
 				retval = PORTINTERROR;
 			}
 
@@ -138,7 +139,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 				if (timeo < 0)
 				{
 					int errsv = errno ;
-					IPSCAN_LOG( LOGPREFIX "Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
+					IPSCAN_LOG( LOGPREFIX "check_tcp_port: Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
 					retval = PORTINTERROR;
 				}
 			}
@@ -154,7 +155,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 				if (timeo < 0)
 				{
 					int errsv = errno ;
-					IPSCAN_LOG( LOGPREFIX "Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
+					IPSCAN_LOG( LOGPREFIX "check_tcp_port: Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
 					retval = PORTINTERROR;
 				}
 			}
@@ -182,13 +183,13 @@ int check_tcp_port(char * hostname, uint16_t port)
 				}
 
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "found port %d returned conn = %d, errsv = %d(%s)\n",port, conn, errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "check_tcp_port: found port %d returned conn = %d, errsv = %d(%s)\n",port, conn, errsv, strerror(errsv));
 				#endif
 
 				// If we haven't found a matching returncode/errno then log this ....
 				if (PORTUNKNOWN == retval)
 				{
-					IPSCAN_LOG( LOGPREFIX "connect unexpected response, errno is : %d (%s) for host %s port %d\n", \
+					IPSCAN_LOG( LOGPREFIX "check_tcp_port: connect unexpected response, errno is : %d (%s) for host %s port %d\n", \
 							errsv, strerror(errsv), hostname, port);
 					retval = PORTUNEXPECTED;
 				}
@@ -196,7 +197,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 				cl = close(sock);
 				if (cl == -1)
 				{
-					IPSCAN_LOG( LOGPREFIX "close unexpected failure : %d (%s)\n", errno, strerror(errno));
+					IPSCAN_LOG( LOGPREFIX "check_tcp_port: close unexpected failure : %d (%s)\n", errno, strerror(errno));
 				}
 
 			}
@@ -225,13 +226,13 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 	{
 		// parent
 		#ifdef PARLLDEBUG
-		IPSCAN_LOG( LOGPREFIX "INFO: check_tcp_ports_parll() forked and started child PID=%d\n",childpid);
+		IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): forked and started child PID=%d\n",childpid);
 		#endif
 	}
 	else if (childpid == 0)
 	{
 		#ifdef PARLLDEBUG
-		IPSCAN_LOG( LOGPREFIX "INFO: startindex %d, todo %d\n",portindex,todo);
+		IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): startindex %d, todo %d\n",portindex,todo);
 		#endif
 		// child - actually do the work here - and then exit successfully
 		char unusedfield[8] = "unused";
@@ -243,7 +244,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			rc = write_db(host_msb, host_lsb, timestamp, session, (port + IPSCAN_PROTO_TCP), result, unusedfield );
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "WARNING : check_tcp_port_parll() write_db returned %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): check_tcp_port_parll() write_db returned %d\n", rc);
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()
@@ -251,7 +252,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 	}
 	else
 	{
-		IPSCAN_LOG( LOGPREFIX "fork() failed childpid=%d, errno=%d(%s)\n", childpid, errno, strerror(errno));
+		IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): fork() failed childpid=%d, errno=%d(%s)\n", childpid, errno, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 	return( (int)childpid );

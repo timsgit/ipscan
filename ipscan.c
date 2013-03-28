@@ -35,6 +35,7 @@
 // 0.15 - fix length of requestmethod to prevent potential overflow
 // 0.16 - add UDP port scan support
 // 0.17 - add parallel UDP port scan support
+// 0.18 - separate UDP and TCP debug logging
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -261,13 +262,11 @@ int main(void)
 	// ensure length OK
 	if (NULL == reqmethodvar)
 	{
-		#ifdef DEBUG
-		IPSCAN_LOG( LOGPREFIX "Error in passing request-method from form to script.");
-		#endif
+		IPSCAN_LOG( LOGPREFIX "ipscan: Error in passing request-method from form to script.");
 	}
 	else if ( strlen(reqmethodvar) > MAXREQMETHODLEN )
 	{
-		IPSCAN_LOG( LOGPREFIX "ATTACK?: Request-method environment string is longer than allocated buffer (%d > %d)\n", (int)strlen(reqmethodvar), MAXREQMETHODLEN);
+		IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: Request-method environment string is longer than allocated buffer (%d > %d)\n", (int)strlen(reqmethodvar), MAXREQMETHODLEN);
 		// Create the header
 		create_html_common_header();
 		// Now finish the header
@@ -281,14 +280,12 @@ int main(void)
 	}
 	else if( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
 	{
-		#ifdef DEBUG
-		IPSCAN_LOG( LOGPREFIX "Invalid request-method scan.");
-		#endif
+		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid request-method scan.");
 	}
 	else
 	{
 		#ifdef DEBUG
-		IPSCAN_LOG( LOGPREFIX "Request method is : %s\n", requestmethod);
+		IPSCAN_LOG( LOGPREFIX "ipscan: Request method is : %s\n", requestmethod);
 		#endif
 
 		// Force Uppercase to ease comparison
@@ -302,11 +299,11 @@ int main(void)
 		{
 			if(NULL == querystringvar)
 			{
-				IPSCAN_LOG( LOGPREFIX "Error in passing null query-string from form to script.\n");
+				IPSCAN_LOG( LOGPREFIX "ipscan: Error in passing null query-string from form to script.\n");
 			}
 			else if ( strlen(querystringvar) > MAXQUERYSTRLEN)
 			{
-				IPSCAN_LOG( LOGPREFIX "ATTACK?: Query-string environment string is longer than allocated buffer (%d > %d)\n", (int)strlen(querystringvar), MAXQUERYSTRLEN);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: Query-string environment string is longer than allocated buffer (%d > %d)\n", (int)strlen(querystringvar), MAXQUERYSTRLEN);
 				// Create the header
 				create_html_common_header();
 				// Now finish the header
@@ -322,13 +319,13 @@ int main(void)
 			{
 				#ifdef DEBUG
 				// No query string will get reported here ....
-				IPSCAN_LOG( LOGPREFIX "Invalid query-string sscanf.\n");
+				IPSCAN_LOG( LOGPREFIX "ipscan: Invalid query-string sscanf.\n");
 				#endif
 			}
 			else
 			{
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "DEBUG info: Query-string : %s\n", querystring);
+				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: Query-string : %s\n", querystring);
 				#endif
 
 
@@ -355,7 +352,7 @@ int main(void)
 					}
 					if (varnamenum >= MAXQUERYNAMELEN)
 					{
-						IPSCAN_LOG( LOGPREFIX "query parameter name string is too long : %s\n", querystring);
+						IPSCAN_LOG( LOGPREFIX "ipscan: query parameter name string is too long : %s\n", querystring);
 					}
 					query[numqueries].varname[varnamenum]=0;
 					finished = (querystring[byte] < 32 || byte >= MAXQUERYSTRLEN) ? 1 : 0;
@@ -373,7 +370,7 @@ int main(void)
 						valstring[valbyte]=0;
 						if (valbyte >= MAXQUERYVALLEN)
 						{
-							IPSCAN_LOG( LOGPREFIX "query parameter value string is too long for %s : %s\n", query[numqueries].varname, querystring);
+							IPSCAN_LOG( LOGPREFIX "ipscan: query parameter value string is too long for %s : %s\n", query[numqueries].varname, querystring);
 						}
 						rc = sscanf(valstring,"%"SCNd64, &varval );
 						if (rc == 1)
@@ -382,15 +379,15 @@ int main(void)
 							query[numqueries].varval = varval;
 							query[numqueries].valid = 1;
 							#ifdef DEBUG
-							IPSCAN_LOG( LOGPREFIX "Added a new query name: %s\n", query[numqueries].varname);
-							IPSCAN_LOG( LOGPREFIX "with a value of       : %"PRId64"\n", query[numqueries].varval);
+							IPSCAN_LOG( LOGPREFIX "ipscan: Added a new query name: %s\n", query[numqueries].varname);
+							IPSCAN_LOG( LOGPREFIX "ipscan: with a value of       : %"PRId64"\n", query[numqueries].varval);
 							#endif
 							numqueries++;
 						}
 						else
 						{
 							#ifdef DEBUG
-							IPSCAN_LOG( LOGPREFIX "Bad value assignment for %s, setting invalid.\n", query[numqueries].varname);
+							IPSCAN_LOG( LOGPREFIX "ipscan: Bad value assignment for %s, setting invalid.\n", query[numqueries].varname);
 							#endif
 							query[numqueries].valid = 0;
 							numqueries++;
@@ -404,7 +401,7 @@ int main(void)
 					finished = (querystring[byte] < 32 || byte >= MAXQUERYSTRLEN) ? 1 : 0;
 				}
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "Number of query pairs found is : %d\n", numqueries);
+				IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %d\n", numqueries);
 				#endif
 			}
 		}
@@ -416,12 +413,12 @@ int main(void)
         		printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
         		printf("</HEAD>\n");
 		        printf("</HTML>\n");
-			IPSCAN_LOG( LOGPREFIX "HEAD request method, sending headers only\n");
+			IPSCAN_LOG( LOGPREFIX "ipscan: HEAD request method, sending headers only\n");
 			exit(EXIT_SUCCESS);
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "WARNING: called with an unsupported request method: %s.\n", requestmethod);
+			IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: called with an unsupported request method: %s.\n", requestmethod);
 			// Create the header
 			create_html_common_header();
 			// Now finish the header
@@ -439,16 +436,16 @@ int main(void)
 	remoteaddrvar = getenv("REMOTE_ADDR");
 	if(NULL == remoteaddrvar)
 	{
-		IPSCAN_LOG( LOGPREFIX "Error in passing remoteaddr data from form to script.\n");
+		IPSCAN_LOG( LOGPREFIX "ipscan: Error in passing remoteaddr data from form to script.\n");
 	}
 	else if (strlen(remoteaddrvar) > INET6_ADDRSTRLEN)
 	{
-		IPSCAN_LOG( LOGPREFIX "Host address length exceeds allocated buffer size (%d > %d)\n", (int)strlen(remoteaddrvar), INET6_ADDRSTRLEN);
+		IPSCAN_LOG( LOGPREFIX "ipscan: Host address length exceeds allocated buffer size (%d > %d)\n", (int)strlen(remoteaddrvar), INET6_ADDRSTRLEN);
 		exit(EXIT_FAILURE);
 	}
 	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
 	{
-		IPSCAN_LOG( LOGPREFIX "Invalid remoteaddr data.\n");
+		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid remoteaddr data.\n");
 	}
 	else
 	{	
@@ -456,7 +453,7 @@ int main(void)
 		rc = inet_pton(AF_INET6, remoteaddrstring, remotehost);
 		if (rc <= 0)
 		{
-			IPSCAN_LOG( LOGPREFIX "Unparseable IPv6 host address : %s\n", remoteaddrstring);
+			IPSCAN_LOG( LOGPREFIX "ipscan: Unparseable IPv6 host address : %s\n", remoteaddrstring);
 			exit(EXIT_FAILURE);
 		}
 		else
@@ -486,8 +483,7 @@ int main(void)
 			}
 
 			#ifdef DEBUG
-			IPSCAN_LOG( LOGPREFIX "Remote host address MSB %"PRIx64" and LSB %"PRIx64"\n", remotehost_msb, remotehost_lsb);
-			IPSCAN_LOG( LOGPREFIX "Remote host address MSB %"PRIu64" and LSB %"PRIu64"\n", remotehost_msb, remotehost_lsb);
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address MSB %"PRIx64" and LSB %"PRIx64"\n", remotehost_msb, remotehost_lsb);
 			#endif
 
 		}
@@ -541,13 +537,13 @@ int main(void)
 			reconquerysize -= rc;
 			if (reconquerysize <= 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
+				IPSCAN_LOG( LOGPREFIX "ipscan: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 				exit(EXIT_FAILURE);
 			}
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
+			IPSCAN_LOG( LOGPREFIX "ipscan: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
 			exit(EXIT_FAILURE);
 		}
 
@@ -564,7 +560,7 @@ int main(void)
 		}
 
 		#ifdef DEBUG
-		IPSCAN_LOG( LOGPREFIX "numports is initially found to be %d\n", numports);
+		IPSCAN_LOG( LOGPREFIX "ipscan: numports is initially found to be %d\n", numports);
 		#endif
 
 		//
@@ -604,7 +600,7 @@ int main(void)
 						rc = snprintf(&portlist[numports].port_desc[0], PORTDESCSIZE, "User-specified: %d",(int)query[i].varval);
 						if (rc < 0 || rc >= PORTDESCSIZE)
 						{
-							IPSCAN_LOG( LOGPREFIX "WARNING: failed to write user-specified port description, does PORTDESCSIZE (%d) need increasing?\n", PORTDESCSIZE);
+							IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: failed to write user-specified port description, does PORTDESCSIZE (%d) need increasing?\n", PORTDESCSIZE);
 						}
 						numports ++;
 						rc = snprintf(reconptr, reconquerysize, "&customport%d=%d", customport, (int)query[i].varval);
@@ -615,13 +611,13 @@ int main(void)
 							reconquerysize -= rc;
 							if (reconquerysize <= 0)
 							{
-								IPSCAN_LOG( LOGPREFIX "run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
+								IPSCAN_LOG( LOGPREFIX "ipscan: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 								exit(EXIT_FAILURE);
 							}
 						}
 						else
 						{
-							IPSCAN_LOG( LOGPREFIX "customport%d reconstitution failed, due to unexpected size.\n", customport);
+							IPSCAN_LOG( LOGPREFIX "ipscan: customport%d reconstitution failed, due to unexpected size.\n", customport);
 							exit(EXIT_FAILURE);
 						}
 					}
@@ -684,13 +680,13 @@ int main(void)
 
 		// Dump the variables resulting from the query-string parsing
 		#ifdef DEBUG
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: numqueries = %d\n", numqueries);
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", \
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numqueries = %d\n", numqueries);
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", \
 					session, (uint64_t)starttime, numports);
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: querysession = %"PRId64" querystarttime = %"PRId64" magic = %"PRId64"\n", querysession, querystarttime, magic );
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
-			IPSCAN_LOG( LOGPREFIX "DEBUG info: reconstituted query string = %s\n", reconquery );
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: querysession = %"PRId64" querystarttime = %"PRId64" magic = %"PRId64"\n", querysession, querystarttime, magic );
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: reconstituted query string = %s\n", reconquery );
 		#endif
 
 		//
@@ -715,7 +711,9 @@ int main(void)
 
 			// Take current time/PID for database logging purposes
 			starttime = time(0);
+			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scanstart = starttime;
+			#endif
 			session = (uint64_t) getpid();
 
 			// Create the header
@@ -726,9 +724,7 @@ int main(void)
 			printf("<BODY>\n");
 			printf("<H3 style=\"color:red\">IPv6 UDP, ICMPv6 and TCP Port Scanner by Tim Chappell</H3>\n");
 			printf("<P>Results for host : %s</P>\n\n", remoteaddrstring);
-			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
-			#endif
+
 			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
 					asctime(localtime(&starttime)), (int)ESTIMATEDTIMETORUN );
 
@@ -737,7 +733,7 @@ int main(void)
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#endif
 
 			portsstats[result]++ ;
@@ -745,8 +741,12 @@ int main(void)
 			rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "WARNING : write_db for ping result returned : %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING : write_db for ping result returned : %d\n", rc);
 			}
+
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
+			#endif
 
 			// Scan the UDP ports in parallel
 			remaining = numudpports;
@@ -760,7 +760,7 @@ int main(void)
 					{
 						int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : remaining;
 						#ifdef UDPPARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &udpportlist[0]);
 						porti += todo;
@@ -771,14 +771,14 @@ int main(void)
 					{
 						int pid = wait(&childstatus);
 						numchildren--;
-						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: UDP ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: UDP ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 					}
 				}
 				while (numchildren > 0)
 				{
 					int pid = wait(&childstatus);
 					numchildren--;
-					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
 
@@ -806,7 +806,7 @@ int main(void)
 				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_UDP));
 
 				#ifdef UDPDEBUG
-				IPSCAN_LOG( LOGPREFIX "INFO: UDP port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
@@ -823,7 +823,7 @@ int main(void)
 				else
 				{
 					printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", udpportlist[portindex].port_desc, port);
-					IPSCAN_LOG( LOGPREFIX "WARNING: Unknown result for port %d is %d\n",port,result);
+					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for port %d is %d\n",port,result);
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
 
@@ -834,6 +834,9 @@ int main(void)
 			}
 			printf("</TABLE>\n");
 
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
+			#endif
 			printf("<P>Individual TCP port scan results:</P>\n");
 
 			// Scan the TCP ports in parallel
@@ -848,7 +851,7 @@ int main(void)
 					{
 						int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : remaining;
 						#ifdef PARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &portlist[0]);
 						porti += todo;
@@ -859,14 +862,14 @@ int main(void)
 					{
 						int pid = wait(&childstatus);
 						numchildren--;
-						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 					}
 				}
 				while (numchildren > 0)
 				{
 					int pid = wait(&childstatus);
 					numchildren--;
-					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
 
@@ -879,7 +882,7 @@ int main(void)
 				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_TCP));
 
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "INFO: port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
@@ -896,7 +899,7 @@ int main(void)
 				else
 				{
 					printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", portlist[portindex].port_desc, port);
-					IPSCAN_LOG( LOGPREFIX "WARNING: Unknown result for port %d is %d\n",port,result);
+					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for port %d is %d\n",port,result);
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
 
@@ -917,7 +920,7 @@ int main(void)
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scancomplete = time(0);
-			IPSCAN_LOG( LOGPREFIX "INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
 
 			// Log the summary of results internally
@@ -936,7 +939,7 @@ int main(void)
 
 				if (rc < 0 || rc >= logbuffersize)
 				{
-					IPSCAN_LOG( LOGPREFIX "logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
+					IPSCAN_LOG( LOGPREFIX "ipscan: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
 					exit(EXIT_FAILURE);
 				}
 
@@ -946,7 +949,7 @@ int main(void)
 				if ( position >= LOGMAXCOLS || i == (NUMRESULTTYPES -1) )
 				{
 					#if (IPSCAN_LOGVERBOSITY == 1)
-					IPSCAN_LOG( LOGPREFIX "%s\n", logbuffer);
+					IPSCAN_LOG( LOGPREFIX "ipscan: %s\n", logbuffer);
 					#endif
 					logbufferptr = &logbuffer[0];
 					logbuffersize = LOGENTRYLEN;
@@ -969,7 +972,7 @@ int main(void)
 			rc = dump_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "dump_db return code was %d (expected 0)\n", rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: dump_db return code was %d (expected 0)\n", rc);
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -980,12 +983,10 @@ int main(void)
 
 		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && includeexisting != 0 && fetch == 0)
 		{
-
-			time_t scanstart = time(0);
-
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
+			time_t scanstart = time(0);
 			#endif
+
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
 			create_html_common_header();
@@ -996,16 +997,20 @@ int main(void)
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#endif
 			portsstats[result]++ ;
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "write_db for ping result returned non-zero: %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: write_db for ping result returned non-zero: %d\n", rc);
 				create_html_body_end();
 				exit(EXIT_FAILURE);
 			}
+
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
+			#endif
 
 			// Scan the UDP ports in parallel
 			remaining = numudpports;
@@ -1019,7 +1024,7 @@ int main(void)
 					{
 						int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : remaining;
 						#ifdef UDPPARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, &udpportlist[0]);
 						porti += todo;
@@ -1030,18 +1035,21 @@ int main(void)
 					{
 						int pid = wait(&childstatus);
 						numchildren--;
-						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: UDP ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: UDP ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 					}
 				}
 				while (numchildren > 0)
 				{
 					int pid = wait(&childstatus);
 					numchildren--;
-					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
 
 
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
+			#endif
 
 			// Scan the TCP ports in parallel
 			remaining = numports;
@@ -1055,7 +1063,7 @@ int main(void)
 					{
 						int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : remaining;
 						#ifdef PARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, &portlist[0]);
 						porti += todo;
@@ -1066,14 +1074,14 @@ int main(void)
 					{
 						int pid = wait(&childstatus);
 						numchildren--;
-						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 					}
 				}
 				while (numchildren > 0)
 				{
 					int pid = wait(&childstatus);
 					numchildren--;
-					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "WARNING: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
 
@@ -1092,7 +1100,7 @@ int main(void)
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "WARNING scan of UDP port %d returned : %d\n", port, result);
+					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING scan of UDP port %d returned : %d\n", port, result);
 					portsstats[PORTUNKNOWN]++;
 				}
 			}
@@ -1110,16 +1118,16 @@ int main(void)
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "WARNING scan of port %d returned : %d\n", port, result);
+					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING scan of port %d returned : %d\n", port, result);
 					portsstats[PORTUNKNOWN]++;
 				}
 			}
 
 			#ifdef DEBUG
-			IPSCAN_LOG( LOGPREFIX "rmthost        was : %"PRIx64":%"PRIx64"\n", remotehost_msb, remotehost_lsb);
-			IPSCAN_LOG( LOGPREFIX "querystarttime was : %"PRId64"\n", querystarttime);
-			IPSCAN_LOG( LOGPREFIX "querysession   was : %"PRId64"\n", querysession);
-			IPSCAN_LOG( LOGPREFIX "numcustomports was : %d\n", numcustomports);
+			IPSCAN_LOG( LOGPREFIX "ipscan: rmthost        was : %"PRIx64":%"PRIx64"\n", remotehost_msb, remotehost_lsb);
+			IPSCAN_LOG( LOGPREFIX "ipscan: querystarttime was : %"PRId64"\n", querystarttime);
+			IPSCAN_LOG( LOGPREFIX "ipscan: querysession   was : %"PRId64"\n", querysession);
+			IPSCAN_LOG( LOGPREFIX "ipscan: numcustomports was : %d\n", numcustomports);
 			#endif
 
 
@@ -1128,7 +1136,7 @@ int main(void)
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scancomplete = time(0);
-			IPSCAN_LOG( LOGPREFIX "INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
 
 			// Log the summary of results internally
@@ -1147,7 +1155,7 @@ int main(void)
 
 				if (rc < 0 || rc >= logbuffersize)
 				{
-					IPSCAN_LOG( LOGPREFIX "logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
+					IPSCAN_LOG( LOGPREFIX "ipscan: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
 					exit(EXIT_FAILURE);
 				}
 
@@ -1174,7 +1182,7 @@ int main(void)
 		else if (numqueries >= (NUMUSERDEFPORTS + 1) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 && fetch == 0)
 		{
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "Creating the standard web results page start point\n");
+			IPSCAN_LOG( LOGPREFIX "ipscan: Creating the standard web results page start point\n");
 			#endif
 			starttime = time(0);
 			session = (uint64_t) getpid();
@@ -1206,7 +1214,7 @@ int main(void)
 			rc = summarise_db();
 			// Finish the output
 			create_html_body_end();
-			IPSCAN_LOG( LOGPREFIX "summarise_db: provided the requested summary, exited with rc=%d\n", rc);
+			IPSCAN_LOG( LOGPREFIX "ipscan: summarise_db: provided the requested summary, exited with rc=%d\n", rc);
 		}
 		#endif
 
@@ -1220,9 +1228,9 @@ int main(void)
 			printf("<P>Nothing to report.</P>\n");
 			// Finish the output
 			create_html_body_end();
-			IPSCAN_LOG( LOGPREFIX "Something untoward happened, numqueries = %d, magic = %"PRId64"\n", numqueries, magic);
-			IPSCAN_LOG( LOGPREFIX "includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
-			IPSCAN_LOG( LOGPREFIX "querysession = %"PRId64" querystarttime = %"PRId64" numports = %d and numcustomports = %d.\n", \
+			IPSCAN_LOG( LOGPREFIX "ipscan: Something untoward happened, numqueries = %d, magic = %"PRId64"\n", numqueries, magic);
+			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
+			IPSCAN_LOG( LOGPREFIX "ipscan: querysession = %"PRId64" querystarttime = %"PRId64" numports = %d and numcustomports = %d.\n", \
 					querysession, querystarttime, numports, numcustomports);
 		}
 	}

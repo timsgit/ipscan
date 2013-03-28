@@ -21,6 +21,7 @@
 // 0.01 			initial version after split from ipscan_checks.c
 // 0.02				add parallel scanning support
 // 0.03				add SNMP support
+// 0.04				improve debug logging
 
 #include "ipscan.h"
 //
@@ -465,7 +466,7 @@ int check_udp_port(char * hostname, uint16_t port)
 			{
 				if (position == 0)
 				{
-					rc = snprintf(udplogbufferptr, udplogbuffersize, "Found response packet for port %d: %02x", port, (rxmessage[i] & 0xff) );
+					rc = snprintf(udplogbufferptr, udplogbuffersize, "check_udp_port: Found response packet for port %d: %02x", port, (rxmessage[i] & 0xff) );
 				}
 				else
 				{
@@ -518,13 +519,13 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 	{
 		// parent
 		#ifdef UDPPARLLDEBUG
-		IPSCAN_LOG( LOGPREFIX "INFO: check_udp_ports_parll() forked and started child PID=%d\n",childpid);
+		IPSCAN_LOG( LOGPREFIX "check_udp_ports_parll(): forked and started child PID=%d\n",childpid);
 		#endif
 	}
 	else if (childpid == 0)
 	{
 		#ifdef UDPPARLLDEBUG
-		IPSCAN_LOG( LOGPREFIX "INFO: check_udp_ports_parll() startindex %d and todo %d\n",portindex,todo);
+		IPSCAN_LOG( LOGPREFIX "check_udp_ports_parll(): startindex %d and todo %d\n",portindex,todo);
 		#endif
 		// child - actually do the work here - and then exit successfully
 		char unusedfield[8] = "unused";
@@ -536,7 +537,7 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			rc = write_db(host_msb, host_lsb, timestamp, session, (port + IPSCAN_PROTO_UDP), result, unusedfield );
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "WARNING : check_udp_port_parll() write_db returned %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): write_db returned %d\n", rc);
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()
@@ -544,7 +545,7 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 	}
 	else
 	{
-		IPSCAN_LOG( LOGPREFIX "WARNING: check_udp_port_parll() fork() failed childpid=%d, errno=%d(%s)\n", childpid, errno, strerror(errno));
+		IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): fork() failed childpid=%d, errno=%d(%s)\n", childpid, errno, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 	return( (int)childpid );

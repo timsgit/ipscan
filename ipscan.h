@@ -23,9 +23,9 @@
 #ifndef IPSCAN_H
 	#define IPSCAN_H 1
 
-    // Build-mode for executable
-    // Note this is controlled by the makefile, but a default is defined here for safety
-    //
+	// Build-mode for executable
+	// Note this is controlled by the makefile, but a default is defined here for safety
+	//
 	// TEXTMODE == 1 => Text Browser compatible (e.g. lynx or w3m)
 	// TEXTMODE == 0 => Browser supports Javascript
 	//
@@ -34,14 +34,14 @@
 	#endif
 
 	// DEBUG build options - uncommenting these #defines will result in copious amounts of information
-    //
-    // general debug:
+	//
+	// general debug:
 	// #define DEBUG 1
-    //
-    // database related debug:
+	//
+	// database related debug:
 	// #define DBDEBUG 1
-    //
-    // ICMPv6 ping related debug:
+	//
+	// ICMPv6 ping related debug:
 	// #define PINGDEBUG 1
 	//
 	// Parallel processing related debug:
@@ -52,7 +52,6 @@
 	//
 	// UDP Parallel processing related debug:
 	// #define UDPPARLLDEBUG 1
-
 
 	// Determine which logging target to use stderr (0) or syslog(1)
 	#define LOGMODE 0
@@ -65,7 +64,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.10"
+	#define IPSCAN_VER "1.11"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -117,12 +116,14 @@
 	// 1.08 Estimated run time improvement
 	// 1.09 UDP responses renamed for improved consistency, ipscan_checks.c split
 	// 1.10 Parallel UDP processing support added
+	// 1.11 Separate TCP/UDP logging, all disabled by default
 
 	//
-    // Logging verbosity
+    	// Logging verbosity
 	//
-    // (1) Normal - port scan summary is logged; (0) Quiet - program/unexpected response errors only
-	#define IPSCAN_LOGVERBOSITY 1
+    	// (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
+	// (0) Quiet  - program/unexpected response errors only
+	#define IPSCAN_LOGVERBOSITY 0
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -135,7 +136,7 @@
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
 	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
-    // available using an URL similar to:
+    	// available using an URL similar to:
 	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
@@ -226,7 +227,7 @@
 		// Logging prefix (goes into apache error_log or syslog)
 	#define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
 
-    //
+    	//
 	// Parallel port scanning related
 	//
 

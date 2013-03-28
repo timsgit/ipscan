@@ -32,6 +32,7 @@
 // 0.12 - add read_db_result() function
 // 0.13 - change dump_db() to extend json results to report port, result and "address"
 //      - necessary for UDP support
+// 0.14 - improve debug logging
 
 #include "ipscan.h"
 //
@@ -280,7 +281,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								else // original approach
 								{
 									printf("%s, ", row[num_fields-1]);
-									IPSCAN_LOG( LOGPREFIX "ERROR - you NEED to update to the new database format - please see the README for details!\n");
+									IPSCAN_LOG( LOGPREFIX "dump_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
 								}
 							}
 							printf(" -9999, -9999, \"::1\" ]\n");
