@@ -131,7 +131,7 @@
 	// Determine whether to include terms of use link (0 = don't include; 1 = include)
 	#define INCLUDETERMSOFUSE 0
 	// Link for terms of use - please update to reference a page from your website
-	#define TERMSOFUSEURL "http://ipv6.chappell-family.com/termsofuse"
+	#define TERMSOFUSEURL "http://ipv6.chappell-family.com/html/termsofuse.html"
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
