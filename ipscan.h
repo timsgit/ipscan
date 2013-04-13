@@ -64,7 +64,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.11"
+	#define IPSCAN_VER "1.12"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -117,6 +117,7 @@
 	// 1.09 UDP responses renamed for improved consistency, ipscan_checks.c split
 	// 1.10 Parallel UDP processing support added
 	// 1.11 Separate TCP/UDP logging, all disabled by default
+	// 1.12 Runtime estimate improvement - separate calc per protocol type
 
 	//
     	// Logging verbosity
@@ -303,8 +304,15 @@
 	// UDP timeout (seconds) - needs to exceed UPnP/SSDP response request time (MX field) which is 1
 	#define UDPTIMEOUTSECS 2
 
-	// An estimate of the time to perform the test
-	#define ESTIMATEDTIMETORUN ( (4+((2 + numudpports * UDPTIMEOUTSECS) / MAXCHILDREN)) + (4 + ((2 + numports * TIMEOUTSECS) / MAXCHILDREN)) )
+
+	// An estimate of the time to perform the test - assumes num ports is always smaller than (MAXPORTSPERCHILD * MAX_CHILDREN) for each protocol
+	#define UDPSTATICTIME 2
+	#define TCPSTATICTIME 2
+	#define ICMP6STATICTIME 2
+	#define UDPRUNTIME ( ( (numudpports > MAXUDPPORTSPERCHILD) ? (MAXUDPPORTSPERCHILD * UDPTIMEOUTSECS + UDPSTATICTIME) : ( numudpports * UDPTIMEOUTSECS + UDPSTATICTIME) ) )
+	#define TCPRUNTIME ( ( (numports > MAXPORTSPERCHILD) ? (MAXPORTSPERCHILD * TIMEOUTSECS + TCPSTATICTIME) : ( numports * TIMEOUTSECS + TCPSTATICTIME) ) )
+	#define ICMP6RUNTIME (ICMP6STATICTIME + TIMEOUTSECS)
+	#define ESTIMATEDTIMETORUN ( UDPRUNTIME + TCPRUNTIME + ICMP6RUNTIME )
 
 	// NTP constants - setup as client (mode 3), unsynchronised, poll interval 8, precision 1 second
 	#define NTP_LI 0
