@@ -36,6 +36,7 @@
 // 0.16 - add UDP port scan support
 // 0.17 - add parallel UDP port scan support
 // 0.18 - separate UDP and TCP debug logging
+// 0.19 - added missing log prefix
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -1165,7 +1166,7 @@ int main(void)
 				if ( position >= LOGMAXCOLS || i == (NUMRESULTTYPES -1) )
 				{
 					#if (IPSCAN_LOGVERBOSITY == 1)
-					IPSCAN_LOG( LOGPREFIX "%s\n", logbuffer);
+					IPSCAN_LOG( LOGPREFIX "ipscan: %s\n", logbuffer);
 					#endif
 					logbufferptr = &logbuffer[0];
 					logbuffersize = LOGENTRYLEN;

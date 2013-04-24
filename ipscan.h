@@ -118,11 +118,12 @@
 	// 1.10 Parallel UDP processing support added
 	// 1.11 Separate TCP/UDP logging, all disabled by default
 	// 1.12 Runtime estimate improvement - separate calc per protocol type
+	// 1.13 Logging improvement
 
 	//
-    	// Logging verbosity
+    // Logging verbosity
 	//
-    	// (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
+    // (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
 	// (0) Quiet  - program/unexpected response errors only
 	#define IPSCAN_LOGVERBOSITY 0
 
