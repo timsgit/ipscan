@@ -64,7 +64,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.12"
+	#define IPSCAN_VER "1.14"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -119,9 +119,9 @@
 	// 1.11 Separate TCP/UDP logging, all disabled by default
 	// 1.12 Runtime estimate improvement - separate calc per protocol type
 	// 1.13 Logging improvement
-
+	// 1.14 Add support for scan automation help when offered a bad query string
 	//
-    // Logging verbosity
+    // Logging verbosity:
 	//
     // (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
 	// (0) Quiet  - program/unexpected response errors only
@@ -134,6 +134,12 @@
 	#define INCLUDETERMSOFUSE 0
 	// Link for terms of use - please update to reference a page from your website
 	#define TERMSOFUSEURL "http://ipv6.chappell-family.com/html/termsofuse.html"
+
+	// Determine whether to offer help for bad/incomplete/unrecognised URLs
+	// 0=offer no help, 1=offer help - need to define URL
+	#define IPSCAN_BAD_URL_HELP 0
+	// The link that might provide some help ...
+	#define IPSCAN_BAD_URL_LINK "http://ipv6.chappell-family.com/timswiki/index.php5/ScanAutomation"
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose

@@ -37,6 +37,7 @@
 // 0.17 - add parallel UDP port scan support
 // 0.18 - separate UDP and TCP debug logging
 // 0.19 - added missing log prefix
+// 0.20 - add scan automation help when offered a bad query string
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -1226,7 +1227,12 @@ int main(void)
 			printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
-			printf("<P>Nothing to report.</P>\n");
+			printf("<P>Nothing useful to report.</P>\n");
+			#if (IPSCAN_BAD_URL_HELP != 0)
+			printf("<P>You seem to have presented an incomplete or unexpected query string to ipscan. ");
+			printf("If you are trying to automate ipscan operation then please see the following ");
+			printf("<A href=\"%s\">Scan Automation link.</A></P>\n", IPSCAN_BAD_URL_LINK);
+			#endif
 			// Finish the output
 			create_html_body_end();
 			IPSCAN_LOG( LOGPREFIX "ipscan: Something untoward happened, numqueries = %d, magic = %"PRId64"\n", numqueries, magic);
