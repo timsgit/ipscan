@@ -37,9 +37,8 @@ LIBPATHS=-L/usr/lib
 INCLUDES=-I/usr/include
 LIBS=
 CC=gcc
-CFLAGS=-Wall -Wextra -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O2
-CFLAGS+= -Werror -D_FORTIFY_SOURCE=2 -fstack-protector-all  
-CFLAGS+= -Wstack-protector --param ssp-buffer-size=4 -ftrapv -fPIE -pie -Wl,-z,relro,-z,now
+CFLAGS=-Wall -Wextra -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O2 -D_FORTIFY_SOURCE=2
+CFLAGS+= -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4 -ftrapv -fPIE -pie -Wl,-z,relro,-z,now
 
 # Install location for the CGI files
 TARGETDIR=/srv/www/cgi-bin6
