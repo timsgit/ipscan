@@ -28,6 +28,7 @@
 # 0.08 - add extra compiler checks
 # 0.09 - add 'running as root' check for install step
 # 0.10 - strip symbols from the final objects
+# 0.11 - add additional object security-related options
 
 # General build variables
 SHELL=/bin/sh
@@ -68,7 +69,9 @@ INCLUDES+=$(shell mysql_config --include)
 MYEUID=$(shell id -u)
 
 # Concatenate the necessary parameters for the two targets
-CMNPARAMS=-DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
+CMNPARAMS=-Wall -Wextra -Werror -Wformat-security -D_FORTIFY_SOURCE=2 -fstack-protector-all  
+CMNPARAMS+= -Wstack-protector --param ssp-buffer-size=4 -ftrapv -fPIE -pie -Wl,-z,relro,-z,now
+CMNPARAMS+= -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
 CMNPARAMS+= -DURIPATH=\"$(URIPATH)\"
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 $(CMNPARAMS)
