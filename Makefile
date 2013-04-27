@@ -29,6 +29,7 @@
 # 0.09 - add 'running as root' check for install step
 # 0.10 - strip symbols from the final objects
 # 0.11 - add additional object security-related options
+# 0.12 - tidy up
 
 # General build variables
 SHELL=/bin/sh
