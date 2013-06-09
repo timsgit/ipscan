@@ -30,6 +30,11 @@
 # 0.10 - strip symbols from the final objects
 # 0.11 - add additional object security-related options
 # 0.12 - tidy up
+# 0.13 - add support for servers where SETUID is missing/unavailable
+
+# Support servers where SETUID is not available
+# Set this variable to 0 if you don't have, or don't have access to, SETUID
+SETUID_AVAILABLE=1
 
 # General build variables
 SHELL=/bin/sh
@@ -72,7 +77,7 @@ MYEUID=$(shell id -u)
 
 # Concatenate the necessary parameters for the two targets
 CMNPARAMS= -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
-CMNPARAMS+= -DURIPATH=\"$(URIPATH)\"
+CMNPARAMS+= -DURIPATH=\"$(URIPATH)\" -DSETUID_AVAILABLE=$(SETUID_AVAILABLE)  
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 $(CMNPARAMS)
 
@@ -105,6 +110,12 @@ $(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
 # optionally set setuid bit on targets if required
 .PHONY: install
 install : $(TXTTARGET) $(JSTARGET)
+ifeq ($(SETUID_AVAILABLE),1)
+	@echo 
+	@echo Running with SETUID_AVAILABLE in the Makefile set to 1
+	@echo If you do NOT have root permissions or chmod/setuid is NOT available then
+	@echo please set SETUID_AVAILABLE to 0 and re-make.
+	@echo 
 ifeq ($(MYEUID),0)
 	strip --strip-unneeded $(TXTTARGET) $(JSTARGET)
 	cp $(TXTTARGET) $(TARGETDIR)
@@ -116,6 +127,16 @@ else
 	@echo ERROR: install must be run as root in order to setuid.
 	@echo ERROR: user-id is currently $(MYEUID)
 	@echo 
+endif
+else
+	@echo 
+	@echo Running with SETUID_AVAILABLE in the Makefile set to 0
+	@echo If you do have root permissions AND chmod/setuid is available then
+	@echo please set SETUID_AVAILABLE to 1 and re-make.
+	@echo
+	strip --strip-unneeded $(TXTTARGET) $(JSTARGET)
+	cp $(TXTTARGET) $(TARGETDIR)
+	cp $(JSTARGET) $(TARGETDIR)
 endif
 	
 # Rule to clean the source directory	

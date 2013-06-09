@@ -38,6 +38,7 @@
 // 0.18 - separate UDP and TCP debug logging
 // 0.19 - added missing log prefix
 // 0.20 - add scan automation help when offered a bad query string
+// 0.21 - add support for removal of ping
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -84,7 +85,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 
 int check_tcp_port(char * hostname, uint16_t port);
 int check_udp_port(char * hostname, uint16_t port);
-int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
+
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
 
@@ -104,6 +105,11 @@ void create_results_key_table(char * hostname, time_t timestamp);
 // summarise_db is only referenced if summary reporting is enabled
 #if (SUMMARYENABLE == 1)
 int summarise_db(void);
+#endif
+
+// Only include reference to ping-test function if compiled in
+#if (IPSCAN_INCLUDE_PING ==1)
+int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
 #endif
 
 //
@@ -149,12 +155,17 @@ int main(void)
 	// List of ports to be tested and their results
 	struct portlist_struc portlist[MAXPORTS];
 
-	int result, pingresult;
-	char remoteaddrstring[INET6_ADDRSTRLEN];
-	char *remoteaddrvar;
+	int result;
 
+	// Only necessary if we're including ping support
+	#if (IPSCAN_INCLUDE_PING == 1)
+	int pingresult;
 	// Storage for indirecthost address, in case required
 	char indirecthost[INET6_ADDRSTRLEN];
+	#endif
+
+	char remoteaddrstring[INET6_ADDRSTRLEN];
+	char *remoteaddrvar;
 
 	unsigned int position = 0;
 
@@ -730,6 +741,8 @@ int main(void)
 			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
 					asctime(localtime(&starttime)), (int)ESTIMATEDTIMETORUN );
 
+			// Only included if ping is compiled in ...
+			#if (IPSCAN_INCLUDE_PING == 1)
 			// Ping the remote host and store the result ...
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, starttime, session, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
@@ -745,6 +758,7 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING : write_db for ping result returned : %d\n", rc);
 			}
+			#endif
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
@@ -784,6 +798,7 @@ int main(void)
 				}
 			}
 
+			#if (IPSCAN_INCLUDE_PING == 1)
 			printf("<P>ICMPv6 ECHO-Request:</P>\n");
 			printf("<TABLE border=\"1\">\n");
 			printf("<TR style=\"text-align:left\">\n");
@@ -797,6 +812,7 @@ int main(void)
 			}
 			printf("</TR>\n");
 			printf("</TABLE>\n");
+			#endif
 
 			printf("<P>Individual UDP port scan results:</P>\n");
 			// Start of UDP port scan results table
@@ -996,6 +1012,8 @@ int main(void)
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
 
+			// Only include this section if ping is compiled in ...
+			#if (IPSCAN_INCLUDE_PING == 1)
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (IPSCAN_LOGVERBOSITY == 1)
@@ -1009,6 +1027,7 @@ int main(void)
 				create_html_body_end();
 				exit(EXIT_FAILURE);
 			}
+			#endif
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);

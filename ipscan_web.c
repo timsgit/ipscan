@@ -31,6 +31,7 @@
 // 0.11 - add service names to results table (modification to portlist, now structure)
 // 0.12 - compress form vertically
 // 0.13 - introduce UDP support
+// 0.14 - support the optional removal of ping functionality
 
 #include "ipscan.h"
 
@@ -167,9 +168,16 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf(" 		var lateststate = eval( '(' + request.responseText + ')' );\n");
 	printf("		if (lateststate.length > 3)\n");
 	printf("		{\n");
+	#if (IPSCAN_INCLUDE_PING ==1)
 	// if we've received a complete set of results for the ports under test then stop the periodic tasks
 	// we expect (numudpports+PING+numports)*3+3 (final 3 are end of JSON array dummies) results
 	printf("			if (lateststate.length >= %d)\n", 3+((numudpports+1+numports)*3) );
+	#else
+	// if we've received a complete set of results for the ports under test then stop the periodic tasks
+	// we expect (numudpports+numports)*3+3 (final 3 are end of JSON array dummies) results
+	printf("			if (lateststate.length >= %d)\n", 3+((numudpports+numports)*3) );
+	#endif
+
 	printf("			{\n");
 	printf("				window.clearInterval(myInterval);\n");
 	printf("				window.clearInterval(myBlink);\n");
@@ -184,7 +192,6 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("				var port = lateststate[i];\n");
 	printf("				var result = lateststate[i+1];\n");
 	printf("				var host = lateststate[i+2];\n");
-
 	printf("				if (port >= %d)\n", IPSCAN_PROTO_UDP);
 	printf("				{\n");
 	printf("					proto = %d;\n", IPSCAN_PROTO_UDP);
@@ -201,7 +208,6 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("				{\n");
 	printf("					elemid = \"port\" + port;\n");
 	printf("				}\n");
-
 	printf("				for (j = 0; j < retvals.length; j++)\n");
 	printf("				{\n");
 	printf("					if (retvals[j] == (result & %d))\n", IPSCAN_INDIRECT_MASK);
@@ -240,15 +246,25 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("				document.getElementById(elemid).innerHTML = textupdate;\n");
 	printf("				document.getElementById(elemid).style.backgroundColor = colourupdate;\n");
 	printf("			}\n");
+	#if (IPSCAN_INCLUDE_PING ==1)
 	// if we have finished then update the page to reflect the fact
 	printf("			if (lateststate.length >= %d)\n",3+((numudpports+numports+1)*3) );
+	#else
+	// if we have finished then update the page to reflect the fact (no ping result in this case)
+	printf("			if (lateststate.length >= %d)\n",3+((numudpports+numports)*3) );
+	#endif
 	printf("			{\n");
 	printf("				document.getElementById(\"scanstate\").innerHTML = \"COMPLETE.\";\n");
 	printf("				document.getElementById(\"scanstate\").style.color=\"black\";\n");
 	printf("			}\n");
 	printf("		}\n");
-	// handle failure to complete the scan in the allocated number of updates
+	#if (IPSCAN_INCLUDE_PING ==1)
+	// handle failure to complete the scan in the allocated number of updates (including ping result)
 	printf("		else if (lateststate.length < %d && lastupdate == 1)\n",3+((numudpports+numports+1)*3));
+	#else
+	// handle failure to complete the scan in the allocated number of updates (no ping result)
+	printf("		else if (lateststate.length < %d && lastupdate == 1)\n",3+((numudpports+numports)*3));
+	#endif
 	printf("		{\n");
 	printf("			window.clearInterval(myBlink);\n");
 	printf("			document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";\n");
@@ -292,8 +308,11 @@ void create_results_key_table(char * hostname, time_t timestamp)
 		printf("</TR>\n");
 	}
 	printf("</TABLE>\n");
+	// Only include if ping is supported
+	#if (IPSCAN_INCLUDE_PING ==1)
 	printf("<P>NOTE: Results in the ICMPv6 ECHO REQUEST test marked as INDIRECT indicate an ICMPv6 error response was received from another host (e.g. a router or firewall) rather");
 	printf(" than the host under test. In this case the address of the responding host is also displayed.</P>\n");
+	#endif
 }
 
 void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist)
@@ -319,11 +338,14 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 
 	printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", asctime(localtime(&timestamp)), (int)ESTIMATEDTIMETORUN );
 
+	// Only include the PING result if necessary
+	#if (IPSCAN_INCLUDE_PING ==1)
 	printf("<TABLE border=\"1\">\n");
 	printf("<TR style=\"text-align:left\">\n");
 	printf("<TD TITLE=\"IPv6 Ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\" id=\"pingstate\">%s</TD>\n",resultsstruct[PORTUNKNOWN].colour,resultsstruct[PORTUNKNOWN].label);
 	printf("</TR>\n");
 	printf("</TABLE>\n");
+	#endif
 
 	printf("<P>Individual IPv6 UDP port scan results (hover for service names):</P>\n");
 	// Start of UDP table

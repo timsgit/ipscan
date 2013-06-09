@@ -22,6 +22,8 @@
 // 0.02				add parallel scanning support
 // 0.03				add SNMP support
 // 0.04				improve debug logging
+// 0.05				generate a dummy packet for unhandled ports
+// 0.06				add the beginnings of ISAKMP and LSP Ping
 
 #include "ipscan.h"
 //
@@ -46,6 +48,9 @@
 #if (LOGMODE == 1)
 	#include <syslog.h>
 #endif
+
+// gettimeofday()
+#include <sys/time.h>
 
 // Include externals : resultsstruct
 extern struct rslt_struc resultsstruct[];
@@ -74,6 +79,7 @@ int check_udp_port(char * hostname, uint16_t port)
 {
 	char txmessage[UDP_BUFFER_SIZE],rxmessage[UDP_BUFFER_SIZE];
 	struct sockaddr_in6 remoteaddr;
+	unsigned char localaddr[sizeof(struct in6_addr)];
 	struct timeval timeout;
 	int rc = 0, i;
 	int fd = -1;
@@ -91,6 +97,14 @@ int check_udp_port(char * hostname, uint16_t port)
 	// set return value to a known default
 	int retval = PORTUNKNOWN;
 
+	// Capture time of day and convert to NTP format
+	struct timeval tv;
+	const unsigned long long EPOCH = 2208988800ULL;
+	const unsigned long long NTP_SCALE_FRAC = 4294967296ULL;
+	gettimeofday(&tv, NULL);
+	unsigned long long tv_secs = tv.tv_sec + EPOCH;
+	unsigned long long tv_usecs = (NTP_SCALE_FRAC * tv.tv_usec) / 1000000UL;
+
 	rc = inet_pton(AF_INET6, hostname, &(remoteaddr.sin6_addr));
 	if (rc != 1)
 	{
@@ -100,6 +114,14 @@ int check_udp_port(char * hostname, uint16_t port)
 	remoteaddr.sin6_port = htons(port);
 	remoteaddr.sin6_family = AF_INET6;
 	remoteaddr.sin6_flowinfo = 0;
+
+	rc = inet_pton(AF_INET6, IPSCAN_HOST_ADDRESS, &localaddr);
+	if (rc != 1)
+	{
+		printf( "check_udp_port: Bad inet_pton() call for %s, returned %d with errno %d (%s)\n", IPSCAN_HOST_ADDRESS, rc, errno, strerror(errno));
+		retval = PORTINTERROR;
+	}
+
 
 	// Attempt to create a socket
 	if (retval == PORTUNKNOWN)
@@ -323,7 +345,7 @@ int check_udp_port(char * hostname, uint16_t port)
 				rc = sprintf(&txmessage[len], "%s", community);
 				if (rc < 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for snmp, returned %d\n", len);
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for snmp, returned %d\n", rc);
 					retval = PORTINTERROR;
 				}
 				else
@@ -371,6 +393,77 @@ int check_udp_port(char * hostname, uint16_t port)
 				break;
 			}
 
+			case 500:
+			{
+				// ISAKMP
+				len = 0;
+				// Initiator cookie (8 bytes)
+				txmessage[len++] = 0xde;
+				txmessage[len++] = 0xad;
+				txmessage[len++] = 0xfa;
+				txmessage[len++] = 0xce;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 1;
+				// Responder cookie (8 bytes)
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				// Next payload 0=None, 2=proposal, 4=key exchange
+				txmessage[len++] = 4;
+				// Version Major/Minor 1.0
+				txmessage[len++] = 16;
+				// Exchange type 4=aggressive
+				txmessage[len++] = 4;
+				// Flags
+				txmessage[len++] = 0;
+
+				// Message ID (4 bytes)
+				txmessage[len++] = 128;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				// Length (4 bytes)
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = (28+12); // includes key exchange payload
+
+				// Key Exchange payload
+				//      		   	  1                   2                   3
+				//0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//! Next Payload  !   RESERVED    !         Payload Length        !
+				//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//!                                                               !
+				//~                       Key Exchange Data                       ~
+				//!                                                               !
+				//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				// next payload 0=none
+				txmessage[len++] = 0;
+				// reserved
+				txmessage[len++] = 0;
+				// length
+				txmessage[len++] = 0;
+				txmessage[len++] = 12;
+				// Key exchange data
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				break;
+			}
+
 			case 1900:
 			{
 				// UPnP
@@ -388,13 +481,175 @@ int check_udp_port(char * hostname, uint16_t port)
 				break;
 			}
 
+			case 3503:
+			{
+				// Taken from RFC4379
+				//
+				//             0                   1                   2                   3
+				//		       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |         Version Number        |         Global Flags          |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |  Message Type |   Reply mode  |  Return Code  | Return Subcode|
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                        Sender's Handle                        |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                        Sequence Number                        |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                    TimeStamp Sent (seconds)                   |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                  TimeStamp Sent (microseconds)                |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                  TimeStamp Received (seconds)                 |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                TimeStamp Received (microseconds)              |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                            TLVs ...                           |
+				//		      .                                                               .
+				//		      .                                                               .
+				//		      .                                                               .
+				//		      |                                                               |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				// Version
+				txmessage[len++] = 0;
+				txmessage[len++] = 1; // Version 1
+				// Global flags
+				txmessage[len++] = 0;
+				txmessage[len++] = 0; // Global Flags = 0
+				// Message type
+				txmessage[len++] = 1; // Message type 1=echo request
+				// Reply mode
+				txmessage[len++] = 2; // Reply Mode (1=don't;2=ip udp;3=ip udp + router alert; 4 = app level control channel)
+				// Return code
+				txmessage[len++] = 0; // Filled in by responder
+				// Return subcode
+				txmessage[len++] = 0; // Filled in by responder
+				// Sender's Handle
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				// Sequence Number
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 1;
+				// Timestamp sent (seconds)
+				txmessage[len++] = (tv_secs >> 24) & 0xff;
+				txmessage[len++] = (tv_secs >> 16) & 0xff;
+				txmessage[len++] = (tv_secs >>  8) & 0xff;
+				txmessage[len++] = tv_secs         & 0xff;
+				// Timestamp sent (microseconds)
+				txmessage[len++] = (tv_usecs >> 24) & 0xff;
+				txmessage[len++] = (tv_usecs >> 16) & 0xff;
+				txmessage[len++] = (tv_usecs >>  8) & 0xff;
+				txmessage[len++] = tv_usecs         & 0xff;
+				// Timestamp received (seconds)
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				// Timestamp received (microseconds)
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				//
+				// TLVs
+				//
+				//			TLVs (Type-Length-Value tuples) have the following format:
+				//
+				//			       0                   1                   2                   3
+				//			       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//			      |             Type              |            Length             |
+				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//			      |                             Value                             |
+				//			      .                                                               .
+				//			      .                                                               .
+				//			      .                                                               .
+				//			      |                                                               |
+				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//			   Types are defined below; Length is the length of the Value field in
+				//			   octets.  The Value field depends on the Type; it is zero padded to
+				//			   align to a 4-octet boundary.  TLVs may be nested within other TLVs,
+				//			   in which case the nested TLVs are called sub-TLVs.  Sub-TLVs have
+				//			   independent types and MUST also be 4-octet aligned.
+				//
+				//			A description of the Types and Values of the top-level TLVs for LSP
+				//			   ping are given below:
+				//
+				//			          Type #                  Value Field
+				//			          ------                  -----------
+				//			               1                  Target FEC Stack
+				//			               2                  Downstream Mapping
+				//			               3                  Pad
+				//			               4                  Not Assigned
+				//			               5                  Vendor Enterprise Number
+				//			               6                  Not Assigned
+				//			               7                  Interface and Label Stack
+				//			               8                  Not Assigned
+				//			               9                  Errored TLVs
+				//			              10                  Reply TOS Byte
+				//
+				//
+				//			The Label Distribution Protocol (LDP) IPv6 FEC
+				//			   sub-TLV has the following format:
+				//       0                   1                   2                   3
+				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |                          IPv6 prefix                          |
+				//      |                          (16 octets)                          |
+				//      |                                                               |
+				//      |                                                               |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      | Prefix Length |         Must Be Zero                          |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				// Always include a FEC TLV
+				txmessage[len++] = 0;
+				txmessage[len++] = 1; // FEC
+				txmessage[len++] = 0;
+				txmessage[len++] = 24; // length of LDP IPv6 FEC that follows
 
+				txmessage[len++] = 0;
+				txmessage[len++] = 2; // Sub-type LDP IPv6 FEC
+				txmessage[len++] = 0;
+				txmessage[len++] = 17; // FEC TLV
+				// copy the server's local address into the FEC entry
+				for (i = 0; i < 16; i++)
+				{
+					txmessage[len++] = localaddr[i] & 0xff;
+				}
+				txmessage[len++] = 128; // single host is /128
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+
+				break;
+			}
 
 			default:
 			{
 				// Unhandled port
-				retval = PORTINTERROR;
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: FATAL ERROR - Request for unhandled UDP port %d\n", port);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: generating an unspecified message for UDP port %d\n", port);
+				len = 0;
+				// Generate an unspecified message
+				txmessage[len++] = 0x0A;
+				txmessage[len++] = 0x0A;
+				txmessage[len++] = 0x0D;
+				txmessage[len++] = 0x0;
+				rc = sprintf(&txmessage[len], "ipscan (c) 2013 Tim Chappell. This message is destined for UDP port %d\n", port);
+				if (rc < 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
+					retval = PORTINTERROR;
+				}
+				else
+				{
+					len += rc;
+				}
 				break;
 			}
 		}
