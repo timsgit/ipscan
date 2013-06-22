@@ -117,7 +117,7 @@
 	// 0=offer no help, 1=offer help - need to define URL
 	#define IPSCAN_BAD_URL_HELP 1
 	// The link that might provide some help ...
-	#define IPSCAN_BAD_URL_LINK "http://ipv6.chappell-family.com/timswiki/index.php5/ScanAutomation"
+	#define IPSCAN_BAD_URL_LINK "http://ipv6.chappell-family.com/timswiki/index.php5?title=ScanAutomation"
 
 	// Host address used to specify the FEC for LSP Ping
 	#define IPSCAN_HOST_ADDRESS "2001:470:1f08:185c::2"
