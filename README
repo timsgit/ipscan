@@ -98,7 +98,7 @@ Installation Steps:
     8. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
        w3m http://www6.ipv6.chappell-family.com/cgi-bin6/ipscan-txt.cgi 
        or: 
-       lynx http://[2001:470:1f08:185c::2]/cgi-bin6/ipscan-txt.cgi  
+       lynx http://[2001:470:971f:3:ba27:ebff:fecc:dc7c]/cgi-bin6/ipscan-txt.cgi  
 
     9. Check the web server access and error logs for messages. ipscan will place summary messages in the error log if enabled to do so (this is NOT the default option - change IPSCAN_LOGVERBOSITY to 1 to enable this). It is possible to enable copious amounts of debug by uncommenting the debug #define statements in ipscan.h.
     
