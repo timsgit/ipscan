@@ -31,10 +31,15 @@
 # 0.11 - add additional object security-related options
 # 0.12 - tidy up
 # 0.13 - add support for servers where SETUID is missing/unavailable
+# 0.14 - add support for servers where UDP is missing/available
 
 # Support servers where SETUID is not available
-# Set this variable to 0 if you don't have, or don't have access to, SETUID
+# Set this variable to 0 if you don't have permissions to call SETUID
 SETUID_AVAILABLE=1
+
+# Support servers where UDP port access is disabled
+# Set this variable to 0 if you don't have permissions to access UDP ports
+UDP_AVAILABLE=1
 
 # General build variables
 SHELL=/bin/sh
@@ -77,7 +82,8 @@ MYEUID=$(shell id -u)
 
 # Concatenate the necessary parameters for the two targets
 CMNPARAMS= -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
-CMNPARAMS+= -DURIPATH=\"$(URIPATH)\" -DSETUID_AVAILABLE=$(SETUID_AVAILABLE)  
+CMNPARAMS+= -DURIPATH=\"$(URIPATH)\" -DSETUID_AVAILABLE=$(SETUID_AVAILABLE)
+CMNPARAMS+= -DUDP_AVAILABLE=$(UDP_AVAILABLE) 
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 $(CMNPARAMS)
 
@@ -110,6 +116,24 @@ $(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
 # optionally set setuid bit on targets if required
 .PHONY: install
 install : $(TXTTARGET) $(JSTARGET)
+ifeq ($(UDP_AVAILABLE),1)
+	@echo 
+	@echo Running with UDP_AVAILABLE in the Makefile set to 1
+	@echo If you do NOT have root permissions or UDP sockets are NOT available then
+	@echo please set UDP_AVAILABLE to 0 and re-make.
+	@echo 
+else
+	@echo 
+	@echo Running with UDP_AVAILABLE in the Makefile set to 0
+	@echo If you do have permissions to create UDP sockets then
+	@echo please set SETUID_AVAILABLE to 1 and re-make.
+	@echo
+endif
+# Strip un-needed symbols from the binaries and copy them to their
+# target location
+	strip --strip-unneeded $(TXTTARGET) $(JSTARGET)
+	cp $(TXTTARGET) $(TARGETDIR)
+	cp $(JSTARGET) $(TARGETDIR)
 ifeq ($(SETUID_AVAILABLE),1)
 	@echo 
 	@echo Running with SETUID_AVAILABLE in the Makefile set to 1
@@ -117,9 +141,6 @@ ifeq ($(SETUID_AVAILABLE),1)
 	@echo please set SETUID_AVAILABLE to 0 and re-make.
 	@echo 
 ifeq ($(MYEUID),0)
-	strip --strip-unneeded $(TXTTARGET) $(JSTARGET)
-	cp $(TXTTARGET) $(TARGETDIR)
-	cp $(JSTARGET) $(TARGETDIR)
 	chmod 4555 $(TARGETDIR)/$(TXTTARGET)
 	chmod 4555 $(TARGETDIR)/$(JSTARGET)
 else
@@ -134,9 +155,6 @@ else
 	@echo If you do have root permissions AND chmod/setuid is available then
 	@echo please set SETUID_AVAILABLE to 1 and re-make.
 	@echo
-	strip --strip-unneeded $(TXTTARGET) $(JSTARGET)
-	cp $(TXTTARGET) $(TARGETDIR)
-	cp $(JSTARGET) $(TARGETDIR)
 endif
 	
 # Rule to clean the source directory	

@@ -105,7 +105,10 @@
 			{  161, "SNMP" },\
 			{ 1900, "UPnP SSDP" },\
 		};
-
+#if (IPSCAN_INCLUDE_UDP == 1)
 	#define NUMUDPPORTS ( sizeof(udpportlist) / sizeof(struct portlist_struc) )
+#else
+	#define NUMUDPPORTS 0
+#endif
 
 #endif /* IPSCAN_PORTLIST_H */

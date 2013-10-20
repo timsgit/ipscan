@@ -39,6 +39,7 @@
 // 0.19 - added missing log prefix
 // 0.20 - add scan automation help when offered a bad query string
 // 0.21 - add support for removal of ping
+// 0.22 - add support for removal of UDP
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -86,8 +87,8 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 int check_tcp_port(char * hostname, uint16_t port);
 int check_udp_port(char * hostname, uint16_t port);
 
-int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
+int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
 
 void create_html_common_header(void);
 void create_json_header(void);
@@ -111,6 +112,8 @@ int summarise_db(void);
 #if (IPSCAN_INCLUDE_PING ==1)
 int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
 #endif
+
+
 
 //
 // End of prototypes declarations
@@ -283,7 +286,7 @@ int main(void)
 		// Create the header
 		create_html_common_header();
 		// Now finish the header
-		printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+		printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 		printf("</HEAD>\n");
 		printf("<BODY>\n");
 		printf("<P>I was called with request-method longer than my allocated buffer. That is very disappointing.</P>\n");
@@ -320,7 +323,7 @@ int main(void)
 				// Create the header
 				create_html_common_header();
 				// Now finish the header
-				printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+				printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 				printf("</HEAD>\n");
 				printf("<BODY>\n");
 				printf("<P>I was called with a query-string longer than my allocated buffer. That is very disappointing.</P>\n");
@@ -423,7 +426,7 @@ int main(void)
 			// Create the header
 			create_html_common_header();
 			// Now finish the header
-        		printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+        		printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
         		printf("</HEAD>\n");
 		        printf("</HTML>\n");
 			IPSCAN_LOG( LOGPREFIX "ipscan: HEAD request method, sending headers only\n");
@@ -435,7 +438,7 @@ int main(void)
 			// Create the header
 			create_html_common_header();
 			// Now finish the header
-			printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
 			printf("<P>I was called with an unsupported request-method. That is very disappointing.</P>\n");
@@ -732,10 +735,10 @@ int main(void)
 			// Create the header
 			create_html_common_header();
 			// Create main output
-			printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
-			printf("<H3 style=\"color:red\">IPv6 UDP, ICMPv6 and TCP Port Scanner by Tim Chappell</H3>\n");
+			printf("<H3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</H3>\n");
 			printf("<P>Results for host : %s</P>\n\n", remoteaddrstring);
 
 			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
@@ -814,6 +817,7 @@ int main(void)
 			printf("</TABLE>\n");
 			#endif
 
+			#if (IPSCAN_INCLUDE_UDP == 1)
 			printf("<P>Individual UDP port scan results:</P>\n");
 			// Start of UDP port scan results table
 			printf("<TABLE border=\"1\">\n");
@@ -851,6 +855,7 @@ int main(void)
 
 			}
 			printf("</TABLE>\n");
+			#endif
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
@@ -1008,7 +1013,7 @@ int main(void)
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
 			create_html_common_header();
-			printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
 
@@ -1033,6 +1038,8 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
 			#endif
 
+			// Only included if UDP is compiled in ...
+			#if (IPSCAN_INCLUDE_UDP == 1)
 			// Scan the UDP ports in parallel
 			remaining = numudpports;
 			porti = 0;
@@ -1066,7 +1073,7 @@ int main(void)
 					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
-
+			#endif
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
@@ -1106,6 +1113,8 @@ int main(void)
 				}
 			}
 
+			// Only included if UDP is compiled in ...
+			#if (IPSCAN_INCLUDE_UDP == 1)
 			// Generate the stats
 			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
@@ -1125,6 +1134,8 @@ int main(void)
 					portsstats[PORTUNKNOWN]++;
 				}
 			}
+			#endif
+
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex].port_num;
@@ -1226,10 +1237,10 @@ int main(void)
 		else if (numqueries == 1 && magic == MAGICSUMMARY )
 		{
 			create_html_common_header();
-			printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
-			printf("<H3 style=\"color:red\">IPv6 TCP Port Scanner by Tim Chappell</H3>\n");
+			printf("<H3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</H3>\n");
 			printf("<P>Summary of Scans:</P>\n");
 			// Output the scan summary
 			rc = summarise_db();
@@ -1243,7 +1254,7 @@ int main(void)
 		{
 			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
 			create_html_common_header();
-			printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
 			printf("<P>Nothing useful to report.</P>\n");

@@ -21,6 +21,7 @@
 #
 # Version 	Description
 # 0.1		Initial version
+# 0.2		Update to delete any older results
 # 
 use strict;
 use DBI;
@@ -36,7 +37,7 @@ my $MYSQL_TBLNAME='results';
 ####################################################################
 #
 ####################################################################
-# To run every 5 minutes a typical cron job would look like this:
+# To run every 5 minutes a typical cron job entry would look like this:
 #
 # */5 * * * * /path/to/sqltidy.pl 2>&1
 #
@@ -96,6 +97,20 @@ if ($DB_DEBUG == 1 && $sth->rows > 0)
 	print "Runperiod = ".$runperiod." seconds\n";
 	print "Now       = ".localtime($now)."\n";
 	print "Earliest  = ".localtime($earliest)."\n";
+	print "Latest    = ".localtime($latest)."\n";
+	print "Rows deleted : ".$sth->rows."\n";
+}
+#
+# Catchall to delete any even older results. This won't normally be required,
+# however it covers cases where a previous delete attempt was unsuccessful
+# and has been useful on virtualised servers
+$sql = qq"DELETE FROM $MYSQL_TBLNAME WHERE createdate <= $latest";
+$sth = $dbh->prepare($sql) or die "Cannot prepare: " . $dbh->errstr();
+$sth->execute() or die "Cannot execute: " . $sth->errstr();
+if ($sth->rows > 0)
+{
+	print "Tidy-up of previous results required:\n";
+	print "Now       = ".localtime($now)."\n";
 	print "Latest    = ".localtime($latest)."\n";
 	print "Rows deleted : ".$sth->rows."\n";
 }

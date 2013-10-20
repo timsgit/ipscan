@@ -32,6 +32,8 @@
 // 0.12 - compress form vertically
 // 0.13 - introduce UDP support
 // 0.14 - support the optional removal of ping functionality
+// 0.15 - support the optional removal of UDP functionality
+
 
 #include "ipscan.h"
 
@@ -76,7 +78,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 
 	create_html_common_header();
 
-	printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+	printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 	printf("<SCRIPT type = \"text/javascript\" language=\"javascript\">\n");
 	printf("<!--  to hide script contents from old browsers\n");
 	printf("var myInterval = 0;\n");
@@ -333,7 +335,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	printf("<HR>\n");
 	printf("</NOSCRIPT>\n");
 
-	printf("<H3>IPv6 UDP and TCP Port Scan Results</H3>\n");
+	printf("<H3>IPv6 Port Scan Results</H3>\n");
 	printf("<P>Results for host : %s</P>\n\n", hostname);
 
 	printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", asctime(localtime(&timestamp)), (int)ESTIMATEDTIMETORUN );
@@ -347,23 +349,26 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	printf("</TABLE>\n");
 	#endif
 
-	printf("<P>Individual IPv6 UDP port scan results (hover for service names):</P>\n");
-	// Start of UDP table
-	printf("<TABLE border=\"1\">\n");
-
-	for (portindex= 0; portindex < numudpports ; portindex++)
+	if (numudpports > 0)
 	{
-		port = udpportlist[portindex].port_num;
-		last = (portindex == (numports-1)) ? 1 : 0 ;
+		printf("<P>Individual IPv6 UDP port scan results (hover for service names):</P>\n");
+		// Start of UDP table
+		printf("<TABLE border=\"1\">\n");
 
-		if (position ==0) printf("<TR style=\"text-align:center\">\n");;
-		printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d\">Port %d = %s</TD>\n",COLUMNUDPPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
-				port, port, resultsstruct[PORTUNKNOWN].label );
-		position++;
-		if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
+		for (portindex= 0; portindex < numudpports ; portindex++)
+		{
+			port = udpportlist[portindex].port_num;
+			last = (portindex == (numports-1)) ? 1 : 0 ;
+
+			if (position ==0) printf("<TR style=\"text-align:center\">\n");;
+			printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d\">Port %d = %s</TD>\n",COLUMNUDPPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
+					port, port, resultsstruct[PORTUNKNOWN].label );
+			position++;
+			if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
+		}
+		// end of table
+		printf("</TABLE>\n");
 	}
-	// end of table
-	printf("</TABLE>\n");
 
 	printf("<P>Individual IPv6 TCP port scan results (hover for service names):</P>\n");
 	// Start of table
@@ -410,29 +415,33 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 	int position = 0;
 	int last = 0;
 
-	printf("<TITLE>IPv6 UDP, ICMPv6 and TCP Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+	printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 	printf("</HEAD>\n");
 	printf("<BODY>\n");
-	printf("<H3 style=\"color:red\">IPv6 UDP, ICMPv6 and TCP Port Scanner by Tim Chappell</H3>\n");
+	printf("<H3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</H3>\n");
 
 	printf("<P>Please note that this test may take up to %d seconds to complete.</P>\n", (int) ESTIMATEDTIMETORUN);
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
-	printf("<P>The list of UDP ports that will be tested are:</P>\n");
 
-	// Start of table
-	printf("<TABLE border=\"1\">\n");
-	for (portindex= 0; portindex < numudpports ; portindex++)
+	if (numudpports > 0)
 	{
-		port = udpportlist[portindex].port_num;
-		last = (portindex == (numudpports-1)) ? 1 : 0 ;
+		printf("<P>The list of UDP ports that will be tested are:</P>\n");
 
-		if (position == 0) printf("<TR style=\"text-align:center\">\n");
-		printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port);
-		position++;
-		if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
+		// Start of table
+		printf("<TABLE border=\"1\">\n");
+		for (portindex= 0; portindex < numudpports ; portindex++)
+		{
+			port = udpportlist[portindex].port_num;
+			last = (portindex == (numudpports-1)) ? 1 : 0 ;
+
+			if (position == 0) printf("<TR style=\"text-align:center\">\n");
+			printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port);
+			position++;
+			if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
+		}
+		// end of table
+		printf("</TABLE>\n");
 	}
-	// end of table
-	printf("</TABLE>\n");
 
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
 	printf("<P>The default list of TCP ports that will be tested are:</P>\n");

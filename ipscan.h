@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.16"
+	#define IPSCAN_VER "1.17"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -103,7 +103,7 @@
 	// 1.14 Add support for scan automation help when offered a bad query string
     // 1.15 Incorporate further UDP support
 	// 1.16 support optional ping for deployment on servers where setuid not possible
-	//
+	// 1.17 support optional UDP for deployment on controlled servers
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -119,11 +119,7 @@
 	// The link that might provide some help ...
 	#define IPSCAN_BAD_URL_LINK "http://ipv6.chappell-family.com/timswiki/index.php5?title=ScanAutomation"
 
-	// Host address used to specify the FEC for LSP Ping
-	#define IPSCAN_HOST_ADDRESS "2001:470:1f08:185c::2"
-
 	// MySQL database-related globals
-
 	#define MYSQL_HOST "localhost"
 	#define MYSQL_USER "ipscan-user"
 	#define MYSQL_PASSWD "ipscan-passwd"
@@ -183,6 +179,14 @@
 	#define IPSCAN_INCLUDE_PING SETUID_AVAILABLE
 	#endif
 
+	// Decide whether to include UDP support (access can be restricted on some servers)
+	// Do not modify this statement - adjust UDP_AVAILABLE in the Makefile instead
+	#ifndef UDP_AVAILABLE
+	#define IPSCAN_INCLUDE_UDP 0
+	#else
+	#define IPSCAN_INCLUDE_UDP UDP_AVAILABLE
+	#endif
+
     // Logging verbosity:
 	//
     // (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
@@ -195,7 +199,7 @@
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
 	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
-    	// available using an URL similar to:
+    // available using an URL similar to:
 	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
@@ -341,7 +345,13 @@
 	#define UDPSTATICTIME 2
 	#define TCPSTATICTIME 2
 	#define ICMP6STATICTIME 2
+
+	#if (IPSCAN_INCLUDE_UDP == 1)
 	#define UDPRUNTIME ( ( (numudpports > MAXUDPPORTSPERCHILD) ? (MAXUDPPORTSPERCHILD * UDPTIMEOUTSECS + UDPSTATICTIME) : ( numudpports * UDPTIMEOUTSECS + UDPSTATICTIME) ) )
+	#else
+	#define UDPRUNTIME 0
+	#endif
+
 	#define TCPRUNTIME ( ( (numports > MAXPORTSPERCHILD) ? (MAXPORTSPERCHILD * TIMEOUTSECS + TCPSTATICTIME) : ( numports * TIMEOUTSECS + TCPSTATICTIME) ) )
 	#define ICMP6RUNTIME (ICMP6STATICTIME + TIMEOUTSECS)
 	#define ESTIMATEDTIMETORUN ( UDPRUNTIME + TCPRUNTIME + ICMP6RUNTIME )
