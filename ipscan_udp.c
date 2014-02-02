@@ -18,13 +18,14 @@
 //    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
 
 // ipscan_udp.c 	version
-// 0.01 			initial version after split from ipscan_checks.c
-// 0.02				add parallel scanning support
-// 0.03				add SNMP support
-// 0.04				improve debug logging
-// 0.05				generate a dummy packet for unhandled ports
-// 0.06				add the beginnings of ISAKMP and LSP Ping
-// 0.07             remove LSP Ping
+// 0.01 		initial version after split from ipscan_checks.c
+// 0.02			add parallel scanning support
+// 0.03			add SNMP support
+// 0.04			improve debug logging
+// 0.05			generate a dummy packet for unhandled ports
+// 0.06			add the beginnings of ISAKMP and LSP Ping
+// 0.07             	remove LSP Ping
+// 0.08             	move to memset()
 
 #include "ipscan.h"
 //
@@ -122,7 +123,7 @@ int check_udp_port(char * hostname, uint16_t port)
 		}
 		else
 		{
-			bzero(&timeout, sizeof(timeout));
+			memset(&timeout, 0, sizeof(timeout));
 			timeout.tv_sec = UDPTIMEOUTSECS;
 			timeout.tv_usec = 0;
 
@@ -137,7 +138,7 @@ int check_udp_port(char * hostname, uint16_t port)
 
 	if (retval == PORTUNKNOWN) // continue
 	{
-		bzero(&timeout, sizeof(timeout));
+		memset(&timeout, 0, sizeof(timeout));
 		timeout.tv_sec = UDPTIMEOUTSECS;
 		timeout.tv_usec = 0;
 
@@ -306,7 +307,7 @@ int check_udp_port(char * hostname, uint16_t port)
 				txmessage[2] = NTP_POLL;
 				txmessage[3] = NTP_PRECISION;
 				// Clear out 11 32-bit words (Root Delay through transmit timestamp)
-				bzero(&txmessage[4], 44);
+				memset(&txmessage[4], 0,  44);
 				len = 48;
 				break;
 			}

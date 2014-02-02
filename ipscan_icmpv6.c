@@ -20,6 +20,7 @@
 // ipscan_icmpv6.c 	version
 // 0.1				initial version after splitting from ipscan_checks.c
 // 0.2				add prefixes to debug log output
+// 0.3				move to memset()
 
 #include "ipscan.h"
 //
@@ -114,7 +115,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 	unsigned int rxicmp6_type, rxicmp6_code;
 
-	bzero(&hints, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET6;
 	hints.ai_flags = AI_CANONNAME;
 	hints.ai_socktype = SOCK_RAW;
@@ -187,7 +188,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			}
 			else
 			{
-				bzero(&timeout, sizeof(timeout));
+				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
 				timeout.tv_usec = 0;
 
@@ -199,7 +200,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 					retval = PORTINTERROR;
 				}
 
-				bzero(&timeout, sizeof(timeout));
+				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
 				timeout.tv_usec = 0;
 
@@ -268,7 +269,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	//
 	// -----------------------------------------------
 
-	memset( txicmp6hdr_ptr, 0, sizeof(txicmp6hdr_ptr));
+	memset( txicmp6hdr_ptr, 0, sizeof(struct icmp6_hdr));
 	txicmp6hdr_ptr->icmp6_cksum = 0;
 	txicmp6hdr_ptr->icmp6_type = ICMP6_ECHO_REQUEST;
 	txicmp6hdr_ptr->icmp6_code = 0;

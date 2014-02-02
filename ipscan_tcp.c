@@ -20,6 +20,7 @@
 // ipscan_tcp.c 	version
 // 0.01  			initial version after split from ipscan_checks.c
 // 0.02				tidy up logging prefixes
+// 0.03				move to memset()
 
 #include "ipscan.h"
 //
@@ -85,7 +86,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 	struct timeval timeout;
 	char portnum[8];
 
-	bzero(&hints, sizeof(hints));
+	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_flags = AI_NUMERICSERV;
 	hints.ai_socktype = SOCK_STREAM;
@@ -132,7 +133,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 			if (PORTUNKNOWN == retval)
 			{
 				// Set send timeout
-				bzero(&timeout, sizeof(timeout));
+				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
 				timeout.tv_usec = 0;
 				timeo = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
@@ -148,7 +149,7 @@ int check_tcp_port(char * hostname, uint16_t port)
 			if (PORTUNKNOWN == retval)
 			{
 				// Set receive timeout
-				bzero(&timeout, sizeof(timeout));
+				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
 				timeout.tv_usec = 0;
 				timeo = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));

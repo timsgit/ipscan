@@ -35,7 +35,7 @@
 
 
 	// Determine which logging target to use stderr (0) or syslog(1)
-	#define LOGMODE 0
+	#define LOGMODE 1
 
 	// Create the appropriate logging macro
 	#if (LOGMODE == 0)
@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.17"
+	#define IPSCAN_VER "1.18"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -101,9 +101,10 @@
 	// 1.12 Runtime estimate improvement - separate calc per protocol type
 	// 1.13 Logging improvement
 	// 1.14 Add support for scan automation help when offered a bad query string
-    // 1.15 Incorporate further UDP support
+	// 1.15 Incorporate further UDP support
 	// 1.16 support optional ping for deployment on servers where setuid not possible
 	// 1.17 support optional UDP for deployment on controlled servers
+	// 1.18 move to use memset()
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -187,9 +188,9 @@
 	#define IPSCAN_INCLUDE_UDP UDP_AVAILABLE
 	#endif
 
-    // Logging verbosity:
+    	// Logging verbosity:
 	//
-    // (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
+    	// (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
 	// (0) Quiet  - program/unexpected response errors only
 	//
 	// Do NOT change this value on internet facing hosts
@@ -199,7 +200,7 @@
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
 	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
-    // available using an URL similar to:
+    	// available using an URL similar to:
 	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
