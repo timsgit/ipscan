@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2013 Tim Chappell.
+//    Copyright (C) 2011-2014 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -33,6 +33,7 @@
 // 0.13 - introduce UDP support
 // 0.14 - support the optional removal of ping functionality
 // 0.15 - support the optional removal of UDP functionality
+// 0.16 - add special case support
 
 
 #include "ipscan.h"
@@ -63,7 +64,7 @@ void create_html_common_header(void)
 		printf("<META NAME=\"AUTHOR\" CONTENT=\"Tim Chappell\">\n");
 		printf("<META HTTP-EQUIV=\"CACHE-CONTROL\" CONTENT=\"NO-STORE, NO-CACHE, MUST-REVALIDATE, MAX-AGE=0\">\n");
 		printf("<META HTTP-EQUIV=\"PRAGMA\" CONTENT=\"NO-CACHE\">\n");
-		printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2013 Tim Chappell.\">\n");
+		printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2014 Tim Chappell.\">\n");
 
 }
 
@@ -187,28 +188,31 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	// go around the latest received state and update display as required
 	printf("			for (i = 0 ; i < (lateststate.length-3); i+=3)\n");
 	printf("			{\n");
-	printf("				var proto = %d;\n", IPSCAN_PROTO_TCP);
 	printf("				var textupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].label);
 	printf("				var colourupdate = \"%s\";\n", resultsstruct[PORTUNKNOWN].colour);
 	printf("				var elemid = \"pingstate\";\n");
-	printf("				var port = lateststate[i];\n");
+	// psp = protocol, special, port
+	printf("				var psp = lateststate[i];\n");
+	printf("				var proto = ((psp >> %d) & %d);\n", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
+	printf("				var special = ((psp >> %d) & %d);\n", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
+	printf("				var port = ((psp >> %d) & %d);\n", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
 	printf("				var result = lateststate[i+1];\n");
 	printf("				var host = lateststate[i+2];\n");
-	printf("				if (port >= %d)\n", IPSCAN_PROTO_UDP);
+	printf("				if (proto == %d)\n", IPSCAN_PROTO_UDP);
 	printf("				{\n");
-	printf("					proto = %d;\n", IPSCAN_PROTO_UDP);
-	printf("					port = port - %d;\n", IPSCAN_PROTO_UDP);
 	printf("					elemid = \"udpport\" + port;\n");
 	printf("				}\n");
-	printf("				else if (port >= %d)\n", IPSCAN_PROTO_ICMPV6);
+	printf("				else if (proto == %d)\n", IPSCAN_PROTO_ICMPV6);
 	printf("				{\n");
-	printf("					proto = %d;\n", IPSCAN_PROTO_ICMPV6);
-	printf("					port = port - %d;\n", IPSCAN_PROTO_ICMPV6);
 	printf("					elemid = \"pingstate\";\n");
 	printf("				}\n");
 	printf("				else\n");
 	printf("				{\n");
 	printf("					elemid = \"port\" + port;\n");
+	printf("				}\n");
+	printf("				if (0 != special)\n");
+	printf("				{\n");
+	printf("					elemid += \":\" + special;\n");
 	printf("				}\n");
 	printf("				for (j = 0; j < retvals.length; j++)\n");
 	printf("				{\n");
@@ -229,15 +233,36 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("							case %d:\n", IPSCAN_PROTO_UDP);
 	printf("							if (result>=%d)\n", IPSCAN_INDIRECT_RESPONSE);
 	printf("							{\n");
-	printf("								textupdate = \"Port \" + port + \" = INDIRECT-\" + labels[j] + \" (from \" + host + \")\";\n");
+	printf("								if (0 != special)\n");
+	printf("								{\n");
+	printf("									textupdate = \"Port \" + port + \"[\" + special + \"]\" + \" = INDIRECT-\" + labels[j] + \" (from \" + host + \")\";\n");
+	printf("								}\n");
+	printf("								else\n");
+	printf("								{\n");
+	printf("									textupdate = \"Port \" + port + \" = INDIRECT-\" + labels[j] + \" (from \" + host + \")\";\n");
+	printf("								}\n");
+	printf("							}\n");
+	printf("							else\n");
+	printf("							{\n");
+	printf("								if (0 != special)\n");
+	printf("								{\n");
+	printf("									textupdate = \"Port \" + port + \"[\" + special + \"]\" + \" = \" + labels[j];\n");
+	printf("								}\n");
+	printf("								else\n");
+	printf("								{\n");
+	printf("									textupdate = \"Port \" + port + \" = \" + labels[j];\n");
+	printf("								}\n");
+	printf("							}\n");
+	printf("							break;\n");
+	printf("							default:\n"); // TCP
+	printf("							if (0 != special)\n");
+	printf("							{\n");
+	printf("								textupdate = \"Port \" + port + \"[\" + special + \"]\" + labels[j];\n");
 	printf("							}\n");
 	printf("							else\n");
 	printf("							{\n");
 	printf("								textupdate = \"Port \" + port + \" = \" + labels[j];\n");
 	printf("							}\n");
-	printf("							break;\n");
-	printf("							default:\n"); // TCP
-	printf("								textupdate = \"Port \" + port + \" = \" + labels[j];\n");
 	printf("							break;\n");
 	printf("						}\n");
 	// Colour setting
@@ -290,6 +315,8 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	printf("<P style=\"font-weight:bold\">");
 	if (strftime(tstring, sizeof(tstring),"%a,%%20%d%%20%b%%20%Y%%20%T%%20%z", localtime(&timestamp)) != 0)
 	{
+		printf("Special protocol tests, signified by [x] after a port number, test for known protocol weaknesses. ");
+		printf("Further details of these tests can be found at <A href=\"%s\">Special protocol tests.</A>\n", IPSCAN_SPECIALTESTS_URL);
 		// Offer the opportunity for feedback and a link to the source
 		printf("If you have any queries related to the results of this scan, or suggestions for improvement/additions to its' functionality");
 		printf(" then please <A href=\"mailto:%s?subject=Feedback%%20on%%20IPv6%%20scanner&amp;body=host:%%20%s,%%20time:%%20%s\">email me.</A> ",\
@@ -321,6 +348,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 {
 	uint16_t portindex;
 	uint16_t port;
+	uint8_t special;
 	int position = 0;
 	int last = 0;
 
@@ -358,11 +386,20 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 		for (portindex= 0; portindex < numudpports ; portindex++)
 		{
 			port = udpportlist[portindex].port_num;
+			special = udpportlist[portindex].special;
 			last = (portindex == (numports-1)) ? 1 : 0 ;
 
-			if (position ==0) printf("<TR style=\"text-align:center\">\n");;
-			printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d\">Port %d = %s</TD>\n",COLUMNUDPPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
-					port, port, resultsstruct[PORTUNKNOWN].label );
+			if (position ==0) printf("<TR style=\"text-align:center\">\n");
+			if (0 != special)
+			{
+				printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d:%d\">Port %d[%d] = %s</TD>\n",COLUMNUDPPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
+									port, special, port, special, resultsstruct[PORTUNKNOWN].label );
+			}
+			else
+			{
+				printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d\">Port %d = %s</TD>\n",COLUMNUDPPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
+									port, port, resultsstruct[PORTUNKNOWN].label );
+			}
 			position++;
 			if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
 		}
@@ -378,11 +415,20 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	for (portindex= 0; portindex < numports ; portindex++)
 	{
 		port = portlist[portindex].port_num;
+		special = portlist[portindex].special;
 		last = (portindex == (numports-1)) ? 1 : 0 ;
 
-		if (position ==0) printf("<TR style=\"text-align:center\">\n");;
-		printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d\">Port %d = %s</TD>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
-				port, port, resultsstruct[PORTUNKNOWN].label );
+		if (position ==0) printf("<TR style=\"text-align:center\">\n");
+		if (0 != special)
+		{
+			printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d:%d\">Port %d[%d] = %s</TD>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
+							port, special, port, special, resultsstruct[PORTUNKNOWN].label );
+		}
+		else
+		{
+			printf("<TD width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d\">Port %d = %s</TD>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
+							port, port, resultsstruct[PORTUNKNOWN].label );
+		}
 		position++;
 		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
 	}
@@ -412,6 +458,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 {
 	int i;
 	uint16_t port,portindex;
+	uint8_t special;
 	int position = 0;
 	int last = 0;
 
@@ -432,10 +479,18 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 		for (portindex= 0; portindex < numudpports ; portindex++)
 		{
 			port = udpportlist[portindex].port_num;
+			special = udpportlist[portindex].special;
 			last = (portindex == (numudpports-1)) ? 1 : 0 ;
 
 			if (position == 0) printf("<TR style=\"text-align:center\">\n");
-			printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port);
+			if (0 != special)
+			{
+				printf("<TD width=\"%d%%\" title=\"%s\">Port %d[%d]</TD>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port, special);
+			}
+			else
+			{
+				printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port);
+			}
 			position++;
 			if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
 		}
@@ -452,10 +507,19 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 	for (portindex= 0; portindex < numports ; portindex++)
 	{
 		port = portlist[portindex].port_num;
+		special = portlist[portindex].special;
 		last = (portindex == (numports-1)) ? 1 : 0 ;
 
 		if (position == 0) printf("<TR style=\"text-align:center\">\n");
-		printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNPCT, portlist[portindex].port_desc, port);
+		if (0 != special)
+		{
+			printf("<TD width=\"%d%%\" title=\"%s\">Port %d[%d]</TD>\n",COLUMNPCT, portlist[portindex].port_desc, port, special);
+		}
+		else
+		{
+			printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNPCT, portlist[portindex].port_desc, port);
+		}
+
 		position++;
 		if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
 	}

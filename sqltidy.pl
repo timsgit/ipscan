@@ -2,7 +2,7 @@
 #
 # ipscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 # 
-# Copyright (C) 2011-2013 Tim Chappell.
+# Copyright (C) 2011-2014 Tim Chappell.
 # 
 # This file is part of ipscan.
 # 

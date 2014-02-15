@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2013 Tim Chappell.
+//    Copyright (C) 2011-2014 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -21,6 +21,7 @@
 // 0.01  			initial version after split from ipscan_checks.c
 // 0.02				tidy up logging prefixes
 // 0.03				move to memset()
+// 0.04				add support for special cases
 
 #include "ipscan.h"
 //
@@ -76,7 +77,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 // Check an individual TCP port
 //
 
-int check_tcp_port(char * hostname, uint16_t port)
+int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 {
 	struct addrinfo *res, *aip;
 	struct addrinfo hints;
@@ -184,14 +185,14 @@ int check_tcp_port(char * hostname, uint16_t port)
 				}
 
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "check_tcp_port: found port %d returned conn = %d, errsv = %d(%s)\n",port, conn, errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "check_tcp_port: found port %d special %d returned conn = %d, errsv = %d(%s)\n",port, special, conn, errsv, strerror(errsv));
 				#endif
 
 				// If we haven't found a matching returncode/errno then log this ....
 				if (PORTUNKNOWN == retval)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_tcp_port: connect unexpected response, errno is : %d (%s) for host %s port %d\n", \
-							errsv, strerror(errsv), hostname, port);
+					IPSCAN_LOG( LOGPREFIX "check_tcp_port: connect unexpected response, errno is : %d (%s) for host %s port %d special %d\n", \
+							errsv, strerror(errsv), hostname, port, special);
 					retval = PORTUNEXPECTED;
 				}
 
@@ -240,9 +241,10 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		for (i = 0 ; i <(int)todo ; i++)
 		{
 			uint16_t port = portlist[portindex+i].port_num;
-			result = check_tcp_port(hostname, port);
+			uint8_t special = portlist[portindex+i].special;
+			result = check_tcp_port(hostname, port, special);
 			// Put results into database
-			rc = write_db(host_msb, host_lsb, timestamp, session, (port + IPSCAN_PROTO_TCP), result, unusedfield );
+			rc = write_db(host_msb, host_lsb, timestamp, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): check_tcp_port_parll() write_db returned %d\n", rc);

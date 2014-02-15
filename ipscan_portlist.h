@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2013 Tim Chappell.
+//    Copyright (C) 2011-2014 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -26,6 +26,7 @@
 // 0.03 - add service names to results table (modification to portlist, now structure)
 // 0.04 - add UDP ports and service names
 // 0.05 - add SNMP (UDP port 161) support
+// 0.06 - add NTP special case
 
 #include "ipscan.h"
 
@@ -38,59 +39,59 @@
 	//
 	struct portlist_struc defportlist[] =
 	{
-		{    7, "Echo"},\
-		{   21, "FTP" },\
-		{   22, "SSH" },\
-		{   23, "Telnet" },\
-		{   25, "SMTP" },\
-		{   37, "Time" },\
-		{   53, "DNS" },\
-		{   79, "Finger" },\
-		{   80, "HTTP" },\
-		{   88, "Kerberos" },\
-		{  110, "POP3" },\
-		{  111, "SUN-RPC" },\
-		{  113, "Ident, Auth" },\
-		{  119, "NNTP" },\
-		{  123, "NTP" },\
-		{  135, "Microsoft-EPMAP" },\
-		{  137, "NetBIOS Naming" },\
-		{  138, "NetBIOS Datagram" },\
-		{  139, "NetBIOS Session" },\
-		{  143, "IMAP" },\
-		{  311, "Apple-WebAdmin" },\
-		{  389, "LDAP" },\
-		{  427, "SLP" },\
-		{  443, "HTTPS" },\
-		{  445, "Microsoft-DS" },\
-		{  514, "Shell" },\
-		{  543, "Kerberos Login" },\
-		{  544, "Kerberos RSH" },\
-		{  548, "Apple-File" },\
-		{  631, "IPP" },\
-		{  749, "Kerberos Admin" },\
-		{  873, "Rsync" },\
-		{  993, "IMAPS" },\
-		{ 1025, "Blackjack, NFS, IIS or RFS" },\
-		{ 1026, "CAP, Microsoft DCOM" },\
-		{ 1029, "Microsoft DCOM" },\
-		{ 1030, "BBN IAD" },\
-		{ 1080, "Socks" },\
-		{ 1720, "H323, Microsoft Netmeeting" },\
-		{ 1812, "RADIUS" },\
-		{ 2869, "SSDP Event Notification" },\
-		{ 3128, "Active API, or Squid Proxy" },\
-		{ 3306, "MySQL" },\
-		{ 3389, "Microsoft RDP" },\
-		{ 3689, "DAAP, iTunes" },\
-		{ 5000, "UPNP" },\
-		{ 5060, "SIP" },\
-		{ 5100, "Service Mux, Yahoo Messenger" },\
-		{ 5357, "WSDAPI HTTP" },\
-		{ 5900, "VNC" },\
-		{ 8080, "HTTP alternate" },\
-		{ 9090, "WebSM" },\
-		{10243, "Microsoft WMP HTTP"}\
+		{    7, 0, "Echo"},\
+		{   21, 0, "FTP" },\
+		{   22, 0, "SSH" },\
+		{   23, 0, "Telnet" },\
+		{   25, 0, "SMTP" },\
+		{   37, 0, "Time" },\
+		{   53, 0, "DNS" },\
+		{   79, 0, "Finger" },\
+		{   80, 0, "HTTP" },\
+		{   88, 0, "Kerberos" },\
+		{  110, 0, "POP3" },\
+		{  111, 0, "SUN-RPC" },\
+		{  113, 0, "Ident, Auth" },\
+		{  119, 0, "NNTP" },\
+		{  123, 0, "NTP" },\
+		{  135, 0, "Microsoft-EPMAP" },\
+		{  137, 0, "NetBIOS Naming" },\
+		{  138, 0, "NetBIOS Datagram" },\
+		{  139, 0, "NetBIOS Session" },\
+		{  143, 0, "IMAP" },\
+		{  311, 0, "Apple-WebAdmin" },\
+		{  389, 0, "LDAP" },\
+		{  427, 0, "SLP" },\
+		{  443, 0, "HTTPS" },\
+		{  445, 0, "Microsoft-DS" },\
+		{  514, 0, "Shell" },\
+		{  543, 0, "Kerberos Login" },\
+		{  544, 0, "Kerberos RSH" },\
+		{  548, 0, "Apple-File" },\
+		{  631, 0, "IPP" },\
+		{  749, 0, "Kerberos Admin" },\
+		{  873, 0, "Rsync" },\
+		{  993, 0, "IMAPS" },\
+		{ 1025, 0, "Blackjack, NFS, IIS or RFS" },\
+		{ 1026, 0, "CAP, Microsoft DCOM" },\
+		{ 1029, 0, "Microsoft DCOM" },\
+		{ 1030, 0, "BBN IAD" },\
+		{ 1080, 0, "Socks" },\
+		{ 1720, 0, "H323, Microsoft Netmeeting" },\
+		{ 1812, 0, "RADIUS" },\
+		{ 2869, 0, "SSDP Event Notification" },\
+		{ 3128, 0, "Active API, or Squid Proxy" },\
+		{ 3306, 0, "MySQL" },\
+		{ 3389, 0, "Microsoft RDP" },\
+		{ 3689, 0, "DAAP, iTunes" },\
+		{ 5000, 0, "UPNP" },\
+		{ 5060, 0, "SIP" },\
+		{ 5100, 0, "Service Mux, Yahoo Messenger" },\
+		{ 5357, 0, "WSDAPI HTTP" },\
+		{ 5900, 0, "VNC" },\
+		{ 8080, 0, "HTTP alternate" },\
+		{ 9090, 0, "WebSM" },\
+		{10243, 0, "Microsoft WMP HTTP"}\
 	};
 
 
@@ -99,11 +100,12 @@
 
 	struct portlist_struc udpportlist[] =
 		{
-			{   53, "DNS" },\
-			{   69, "TFTP" },\
-			{  123, "NTP" },\
-			{  161, "SNMP" },\
-			{ 1900, "UPnP SSDP" },\
+			{   53, 0, "DNS" },\
+			{   69, 0, "TFTP" },\
+			{  123, 0, "NTP" },\
+			{  123, 1, "NTP MONLIST" },\
+			{  161, 0, "SNMP" },\
+			{ 1900, 0, "UPnP SSDP" },\
 		};
 #if (IPSCAN_INCLUDE_UDP == 1)
 	#define NUMUDPPORTS ( sizeof(udpportlist) / sizeof(struct portlist_struc) )

@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2013 Tim Chappell.
+//    Copyright (C) 2011-2014 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -77,7 +77,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 // Parallel processing related
 #include <sys/wait.h>
 
-int check_udp_port(char * hostname, uint16_t port)
+int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 {
 	char txmessage[UDP_BUFFER_SIZE],rxmessage[UDP_BUFFER_SIZE];
 	struct sockaddr_in6 remoteaddr;
@@ -101,6 +101,9 @@ int check_udp_port(char * hostname, uint16_t port)
 	// Capture time of day and convert to NTP format
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
+
+	// Prefill transmit message buffer with 0s
+	memset(&txmessage, 0,  UDP_BUFFER_SIZE);
 
 	rc = inet_pton(AF_INET6, hostname, &(remoteaddr.sin6_addr));
 	if (rc != 1)
@@ -302,13 +305,23 @@ int check_udp_port(char * hostname, uint16_t port)
 				 |                                                                |
 				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  */
 
-				txmessage[0] = ((NTP_LI << 5) + (NTP_VN << 3) + ( NTP_MODE ));
-				txmessage[1] = NTP_STRATUM;
-				txmessage[2] = NTP_POLL;
-				txmessage[3] = NTP_PRECISION;
-				// Clear out 11 32-bit words (Root Delay through transmit timestamp)
-				memset(&txmessage[4], 0,  44);
-				len = 48;
+				if (1 == special) // NTP monlist case
+				{
+					txmessage[0] = 0x17; 	// NTP version 2, NTP_MODE = 7 (Private use)
+					txmessage[1] = 0; 		// (Auth bit and sequence number)
+					txmessage[2] = 0x03;	// Implementation is XNTPD
+					txmessage[3] = 0X2a;	// MON_GETLIST_1
+					len = 256;
+				}
+				else // Standard NTP client query
+				{
+					txmessage[0] = ((NTP_LI << 5) + (NTP_VN << 3) + ( NTP_MODE ));
+					txmessage[1] = NTP_STRATUM;
+					txmessage[2] = NTP_POLL;
+					txmessage[3] = NTP_PRECISION;
+					// Pad out 11 32-bit words (Root Delay through transmit timestamp)
+					len = 48;
+				}
 				break;
 			}
 
@@ -480,7 +493,7 @@ int check_udp_port(char * hostname, uint16_t port)
 				txmessage[len++] = 0x0A;
 				txmessage[len++] = 0x0D;
 				txmessage[len++] = 0x0;
-				rc = sprintf(&txmessage[len], "ipscan (c) 2013 Tim Chappell. This message is destined for UDP port %d\n", port);
+				rc = sprintf(&txmessage[len], "ipscan (c) 2014 Tim Chappell. This message is destined for UDP port %d\n", port);
 				if (rc < 0)
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
@@ -553,6 +566,7 @@ int check_udp_port(char * hostname, uint16_t port)
 
 			#ifdef UDPDEBUG
 			IPSCAN_LOG( LOGPREFIX "check_udp_port: good read() of UDP port %d, returned %d bytes\n", port, rc);
+
 			// Log the summary of results internally - but only if LOGVERBOSITY is set to 1
 			int rxlength = ( rc < UDPMAXLOGOCTETS ) ? rc : UDPMAXLOGOCTETS;
 			int i = 0;
@@ -627,9 +641,10 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		for (i = 0 ; i <(int)todo ; i++)
 		{
 			uint16_t port = udpportlist[portindex+i].port_num;
-			result = check_udp_port(hostname, port);
+			uint8_t special = udpportlist[portindex+i].special;
+			result = check_udp_port(hostname, port, special);
 			// Put results into database
-			rc = write_db(host_msb, host_lsb, timestamp, session, (port + IPSCAN_PROTO_UDP), result, unusedfield );
+			rc = write_db(host_msb, host_lsb, timestamp, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): write_db returned %d\n", rc);

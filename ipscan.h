@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2013 Tim Chappell.
+//    Copyright (C) 2011-2014 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.18"
+	#define IPSCAN_VER "1.19"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -105,6 +105,7 @@
 	// 1.16 support optional ping for deployment on servers where setuid not possible
 	// 1.17 support optional UDP for deployment on controlled servers
 	// 1.18 move to use memset()
+	// 1.19 support for special test cases
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -119,6 +120,10 @@
 	#define IPSCAN_BAD_URL_HELP 1
 	// The link that might provide some help ...
 	#define IPSCAN_BAD_URL_LINK "http://ipv6.chappell-family.com/timswiki/index.php5?title=ScanAutomation"
+
+	// URL providing description special protocol tests
+	#define IPSCAN_SPECIALTESTS_URL "http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6_SpecialTests"
+
 
 	// MySQL database-related globals
 	#define MYSQL_HOST "localhost"
@@ -188,9 +193,9 @@
 	#define IPSCAN_INCLUDE_UDP UDP_AVAILABLE
 	#endif
 
-    	// Logging verbosity:
+    // Logging verbosity:
 	//
-    	// (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
+    // (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
 	// (0) Quiet  - program/unexpected response errors only
 	//
 	// Do NOT change this value on internet facing hosts
@@ -225,7 +230,7 @@
 	#define COLUMNPCT (100/MAXCOLS)
 
 	// Number of columns for UDP HTML output:
-	#define MAXUDPCOLS 4
+	#define MAXUDPCOLS 3
 	#define COLUMNUDPPCT (100/MAXCOLS)
 
 	// Number of columns for text-only browser output case
@@ -366,9 +371,24 @@
 	#define NTP_PRECISION 2
 
 	// Protocol mappings (stored in database)
-	#define IPSCAN_PROTO_TCP (0<<16)
-	#define IPSCAN_PROTO_ICMPV6 (1<<16)
-	#define IPSCAN_PROTO_UDP (2<<16)
+	// Port number (0-65535) stored in lowest 16 bits, 15-0
+	// Special case tests indicated by value in bits 17-16
+	// This allows multiple tests to be targetted at the same port
+	#define IPSCAN_PORT_WIDTH (16)
+	#define IPSCAN_SPECIAL_WIDTH (2)
+	#define IPSCAN_PROTO_WIDTH (4)
+
+	#define IPSCAN_PORT_MASK ((1<<IPSCAN_PORT_WIDTH)-1)
+	#define IPSCAN_SPECIAL_MASK ((1<<IPSCAN_SPECIAL_WIDTH)-1)
+	#define IPSCAN_PROTO_MASK ((1<<IPSCAN_PROTO_WIDTH)-1)
+
+	#define IPSCAN_PORT_SHIFT (0)
+	#define IPSCAN_SPECIAL_SHIFT (IPSCAN_PORT_SHIFT + IPSCAN_PORT_WIDTH)
+	#define IPSCAN_PROTO_SHIFT (IPSCAN_PORT_SHIFT + IPSCAN_PORT_WIDTH + IPSCAN_SPECIAL_WIDTH)
+
+	#define IPSCAN_PROTO_TCP (0)
+	#define IPSCAN_PROTO_ICMPV6 (1)
+	#define IPSCAN_PROTO_UDP (2)
 
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router
@@ -429,11 +449,12 @@
 	// reduced below 22.
 	#define PORTDESCSIZE 48
 	//
-	// the structure - consists of a port number and a text description
+	// the structure - consists of a port number, a "special case" indicator and a text description
 	//
 	struct portlist_struc
 	{
 		uint16_t port_num;
+		uint8_t special;
 		char port_desc[PORTDESCSIZE];
 	};
 

@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2013 Tim Chappell.
+//    Copyright (C) 2011-2014 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -40,6 +40,7 @@
 // 0.20 - add scan automation help when offered a bad query string
 // 0.21 - add support for removal of ping
 // 0.22 - add support for removal of UDP
+// 0.23 - add support for special test cases
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -84,8 +85,8 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
 
-int check_tcp_port(char * hostname, uint16_t port);
-int check_udp_port(char * hostname, uint16_t port);
+int check_tcp_port(char * hostname, uint16_t port, uint8_t special);
+int check_udp_port(char * hostname, uint16_t port, uint8_t special);
 
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
@@ -181,6 +182,7 @@ int main(void)
 	// the query derived starttime
 	int64_t  querystarttime;
 
+	uint8_t special;
 	uint16_t port;
 	uint16_t portindex;
 
@@ -756,7 +758,7 @@ int main(void)
 
 			portsstats[result]++ ;
 
-			rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
+			rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING : write_db for ping result returned : %d\n", rc);
@@ -824,11 +826,12 @@ int main(void)
 			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
 				port = udpportlist[portindex].port_num;
+				special = udpportlist[portindex].special;
 				last = (portindex == (NUMUDPPORTS-1)) ? 1 : 0 ;
-				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_UDP));
+				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
 
 				#ifdef UDPDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP port %d special %d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
@@ -840,11 +843,25 @@ int main(void)
 				if (result == resultsstruct[i].returnval)
 				{
 					portsstats[result]++ ;
-					printf("<TD TITLE=\"%s\" style=\"background-color:%s\">Port %d = %s</TD>", udpportlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
+					if (0 != special)
+					{
+						printf("<TD TITLE=\"%s\" style=\"background-color:%s\">Port %d[%d] = %s</TD>", udpportlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label);
+					}
+					else
+					{
+						printf("<TD TITLE=\"%s\" style=\"background-color:%s\">Port %d = %s</TD>", udpportlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
+					}
 				}
 				else
 				{
-					printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", udpportlist[portindex].port_desc, port);
+					if (0 != special)
+					{
+						printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d[%d] = BAD</TD>", udpportlist[portindex].port_desc, port, special);
+					}
+					else
+					{
+						printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", udpportlist[portindex].port_desc, port);
+					}
 					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for port %d is %d\n",port,result);
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
@@ -896,16 +913,17 @@ int main(void)
 				}
 			}
 
-			// Start of port scan results table
+			// Start of TCP port scan results table
 			printf("<TABLE border=\"1\">\n");
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex].port_num;
+				special = portlist[portindex].special;
 				last = (portindex == (numports-1)) ? 1 : 0 ;
-				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + IPSCAN_PROTO_TCP));
+				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
 
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port %d returned %d(%s)\n",port,result,resultsstruct[result].label);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port %d special %d returned %d(%s)\n",port, special, result, resultsstruct[result].label);
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
@@ -917,11 +935,28 @@ int main(void)
 				if (result == resultsstruct[i].returnval)
 				{
 					portsstats[result]++ ;
-					printf("<TD TITLE=\"%s\" style=\"background-color:%s\">Port %d = %s</TD>", portlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
+					if (0 != special)
+					{
+						printf("<TD TITLE=\"%s\" style=\"background-color:%s\">Port %d[%d] = %s</TD>", portlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label);
+					}
+					else
+					{
+						printf("<TD TITLE=\"%s\" style=\"background-color:%s\">Port %d = %s</TD>", portlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
+					}
+
 				}
 				else
 				{
-					printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", portlist[portindex].port_desc, port);
+					if (0 != special)
+					{
+						printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d[%d] = BAD</TD>", portlist[portindex].port_desc, port, special);
+					}
+					else
+					{
+						printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", portlist[portindex].port_desc, port);
+					}
+
+
 					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for port %d is %d\n",port,result);
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
@@ -1025,7 +1060,7 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#endif
 			portsstats[result]++ ;
-			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + IPSCAN_PROTO_ICMPV6), pingresult, indirecthost);
+			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: write_db for ping result returned non-zero: %d\n", rc);
@@ -1119,7 +1154,8 @@ int main(void)
 			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
 				port = udpportlist[portindex].port_num;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_UDP));
+				special = udpportlist[portindex].special;
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
@@ -1139,7 +1175,8 @@ int main(void)
 			for (portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex].port_num;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + IPSCAN_PROTO_TCP));
+				special = portlist[portindex].special;
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
