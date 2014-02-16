@@ -33,6 +33,7 @@
 // 0.13 - change dump_db() to extend json results to report port, result and "address"
 //      - necessary for UDP support
 // 0.14 - improve debug logging
+// 0.15 - change comments related to port field
 
 #include "ipscan.h"
 //
@@ -86,9 +87,9 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 	// SESSIONID          BIGINT UNSIGNED
 	//
 	// PORT               BIGINT UNSIGNED
-	//				      [15:0]  16-bits Port number (0-65535)
-	//				      [31:16] 16-bits Protocol
-	//				      [63:32] 32-bits Reserved (0)
+	//				      Multiple fields are mapped to this single entry by the calling routines.
+	//					  This includes the port, a special case indicator and the protocol.
+	//					  See ipscan.h for the field masks and shifts
 	//
 	// RESULT             BIGINT UNSIGNED
 	//

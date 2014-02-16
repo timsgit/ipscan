@@ -27,6 +27,7 @@
 // 0.04 - add UDP ports and service names
 // 0.05 - add SNMP (UDP port 161) support
 // 0.06 - add NTP special case
+// 0.07 - add TCP/32764 router backdoor port (may be IPv4 only)
 
 #include "ipscan.h"
 
@@ -91,7 +92,8 @@
 		{ 5900, 0, "VNC" },\
 		{ 8080, 0, "HTTP alternate" },\
 		{ 9090, 0, "WebSM" },\
-		{10243, 0, "Microsoft WMP HTTP"}\
+		{10243, 0, "Microsoft WMP HTTP"},\
+		{32764, 0, "Router Backdoor"}\
 	};
 
 

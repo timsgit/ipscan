@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.19"
+	#define IPSCAN_VER "1.20"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -106,6 +106,7 @@
 	// 1.17 support optional UDP for deployment on controlled servers
 	// 1.18 move to use memset()
 	// 1.19 support for special test cases
+	// 1.20 support for TCP/32764 (Router backdoor) and special case debug logging improvements
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"

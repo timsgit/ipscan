@@ -513,13 +513,27 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		rc = write(fd,&txmessage,len);
 		if (rc < 0)
 		{
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad write(port %d) attempt, returned %d (%s)\n", port, errno, strerror(errno));
+			if (0 != special)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad write(port %d:%d) attempt, returned %d (%s)\n", port, special, errno, strerror(errno));
+			}
+			else
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad write(port %d) attempt, returned %d (%s)\n", port, errno, strerror(errno));
+			}
 			retval = PORTINTERROR;
 		}
 		else
 		{
 			#ifdef UDPDEBUG
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: write(port %d) returned %d\n", port, rc);
+			if (0 != special)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: write(port %d:%d) returned %d\n", port, special, rc);
+			}
+			else
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: write(port %d) returned %d\n", port, rc);
+			}
 			#endif
 		}
 	}
@@ -531,7 +545,14 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		{
 			int errsv = errno ;
 			#ifdef UDPDEBUG
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad read(port %d), returned %d (%s)\n", port, errno, strerror(errno));
+			if (0 != special)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad read(port %d:%d), returned %d (%s)\n", port, special, errno, strerror(errno));
+			}
+			else
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad read(port %d), returned %d (%s)\n", port, errno, strerror(errno));
+			}
 			#endif
 			// cycle through the expected list of results
 			for (i = 0; PORTEOL != resultsstruct[i].returnval && PORTUNKNOWN == retval ; i++)
@@ -549,14 +570,29 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			}
 
 			#ifdef UDPDEBUG
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: found port %d returned read = %d, errsv = %d(%s)\n",port, rc, errsv, strerror(errsv));
+			if (0 != special)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: found port %d:%d returned read = %d, errsv = %d(%s)\n",port, special, rc, errsv, strerror(errsv));
+			}
+			else
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: found port %d returned read = %d, errsv = %d(%s)\n",port, rc, errsv, strerror(errsv));
+			}
 			#endif
 
 			// If we haven't found a matching returncode/errno then log this ....
 			if (PORTUNKNOWN == retval)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: read(port %d) unexpected response, errno is : %d (%s) for host %s port %d\n", port, \
+				if (0 != special)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: read(port %d:%d) unexpected response, errno is : %d (%s) for host %s port %d\n", port, special,\
 						errsv, strerror(errsv), hostname, port);
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: read(port %d) unexpected response, errno is : %d (%s) for host %s port %d\n", port, \
+						errsv, strerror(errsv), hostname, port);
+				}
 				retval = PORTUNEXPECTED;
 			}
 		}
@@ -565,7 +601,14 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			retval = UDPOPEN;
 
 			#ifdef UDPDEBUG
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: good read() of UDP port %d, returned %d bytes\n", port, rc);
+			if (0 != special)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: good read() of UDP port %d:%d, returned %d bytes\n", port, special, rc);
+			}
+			else
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: good read() of UDP port %d, returned %d bytes\n", port, rc);
+			}
 
 			// Log the summary of results internally - but only if LOGVERBOSITY is set to 1
 			int rxlength = ( rc < UDPMAXLOGOCTETS ) ? rc : UDPMAXLOGOCTETS;
@@ -575,7 +618,14 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			{
 				if (position == 0)
 				{
-					rc = snprintf(udplogbufferptr, udplogbuffersize, "check_udp_port: Found response packet for port %d: %02x", port, (rxmessage[i] & 0xff) );
+					if (0 != special)
+					{
+						rc = snprintf(udplogbufferptr, udplogbuffersize, "check_udp_port: Found response packet for port %d:%d: %02x", port, special, (rxmessage[i] & 0xff) );
+					}
+					else
+					{
+						rc = snprintf(udplogbufferptr, udplogbuffersize, "check_udp_port: Found response packet for port %d: %02x", port, (rxmessage[i] & 0xff) );
+					}
 				}
 				else
 				{

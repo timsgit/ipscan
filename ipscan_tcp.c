@@ -185,14 +185,29 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "check_tcp_port: found port %d special %d returned conn = %d, errsv = %d(%s)\n",port, special, conn, errsv, strerror(errsv));
+				if (0 != special)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_tcp_port: found port %d:%d returned conn = %d, errsv = %d(%s)\n", port, special, conn, errsv, strerror(errsv));
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "check_tcp_port: found port %d returned conn = %d, errsv = %d(%s)\n", port, conn, errsv, strerror(errsv));
+				}
 				#endif
 
 				// If we haven't found a matching returncode/errno then log this ....
 				if (PORTUNKNOWN == retval)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_tcp_port: connect unexpected response, errno is : %d (%s) for host %s port %d special %d\n", \
+					if (0 != special)
+					{
+						IPSCAN_LOG( LOGPREFIX "check_tcp_port: connect unexpected response, errno is : %d (%s) for host %s port %d:%d\n", \
 							errsv, strerror(errsv), hostname, port, special);
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "check_tcp_port: connect unexpected response, errno is : %d (%s) for host %s port %d\n", \
+							errsv, strerror(errsv), hostname, port);
+					}
 					retval = PORTUNEXPECTED;
 				}
 

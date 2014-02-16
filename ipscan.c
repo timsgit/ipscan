@@ -41,6 +41,7 @@
 // 0.21 - add support for removal of ping
 // 0.22 - add support for removal of UDP
 // 0.23 - add support for special test cases
+// 0.24 - improve special test case debug logging
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -84,9 +85,6 @@
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
-
-int check_tcp_port(char * hostname, uint16_t port, uint8_t special);
-int check_udp_port(char * hostname, uint16_t port, uint8_t special);
 
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
@@ -831,7 +829,14 @@ int main(void)
 				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
 
 				#ifdef UDPDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP port %d special %d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
+				if (0 != special)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
+				}
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
@@ -857,12 +862,13 @@ int main(void)
 					if (0 != special)
 					{
 						printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d[%d] = BAD</TD>", udpportlist[portindex].port_desc, port, special);
+						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for UDP port %d:%d is %d\n", port, special, result);
 					}
 					else
 					{
 						printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", udpportlist[portindex].port_desc, port);
+						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for UDP port %d is %d\n", port, result);
 					}
-					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for port %d is %d\n",port,result);
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
 
@@ -923,7 +929,14 @@ int main(void)
 				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
 
 				#ifdef DEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port %d special %d returned %d(%s)\n",port, special, result, resultsstruct[result].label);
+				if (0 != special)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
+				}
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
@@ -950,14 +963,13 @@ int main(void)
 					if (0 != special)
 					{
 						printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d[%d] = BAD</TD>", portlist[portindex].port_desc, port, special);
+						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for TCP port %d:%d is %d\n", port, special, result);
 					}
 					else
 					{
 						printf("<TD TITLE=\"%s\" style=\"background-color:white\">Port %d = BAD</TD>", portlist[portindex].port_desc, port);
+						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for TCP port %d is %d\n",port,result);
 					}
-
-
-					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for port %d is %d\n",port,result);
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
 
@@ -1166,7 +1178,14 @@ int main(void)
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING scan of UDP port %d returned : %d\n", port, result);
+					if (0 != special)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING scan of UDP port %d:%d returned : %d\n", port, special, result);
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING scan of UDP port %d returned : %d\n", port, result);
+					}
 					portsstats[PORTUNKNOWN]++;
 				}
 			}
@@ -1187,7 +1206,14 @@ int main(void)
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: WARNING scan of port %d returned : %d\n", port, result);
+					if (0 != special)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING scan of TCP port %d:%d returned : %d\n", port, special, result);
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING scan of TCP port %d returned : %d\n", port, result);
+					}
 					portsstats[PORTUNKNOWN]++;
 				}
 			}
