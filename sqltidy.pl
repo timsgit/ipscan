@@ -2,7 +2,7 @@
 #
 # ipscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 # 
-# Copyright (C) 2011-2014 Tim Chappell.
+# Copyright (C) 2011-2013 Tim Chappell.
 # 
 # This file is part of ipscan.
 # 
@@ -22,6 +22,8 @@
 # Version 	Description
 # 0.1		Initial version
 # 0.2		Update to delete any older results
+# 0.3		Update to remove narrow delete, since should generally
+#               be handled by ipscan itself.
 # 
 use strict;
 use DBI;
@@ -83,31 +85,13 @@ my $latest = ($earliest + $runperiod - 1);
 # Now open the database using the parameters defined above
 #
 my $dbh = DBI->connect("DBI:mysql:database=$MYSQL_DBNAME;host=$MYSQL_HOST","$MYSQL_USER","$MYSQL_PASSWD") or die "Cannot connect: " . $DBI::errstr;
-#
-# Select and delete the entries bound by the times we calculated above
-#
-my $sql = qq"DELETE FROM $MYSQL_TBLNAME WHERE createdate >= $earliest AND createdate <= $latest";
+# Catchall to delete any old results. This won't normally be required,
+# however it covers cases where a previous delete attempt was unsuccessful
+# or didn't occur
+my $sql = qq"DELETE FROM $MYSQL_TBLNAME WHERE createdate <= $latest";
 my $sth = $dbh->prepare($sql) or die "Cannot prepare: " . $dbh->errstr();
 $sth->execute() or die "Cannot execute: " . $sth->errstr();
-#
-# If debug is enabled and some rows were deleted then report this to stdout
-#
 if ($DB_DEBUG == 1 && $sth->rows > 0)
-{
-	print "Runperiod = ".$runperiod." seconds\n";
-	print "Now       = ".localtime($now)."\n";
-	print "Earliest  = ".localtime($earliest)."\n";
-	print "Latest    = ".localtime($latest)."\n";
-	print "Rows deleted : ".$sth->rows."\n";
-}
-#
-# Catchall to delete any even older results. This won't normally be required,
-# however it covers cases where a previous delete attempt was unsuccessful
-# and has been useful on virtualised servers
-$sql = qq"DELETE FROM $MYSQL_TBLNAME WHERE createdate <= $latest";
-$sth = $dbh->prepare($sql) or die "Cannot prepare: " . $dbh->errstr();
-$sth->execute() or die "Cannot execute: " . $sth->errstr();
-if ($sth->rows > 0)
 {
 	print "Tidy-up of previous results required:\n";
 	print "Now       = ".localtime($now)."\n";

@@ -24,8 +24,9 @@
 // 0.04			improve debug logging
 // 0.05			generate a dummy packet for unhandled ports
 // 0.06			add the beginnings of ISAKMP and LSP Ping
-// 0.07             	remove LSP Ping
-// 0.08             	move to memset()
+// 0.07                 remove LSP Ping
+// 0.08                 move to memset()
+// 0.09			ensure minimum timings are met
 
 #include "ipscan.h"
 //
@@ -128,7 +129,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		{
 			memset(&timeout, 0, sizeof(timeout));
 			timeout.tv_sec = UDPTIMEOUTSECS;
-			timeout.tv_usec = 0;
+			timeout.tv_usec = UDPTIMEOUTMICROSECS;
 
 			rc = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 			if (rc < 0)
@@ -143,7 +144,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	{
 		memset(&timeout, 0, sizeof(timeout));
 		timeout.tv_sec = UDPTIMEOUTSECS;
-		timeout.tv_usec = 0;
+		timeout.tv_usec = UDPTIMEOUTMICROSECS;
 
 		rc = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 		if (rc < 0)
@@ -666,6 +667,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		}
 	}
 
+	// If we received any non-positive feedback then make sure we wait at least IPSCAN_MINTIME_PER_PORT secs
+	if ((UDPOPEN != retval) && (UDPSTEALTH != retval)) sleep(IPSCAN_MINTIME_PER_PORT);
 
 	return (retval);
 }

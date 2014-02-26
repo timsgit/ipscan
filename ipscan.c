@@ -42,6 +42,7 @@
 // 0.22 - add support for removal of UDP
 // 0.23 - add support for special test cases
 // 0.24 - improve special test case debug logging
+// 0.25 - add support for test completion reporting
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -85,6 +86,7 @@
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
+int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
@@ -152,6 +154,8 @@ int main(void)
 	#if (TEXTMODE == 1)
 	// last is only used in text-only mode
 	int last = 0;
+	#else
+	int fetchnum = 0;
 	#endif
 
 	// List of ports to be tested and their results
@@ -692,6 +696,9 @@ int main(void)
 		if (i < numqueries && query[i].valid == 1)
 		{
 			fetch = (query[i].varval >0) ? 1 : 0;
+			#if (TEXTMODE != 1)
+			if (1 == fetch) fetchnum = query[i].varval;
+			#endif
 		}
 
 		// Dump the variables resulting from the query-string parsing
@@ -1027,6 +1034,14 @@ int main(void)
 				}
 				i++ ;
 			}
+
+			// Delete the results now that we're done
+			rc = delete_from_db(remotehost_msb, remotehost_lsb, starttime, session);
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db return code was %d (expected 0)\n", rc);
+				exit(EXIT_FAILURE);
+			}
 		}
 		#else
 
@@ -1034,7 +1049,34 @@ int main(void)
 		// session, starttime, fetch and includeexisting. Could also have one or more customports
 		// was numqueries >= 4, without includeexisting check - but javascript updateurl always minimally includes includeexisting
 
-		if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0)
+		if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0 && (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum || IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum))
+		{
+			// Put out a dummy page to keep the webserver happy
+			create_html_common_header();
+			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("</HEAD>\n");
+			printf("<BODY>\n");
+			printf("<P>End of test - dummy response.</P>\n");
+			// Finish the output
+			create_html_body_end();
+
+			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated a SUCCESSFUL completion.\n");
+			}
+			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated an UNSUCCESSFUL completion.\n");
+			}
+
+			rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db return code was %d (expected 0)\n", rc);
+				exit(EXIT_FAILURE);
+			}
+		}
+		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION != fetchnum && IPSCAN_UNSUCCESSFUL_COMPLETION != fetchnum)
 		{
 			// Simplified header in which to wrap array of results
 			create_json_header();

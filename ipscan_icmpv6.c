@@ -21,6 +21,7 @@
 // 0.1				initial version after splitting from ipscan_checks.c
 // 0.2				add prefixes to debug log output
 // 0.3				move to memset()
+// 0.4				ensure minimum timings are met
 
 #include "ipscan.h"
 //
@@ -190,7 +191,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			{
 				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
-				timeout.tv_usec = 0;
+				timeout.tv_usec = TIMEOUTMICROSECS;
 
 				rc = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 				errsv = errno;
@@ -202,7 +203,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
-				timeout.tv_usec = 0;
+				timeout.tv_usec = TIMEOUTMICROSECS;
 
 				rc = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 				errsv = errno;
@@ -787,6 +788,10 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 	// return the status
 	if (-1 != sock) close(sock); // close socket if appropriate
+
+	// Make sure we wait long enough in all cases
+	sleep(IPSCAN_MINTIME_PER_PORT);
+
 	return(retval);
 }
 

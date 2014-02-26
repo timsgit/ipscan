@@ -22,6 +22,7 @@
 // 0.02				tidy up logging prefixes
 // 0.03				move to memset()
 // 0.04				add support for special cases
+// 0.05				ensure minimum timings are met
 
 #include "ipscan.h"
 //
@@ -136,7 +137,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 				// Set send timeout
 				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
-				timeout.tv_usec = 0;
+				timeout.tv_usec = TIMEOUTMICROSECS;
 				timeo = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 				if (timeo < 0)
 				{
@@ -152,7 +153,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 				// Set receive timeout
 				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
-				timeout.tv_usec = 0;
+				timeout.tv_usec = TIMEOUTMICROSECS;
 				timeo = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 				if (timeo < 0)
 				{
@@ -230,6 +231,9 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 		} // end for loop
 		freeaddrinfo(res);
 	}
+
+	// If we received any non-positive feedback then make sure we wait at least IPSCAN_MINTIME_PER_PORT secs
+	if ((PORTOPEN != retval) && (PORTINPROGRESS != retval)) sleep(IPSCAN_MINTIME_PER_PORT);
 
 	return(retval);
 }

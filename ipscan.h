@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.20"
+	#define IPSCAN_VER "1.23"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -107,6 +107,9 @@
 	// 1.18 move to use memset()
 	// 1.19 support for special test cases
 	// 1.20 support for TCP/32764 (Router backdoor) and special case debug logging improvements
+	// 1.21 add minimum per-port timings to ensure Linux 1s ratelimit is not hit
+	// 1.22 add completion indication to support quicker results deletion
+	// 1.23 enable automatic results deletion
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -303,17 +306,17 @@
 
 	// Determine the maximum number of children and therefore the maximum number of
 	// port scans that can be running in parallel
-	#define MAXCHILDREN 7
+	#define MAXCHILDREN 1
 	//
 	// Determine the maximum number of port scans that can be allocated to each child
 	#define MAXPORTSPERCHILD 9
 
 	// Determine the maximum number of children and therefore the maximum number of
 	// UDP port scans that can be running in parallel
-	#define MAXUDPCHILDREN 7
+	#define MAXUDPCHILDREN 1
 	//
 	// Determine the maximum number of UDP port scans that can be allocated to each child
-	#define MAXUDPPORTSPERCHILD 2
+	#define MAXUDPPORTSPERCHILD 9
 
 	//
 	// Database related
@@ -325,6 +328,10 @@
 
 	// Timeout for port response (in seconds)
 	#define TIMEOUTSECS 1
+	#define TIMEOUTMICROSECS 20000
+
+	// Minimum time between ports (s)
+	#define IPSCAN_MINTIME_PER_PORT 1
 
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
 	#define JSONFETCHEVERY 3
@@ -347,6 +354,7 @@
 
 	// UDP timeout (seconds) - needs to exceed UPnP/SSDP response request time (MX field) which is 1
 	#define UDPTIMEOUTSECS 2
+	#define UDPTIMEOUTMICROSECS 20000
 
 	// An estimate of the time to perform the test - assumes num ports is always smaller than (MAXPORTSPERCHILD * MAX_CHILDREN) for each protocol
 	#define UDPSTATICTIME 2
@@ -354,12 +362,12 @@
 	#define ICMP6STATICTIME 2
 
 	#if (IPSCAN_INCLUDE_UDP == 1)
-	#define UDPRUNTIME ( ( (numudpports > MAXUDPPORTSPERCHILD) ? (MAXUDPPORTSPERCHILD * UDPTIMEOUTSECS + UDPSTATICTIME) : ( numudpports * UDPTIMEOUTSECS + UDPSTATICTIME) ) )
+	#define UDPRUNTIME ((MAXUDPCHILDREN == 1) ? (numudpports * UDPTIMEOUTSECS + UDPSTATICTIME) :  ( (numudpports > MAXUDPPORTSPERCHILD) ? (MAXUDPPORTSPERCHILD * UDPTIMEOUTSECS + UDPSTATICTIME) : ( numudpports * UDPTIMEOUTSECS + UDPSTATICTIME) ) )
 	#else
 	#define UDPRUNTIME 0
 	#endif
 
-	#define TCPRUNTIME ( ( (numports > MAXPORTSPERCHILD) ? (MAXPORTSPERCHILD * TIMEOUTSECS + TCPSTATICTIME) : ( numports * TIMEOUTSECS + TCPSTATICTIME) ) )
+	#define TCPRUNTIME ( (MAXCHILDREN == 1) ? (numports * TIMEOUTSECS + TCPSTATICTIME) : ( (numports > MAXPORTSPERCHILD) ? (MAXPORTSPERCHILD * TIMEOUTSECS + TCPSTATICTIME) : ( numports * TIMEOUTSECS + TCPSTATICTIME) ) )
 	#define ICMP6RUNTIME (ICMP6STATICTIME + TIMEOUTSECS)
 	#define ESTIMATEDTIMETORUN ( UDPRUNTIME + TCPRUNTIME + ICMP6RUNTIME )
 
@@ -396,6 +404,10 @@
 	#define IPSCAN_INDIRECT_RESPONSE 256
 	// Mask to extract the response code
 	#define IPSCAN_INDIRECT_MASK 255
+
+	// Successful completion indicators (passed in fetch)
+	#define IPSCAN_SUCCESSFUL_COMPLETION 990
+	#define IPSCAN_UNSUCCESSFUL_COMPLETION 999
 
 	// Mapping for connection attempt results
 	// To add a new entry first insert a new internal state in the PORTSTATE enumeration and then add a

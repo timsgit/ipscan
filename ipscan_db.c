@@ -34,6 +34,7 @@
 //      - necessary for UDP support
 // 0.14 - improve debug logging
 // 0.15 - change comments related to port field
+// 0.16 - add delete support
 
 #include "ipscan.h"
 //
@@ -268,12 +269,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									{
 										printf("%d, %d, \"%s\", ", port, res, hostind);
 									}
-
-								/*	else if (rcres == 1 && rcport == 1 && (port != (0 + IPSCAN_PROTO_ICMPV6)) )
-									{
-										printf("%d, %d, ", port, res);
-									} */
-
 									else
 									{
 										IPSCAN_LOG( LOGPREFIX "dump_db: Unexpected row scan results - rcport = %d, rcres = %d, rchost = %d, port = %d\n", rcport, rcres, rchost, port);
@@ -325,6 +320,92 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 	}
 return (retval);
 }
+// ----------------------------------------------------------------------------------------
+//
+// Functions to delete selected result from the database
+//
+// ----------------------------------------------------------------------------------------
+int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session)
+{
+	int rc;
+	int retval = 0;
+	unsigned int qrylen;
+	char query[MAXDBQUERYSIZE];
+	MYSQL *connection;
+	MYSQL *mysqlrc;
+
+	connection = mysql_init(NULL);
+	if (NULL == connection)
+	{
+		IPSCAN_LOG( LOGPREFIX "delete_from_db: Failed to initialise MySQL\n");
+		retval = 1;
+	}
+	else
+	{
+		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
+		// in the my.cnf file which ensures that your program works, even if someone has set
+		// up MySQL in some nonstandard way.
+		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
+		if (0 == rc)
+		{
+
+			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			if (NULL == mysqlrc)
+			{
+				IPSCAN_LOG( LOGPREFIX "delete_from_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+				IPSCAN_LOG( LOGPREFIX "delete_from_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				retval = 3;
+			}
+			else
+			{
+				// DELETE FROM t1 WHERE a = b ;
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"')", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				{
+
+					#ifdef DBDEBUG
+					IPSCAN_LOG( LOGPREFIX "delete_from_db: MySQL Query is : %s\n", query);
+					#endif
+					rc = mysql_real_query(connection, query, qrylen);
+					if (0 == rc)
+					{
+						my_ulonglong affected_rows = mysql_affected_rows(connection);
+						if ( ((my_ulonglong)-1) == affected_rows)
+						{
+							IPSCAN_LOG( LOGPREFIX "delete_from_db: surprisingly delete returned successfully, but mysql_affected_rows() did not.\n");
+							retval = 11;
+						}
+						else
+						{
+							#if (IPSCAN_LOGVERBOSITY == 1)
+							IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
+							#endif
+						}
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "delete_from_db: Delete failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						retval = 10;
+					}
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "delete_from_db: Failed to create select query\n");
+					retval = 4;
+				}
+			}
+			mysql_commit(connection);
+			mysql_close(connection);
+		}
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "delete_from_db: mysql_options() failed - check your my.cnf file\n");
+			retval = 9;
+		}
+	}
+return (retval);
+}
+
 
 // ----------------------------------------------------------------------------------------
 //
