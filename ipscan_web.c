@@ -37,6 +37,7 @@
 // 0.17 - add end of test signalling
 // 0.18 - lint improvements
 // 0.19 - correct position of request.send()
+// 0.20 - handle failure case when HTTP return-code is not 200
 
 
 #include "ipscan.h"
@@ -157,6 +158,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("function update()\n");
  printf("{\n");
  printf("var i = 0;\n");
+ printf("var lateststate = new Array();\n");
  printf("++fetches;\n");
  printf("updateurl = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches;\n", session,\
    (uint32_t)timestamp,reconquery);
@@ -166,14 +168,11 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" lastupdate = 1;\n");
  printf("}\n");
  printf("request = makeHttpObject();\n");
- // third param determines sync/async fetch true=async
- printf("request.open( \"GET\", updateurl, true);\n");
- printf("request.send(null);\n");
  printf("request.onreadystatechange = function()\n");
  printf("{\n");
  printf(" if (request.readyState == 4 && request.status == 200)\n");
  printf(" {\n");
- printf("  var lateststate = eval( '(' + request.responseText + ')' );\n");
+ printf("  lateststate = eval( '(' + request.responseText + ')' );\n");
 
  printf("  if (lateststate.length > 3)\n");
  printf("  {\n");
@@ -305,30 +304,31 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 
  printf("  }\n"); // end of main if (more than 3 elements in array)
 
+ printf(" }\n"); // if (return code == 200)
+ // The following piece of code is evaluated irrespective of the HTTP return code
  #if (IPSCAN_INCLUDE_PING ==1)
  // handle failure to complete the scan in the allocated number of updates (including ping result)
- printf("  else if (lateststate.length < %d && lastupdate == 1)\n",3+((numudpports+numports+1)*3));
+ printf(" if (request.readyState == 4 && lateststate.length < %d && lastupdate == 1)\n",3+((numudpports+numports+1)*3));
  #else
  // handle failure to complete the scan in the allocated number of updates (no ping result)
- printf("  else if (lateststate.length < %d && lastupdate == 1)\n",3+((numudpports+numports)*3));
+ printf(" if (request.readyState == 4 && lateststate.length < %d && lastupdate == 1)\n",3+((numudpports+numports)*3));
  #endif
-
- printf("  {\n");
- printf("   window.clearInterval(myBlink);\n");
- printf("   document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";\n");
- printf("   document.getElementById(\"scanstate\").style.color=\"red\";\n");
- printf("   var finishurl2 = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";\n", session,\
+ printf(" {\n");
+ printf("  window.clearInterval(myBlink);\n");
+ printf("  document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";\n");
+ printf("  document.getElementById(\"scanstate\").style.color=\"red\";\n");
+ printf("  var finishurl2 = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";\n", session,\
       (uint32_t)timestamp, reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
- printf("   var finishreq2 = makeHttpObject();\n");
- printf("   finishreq2.open( \"GET\", finishurl2, true);\n");
- printf("   finishreq2.send(null);\n");
- printf("  }\n");
-
- printf(" }\n"); // if (return code == 200)
-
+ printf("  var finishreq2 = makeHttpObject();\n");
+ printf("  finishreq2.open( \"GET\", finishurl2, true);\n");
+ printf("  finishreq2.send(null);\n");
+ printf(" }\n");
  printf("}\n"); // end of inline statechange function()
 
- printf("} // end function update\n");
+ // third param determines sync/async fetch true=async
+ printf("request.open( \"GET\", updateurl, true);\n");
+ printf("request.send(null);\n");
+ printf("} // end function update()\n");
 
  printf("// end hiding contents from old browsers -->\n");
  printf("</SCRIPT>\n");

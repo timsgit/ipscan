@@ -43,6 +43,7 @@
 // 0.23 - add support for special test cases
 // 0.24 - improve special test case debug logging
 // 0.25 - add support for test completion reporting
+// 0.25 - fix special case handling for custom ports
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -617,6 +618,7 @@ int main(void)
 					if (j == numports)
 					{
 						portlist[numports].port_num = query[i].varval;
+						portlist[numports].special = 0;
 						rc = snprintf(&portlist[numports].port_desc[0], PORTDESCSIZE, "User-specified: %d",(int)query[i].varval);
 						if (rc < 0 || rc >= PORTDESCSIZE)
 						{

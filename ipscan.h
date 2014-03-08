@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.23"
+	#define IPSCAN_VER "1.24"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -110,6 +110,7 @@
 	// 1.21 add minimum per-port timings to ensure Linux 1s ratelimit is not hit
 	// 1.22 add completion indication to support quicker results deletion
 	// 1.23 enable automatic results deletion
+	// 1.24 further javascript improvements and fix for custom ports
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
