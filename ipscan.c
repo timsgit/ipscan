@@ -44,6 +44,7 @@
 // 0.24 - improve special test case debug logging
 // 0.25 - add support for test completion reporting
 // 0.25 - fix special case handling for custom ports
+// 0.26 - correct fetch tidy-up reporting
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -706,7 +707,7 @@ int main(void)
 		// Dump the variables resulting from the query-string parsing
 		#ifdef DEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numqueries = %d\n", numqueries);
-			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", \
 					session, (uint64_t)starttime, numports);
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: querysession = %"PRId64" querystarttime = %"PRId64" magic = %"PRId64"\n", querysession, querystarttime, magic );
@@ -1062,6 +1063,7 @@ int main(void)
 			// Finish the output
 			create_html_body_end();
 
+			#if (IPSCAN_LOGVERBOSITY == 1)
 			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated a SUCCESSFUL completion.\n");
@@ -1070,6 +1072,7 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated an UNSUCCESSFUL completion.\n");
 			}
+			#endif
 
 			rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
 			if (rc != 0)
