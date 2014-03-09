@@ -38,6 +38,7 @@
 // 0.18 - lint improvements
 // 0.19 - correct position of request.send()
 // 0.20 - handle failure case when HTTP return-code is not 200
+// 0.21 - lint check and improvements
 
 
 #include "ipscan.h"
@@ -323,12 +324,13 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("  finishreq2.open( \"GET\", finishurl2, true);\n");
  printf("  finishreq2.send(null);\n");
  printf(" }\n");
- printf("}\n"); // end of inline statechange function()
+ printf("};\n"); // end of inline statechange function()
 
  // third param determines sync/async fetch true=async
  printf("request.open( \"GET\", updateurl, true);\n");
  printf("request.send(null);\n");
- printf("} // end function update()\n");
+ // end of function update()
+ printf("}\n");
 
  printf("// end hiding contents from old browsers -->\n");
  printf("</SCRIPT>\n");
