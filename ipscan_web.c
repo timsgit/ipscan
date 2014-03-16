@@ -39,6 +39,7 @@
 // 0.19 - correct position of request.send()
 // 0.20 - handle failure case when HTTP return-code is not 200
 // 0.21 - lint check and improvements
+// 0.22 - move final fetch earlier
 
 
 #include "ipscan.h"
@@ -191,6 +192,12 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("   {\n");
  printf("    window.clearInterval(myInterval);\n");
  printf("    window.clearInterval(myBlink);\n");
+ // Send indication that fetch is complete and results can be deleted.
+ printf("    var finishurl = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";\n", session,\
+        (uint32_t)timestamp, reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
+ printf("    var finishreq = makeHttpObject();\n");
+ printf("    finishreq.open( \"GET\", finishurl, true);\n");
+ printf("    finishreq.send(null);\n");
  printf("   }\n");
 
  // go around the latest received state and update display as required
@@ -296,11 +303,6 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("   {\n");
  printf("    document.getElementById(\"scanstate\").innerHTML = \"COMPLETE.\";\n");
  printf("    document.getElementById(\"scanstate\").style.color=\"black\";\n");
- printf("    var finishurl = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";\n", session,\
-       (uint32_t)timestamp, reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
- printf("    var finishreq = makeHttpObject();\n");
- printf("    finishreq.open( \"GET\", finishurl, true);\n");
- printf("    finishreq.send(null);\n");
  printf("   }\n");
 
  printf("  }\n"); // end of main if (more than 3 elements in array)
