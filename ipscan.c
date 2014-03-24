@@ -707,7 +707,11 @@ int main(void)
 		// Dump the variables resulting from the query-string parsing
 		#ifdef DEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numqueries = %d\n", numqueries);
+			#if (TEXTMODE != 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
+			#else
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
+			#endif
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", \
 					session, (uint64_t)starttime, numports);
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: querysession = %"PRId64" querystarttime = %"PRId64" magic = %"PRId64"\n", querysession, querystarttime, magic );
