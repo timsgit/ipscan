@@ -210,7 +210,7 @@
 	//
 	// Do NOT change this value on internet facing hosts
 	//
-	#define IPSCAN_LOGVERBOSITY 1
+	#define IPSCAN_LOGVERBOSITY 0
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
