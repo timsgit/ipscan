@@ -35,6 +35,7 @@
 // 0.14 - improve debug logging
 // 0.15 - change comments related to port field
 // 0.16 - add delete support
+// 0.17 - include debug reporting of number of rows sent to client
 
 #include "ipscan.h"
 //
@@ -254,7 +255,9 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							num_fields = mysql_num_fields(result);
 							#ifdef DBDEBUG
 							IPSCAN_LOG( LOGPREFIX "dump_db: MySQL returned num_fields : %d\n", num_fields);
+							unsigned int nump = 0;
 							#endif
+
 							printf("[ ");
 
 							while ((row = mysql_fetch_row(result)))
@@ -268,6 +271,9 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									if ( rcres == 1 && rchost == 1 && rcport == 1 )
 									{
 										printf("%d, %d, \"%s\", ", port, res, hostind);
+										#ifdef DBDEBUG
+										nump += 1;
+										#endif
 									}
 									else
 									{
@@ -278,10 +284,16 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								{
 									printf("%s, ", row[num_fields-1]);
 									IPSCAN_LOG( LOGPREFIX "dump_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
+									#ifdef DBDEBUG
+									nump += 1;
+									#endif
 								}
 							}
 							printf(" -9999, -9999, \"::1\" ]\n");
 							mysql_free_result(result);
+							#ifdef DBDEBUG
+							IPSCAN_LOG( LOGPREFIX "dump_db: reported %d actual results to the client.\n", nump);
+							#endif
 						}
 						else
 						{

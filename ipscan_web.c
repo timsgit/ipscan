@@ -89,7 +89,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
  printf("<SCRIPT type = \"text/javascript\" language=\"javascript\">\n");
  printf("<!--  to hide script contents from old browsers\n");
- printf("var myInterval = 0, myBlink = 0, fetches = 0, request = \"\", initReq = \"\", updateURL = \"\", lastUpdate = 0;\n");
+ printf("var myInterval = 0, myBlink = 0, fetches = 0;\n");
  printf("var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\",", MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
  printf(" finishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\",", session, (uint32_t)timestamp, reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
  printf(" badfinishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";\n", session, (uint32_t)timestamp, reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
@@ -143,9 +143,9 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  // the embedded function waits for the asynchronous HTTP 200 code to be received and then evaluates the returned JSON array.
  printf("function update() ");
  printf("{ ");
- printf("var i, j, lateststate = [], psp, proto, special, port, result, host, finishreq, textupdate, colourupdate, finishreq2; ");
+ printf("var i, j, lateststate = [], psp, proto, request, special, port, result, host, finishreq, textupdate, colourupdate, finishreq2, lastUpdate = 0; ");
  printf("fetches += 1; ");
- printf("updateURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches; ", session, (uint32_t)timestamp,reconquery);
+ printf("var updateURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches; ", session, (uint32_t)timestamp,reconquery);
  printf("if (fetches > %d) ",(int)( 6 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )) );
  printf("{ ");
  printf(" clearInterval(myInterval);");
@@ -277,7 +277,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING.\";");
  printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
  printf(" myBlink = setInterval(function(){blink(); }, 1000);");
- printf(" initReq = makeHttpObject();");
+ printf(" var initReq = makeHttpObject();");
  printf(" initReq.open(\"GET\", startURL, true);");
  printf(" initReq.send(null);");
  printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );

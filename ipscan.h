@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.28"
+	#define IPSCAN_VER "1.29"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -115,6 +115,7 @@
 	// 1.26 javascript lint check
 	// 1.27 move final (javascript) fetch earlier
 	// 1.28 further javascript improvements
+	// 1.29 additional debug support to aid javascript optimisation
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -209,7 +210,7 @@
 	//
 	// Do NOT change this value on internet facing hosts
 	//
-	#define IPSCAN_LOGVERBOSITY 0
+	#define IPSCAN_LOGVERBOSITY 1
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
@@ -339,7 +340,7 @@
 	#define IPSCAN_MINTIME_PER_PORT 1
 
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
-	#define JSONFETCHEVERY 3
+	#define JSONFETCHEVERY 7
 
 	// ICMPv6 ECHO REQUEST packet size - suggest larger than 64 byte minimum is sensible, but as a minimum
 	// needs to support magic string insertion anyway
