@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.29"
+	#define IPSCAN_VER "1.30"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -116,6 +116,7 @@
 	// 1.27 move final (javascript) fetch earlier
 	// 1.28 further javascript improvements
 	// 1.29 additional debug support to aid javascript optimisation
+	// 1.30 additional javascript optimisation
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -340,7 +341,7 @@
 	#define IPSCAN_MINTIME_PER_PORT 1
 
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
-	#define JSONFETCHEVERY 7
+	#define JSONFETCHEVERY 4
 
 	// ICMPv6 ECHO REQUEST packet size - suggest larger than 64 byte minimum is sensible, but as a minimum
 	// needs to support magic string insertion anyway
@@ -411,9 +412,17 @@
 	// Mask to extract the response code
 	#define IPSCAN_INDIRECT_MASK 255
 
-	// Successful completion indicators (passed in fetch)
-	#define IPSCAN_SUCCESSFUL_COMPLETION 990
-	#define IPSCAN_UNSUCCESSFUL_COMPLETION 999
+	// Completion indicators (passed in fetch querystring)
+	#define IPSCAN_UNEXPECTED_CHANGE (1000)
+	enum COMPLETIONSTATE
+	{
+		IPSCAN_SUCCESSFUL_COMPLETION = 990,
+		IPSCAN_HTTPTIMEOUT_COMPLETION,
+		IPSCAN_OVERLAPPING_FETCH,
+		IPSCAN_EVAL_ERROR,
+		IPSCAN_OTHER_ERROR,
+		IPSCAN_UNSUCCESSFUL_COMPLETION
+	};
 
 	// Mapping for connection attempt results
 	// To add a new entry first insert a new internal state in the PORTSTATE enumeration and then add a

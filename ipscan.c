@@ -45,6 +45,7 @@
 // 0.25 - add support for test completion reporting
 // 0.25 - fix special case handling for custom ports
 // 0.26 - correct fetch tidy-up reporting
+// 0.27 - update to support further completion report types
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -401,8 +402,7 @@ int main(void)
 							query[numqueries].varval = varval;
 							query[numqueries].valid = 1;
 							#ifdef DEBUG
-							IPSCAN_LOG( LOGPREFIX "ipscan: Added a new query name: %s\n", query[numqueries].varname);
-							IPSCAN_LOG( LOGPREFIX "ipscan: with a value of       : %"PRId64"\n", query[numqueries].varval);
+							IPSCAN_LOG( LOGPREFIX "ipscan: Added a new query name: %s with a value of : %"PRId64"\n", query[numqueries].varname, query[numqueries].varval);
 							#endif
 							numqueries++;
 						}
@@ -505,7 +505,7 @@ int main(void)
 			}
 
 			#ifdef DEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address MSB %"PRIx64" and LSB %"PRIx64"\n", remotehost_msb, remotehost_lsb);
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %"PRIx64":%"PRIx64"\n", remotehost_msb, remotehost_lsb);
 			#endif
 
 		}
@@ -1056,7 +1056,7 @@ int main(void)
 		// session, starttime, fetch and includeexisting. Could also have one or more customports
 		// was numqueries >= 4, without includeexisting check - but javascript updateurl always minimally includes includeexisting
 
-		if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0 && (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum || IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum))
+		if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0 && ((IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum && IPSCAN_UNSUCCESSFUL_COMPLETION >= fetchnum) || fetchnum >= IPSCAN_UNEXPECTED_CHANGE))
 		{
 			// Put out a dummy page to keep the webserver happy
 			create_html_common_header();
@@ -1070,19 +1070,43 @@ int main(void)
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated a SUCCESSFUL completion.\n");
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated SUCCESSFUL completion.\n");
+			}
+			else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated HTTP TIMEOUT completion.\n");
+			}
+			else if (IPSCAN_OVERLAPPING_FETCH == fetchnum)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated OVERLAPPING fetch.\n");
 			}
 			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated an UNSUCCESSFUL completion.\n");
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated UNSUCCESSFUL completion.\n");
+			}
+			else if (IPSCAN_EVAL_ERROR == fetchnum)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated EVAL ERROR.\n");
+			}
+			else if (IPSCAN_OTHER_ERROR == fetchnum)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated OTHER ERROR.\n");
+			}
+			else if (IPSCAN_UNEXPECTED_CHANGE <= fetchnum)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated UNEXPECTED CHANGE: %d\n", fetchnum);
 			}
 			#endif
 
-			rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
-			if (rc != 0)
+			// If the scan is complete then delete the results from the database
+			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum || IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db return code was %d (expected 0)\n", rc);
-				exit(EXIT_FAILURE);
+				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
+				if (rc != 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db return code was %d (expected 0)\n", rc);
+					exit(EXIT_FAILURE);
+				}
 			}
 		}
 		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION != fetchnum && IPSCAN_UNSUCCESSFUL_COMPLETION != fetchnum)

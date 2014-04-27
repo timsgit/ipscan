@@ -255,6 +255,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							num_fields = mysql_num_fields(result);
 							#ifdef DBDEBUG
 							IPSCAN_LOG( LOGPREFIX "dump_db: MySQL returned num_fields : %d\n", num_fields);
+							#endif
+							#if (IPSCAN_LOGVERBOSITY == 1)
 							unsigned int nump = 0;
 							#endif
 
@@ -271,7 +273,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									if ( rcres == 1 && rchost == 1 && rcport == 1 )
 									{
 										printf("%d, %d, \"%s\", ", port, res, hostind);
-										#ifdef DBDEBUG
+										#if (IPSCAN_LOGVERBOSITY == 1)
 										nump += 1;
 										#endif
 									}
@@ -284,14 +286,14 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								{
 									printf("%s, ", row[num_fields-1]);
 									IPSCAN_LOG( LOGPREFIX "dump_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
-									#ifdef DBDEBUG
+									#if (IPSCAN_LOGVERBOSITY == 1)
 									nump += 1;
 									#endif
 								}
 							}
 							printf(" -9999, -9999, \"::1\" ]\n");
 							mysql_free_result(result);
-							#ifdef DBDEBUG
+							#if (IPSCAN_LOGVERBOSITY == 1)
 							IPSCAN_LOG( LOGPREFIX "dump_db: reported %d actual results to the client.\n", nump);
 							#endif
 						}
