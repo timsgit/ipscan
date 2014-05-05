@@ -1076,10 +1076,6 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated HTTP TIMEOUT completion.\n");
 			}
-			else if (IPSCAN_OVERLAPPING_FETCH == fetchnum)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated OVERLAPPING fetch.\n");
-			}
 			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated UNSUCCESSFUL completion.\n");

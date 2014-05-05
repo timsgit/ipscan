@@ -45,7 +45,7 @@
 	#endif
 
 	// ipscan Version
-	#define IPSCAN_VER "1.30"
+	#define IPSCAN_VER "1.31"
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -117,6 +117,7 @@
 	// 1.28 further javascript improvements
 	// 1.29 additional debug support to aid javascript optimisation
 	// 1.30 additional javascript optimisation
+	// 1.31 removed unused javascript functions
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -418,7 +419,6 @@
 	{
 		IPSCAN_SUCCESSFUL_COMPLETION = 990,
 		IPSCAN_HTTPTIMEOUT_COMPLETION,
-		IPSCAN_OVERLAPPING_FETCH,
 		IPSCAN_EVAL_ERROR,
 		IPSCAN_OTHER_ERROR,
 		IPSCAN_UNSUCCESSFUL_COMPLETION
