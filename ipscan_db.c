@@ -36,6 +36,7 @@
 // 0.15 - change comments related to port field
 // 0.16 - add delete support
 // 0.17 - include debug reporting of number of rows sent to client
+// 0.18 - further debug log improvements
 
 #include "ipscan.h"
 //
@@ -294,7 +295,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							printf(" -9999, -9999, \"::1\" ]\n");
 							mysql_free_result(result);
 							#if (IPSCAN_LOGVERBOSITY == 1)
-							IPSCAN_LOG( LOGPREFIX "dump_db: reported %d actual results to the client.\n", nump);
+							IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: reported %d actual results to the client.\n", nump);
 							#endif
 						}
 						else
@@ -392,7 +393,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						else
 						{
 							#if (IPSCAN_LOGVERBOSITY == 1)
-							IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
+							IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
 							#endif
 						}
 					}
@@ -584,7 +585,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	connection = mysql_init(NULL);
 	if (NULL == connection)
 	{
-		IPSCAN_LOG( LOGPREFIX "read_db_result: Failed to initialise MySQL\n");
+		IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Failed to initialise MySQL\n");
 		retres = PORTINTERROR;
 	}
 	else
@@ -599,7 +600,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
-				IPSCAN_LOG( LOGPREFIX "read_db_result: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+				IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
 				IPSCAN_LOG( LOGPREFIX "read_db_result: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 				retres = PORTINTERROR;
 			}
@@ -637,12 +638,12 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 									}
 									else
 									{
-										IPSCAN_LOG( LOGPREFIX "read_db_result: Unexpected row scan results - rcres = %d\n", rcres);
+										IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Unexpected row scan results - rcres = %d\n", rcres);
 									}
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "read_db_result: Unexpected row scan results - num_fields = %d\n", num_fields);
+									IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Unexpected row scan results - num_fields = %d\n", num_fields);
 								}
 							}
 							mysql_free_result(result);
@@ -652,24 +653,24 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 							// Didn't get any results, so check if we should have got some
 							if (mysql_field_count(connection) == 0)
 							{
-								IPSCAN_LOG( LOGPREFIX "read_db_result: surprisingly mysql_field_count() expected to return 0 fields\n");
+								IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: surprisingly mysql_field_count() expected to return 0 fields\n");
 							}
 							else
 							{
-								IPSCAN_LOG( LOGPREFIX "read_db_result: mysql_store_result() error : %s\n", mysql_error(connection));
+								IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: mysql_store_result() error : %s\n", mysql_error(connection));
 								retres = PORTINTERROR;
 							}
 						}
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "read_db_result: Failed to execute select query\n");
+						IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Failed to execute select query\n");
 						retres = PORTINTERROR;
 					}
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "read_db_result: Failed to create select query\n");
+					IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Failed to create select query\n");
 					retres = PORTINTERROR;
 				}
 			}
@@ -682,5 +683,11 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			retres = PORTINTERROR;
 		}
 	}
+
+if (PORTUNKNOWN == retres)
+{
+	IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: about to exit with PORTUNKNOWN return code\n");
+}
+
 return (retres);
 }

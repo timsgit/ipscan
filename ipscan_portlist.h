@@ -28,6 +28,7 @@
 // 0.05 - add SNMP (UDP port 161) support
 // 0.06 - add NTP special case
 // 0.07 - add TCP/32764 router backdoor port (may be IPv4 only)
+// 0.08 - add SNMPv2c and SNMPv3
 
 #include "ipscan.h"
 
@@ -79,7 +80,6 @@
 		{ 1030, 0, "BBN IAD" },\
 		{ 1080, 0, "Socks" },\
 		{ 1720, 0, "H323, Microsoft Netmeeting" },\
-		{ 1812, 0, "RADIUS" },\
 		{ 2869, 0, "SSDP Event Notification" },\
 		{ 3128, 0, "Active API, or Squid Proxy" },\
 		{ 3306, 0, "MySQL" },\
@@ -106,9 +106,12 @@
 			{   69, 0, "TFTP" },\
 			{  123, 0, "NTP" },\
 			{  123, 1, "NTP MONLIST" },\
-			{  161, 0, "SNMP" },\
+			{  161, 0, "SNMPv1" },\
+			{  161, 1, "SNMPv2c" },\
+			{  161, 2, "SNMPv3" },\
 			{ 1900, 0, "UPnP SSDP" },\
 		};
+
 #if (IPSCAN_INCLUDE_UDP == 1)
 	#define NUMUDPPORTS ( sizeof(udpportlist) / sizeof(struct portlist_struc) )
 #else

@@ -27,6 +27,8 @@
 // 0.07                 remove LSP Ping
 // 0.08                 move to memset()
 // 0.09			ensure minimum timings are met
+// 0.10			improve error handling
+// 0.11			snmpv3 support
 
 #include "ipscan.h"
 //
@@ -329,70 +331,167 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 			case 161:
 			{
-				// SNMP get
-				// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
-				char community[16] = "public";
-				char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
-				int miblen = 6;
-				len = 0;
-				// SNMP packet start
-				txmessage[len++] = 0x30;
-				txmessage[len++] = (29 + strlen(community) + miblen);
-				// SNMP version 1
-				txmessage[len++] = 0x02; //int
-				txmessage[len++] = 0x01; //length of 1
-				txmessage[len++] = 0x00; // SNMP v1
-				// Community name
-				txmessage[len++] = 0x04; //string
-				txmessage[len++] = strlen(community);
-				rc = sprintf(&txmessage[len], "%s", community);
-				if (rc < 0)
+
+				if (0 == special || 1 == special)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for snmp, returned %d\n", rc);
-					retval = PORTINTERROR;
+					// SNMPv1 or SNMPv2c get
+					// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
+					char community[16] = "public";
+					char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
+					int miblen = 6;
+					len = 0;
+					// SNMP packet start
+					txmessage[len++] = 0x30;
+					txmessage[len++] = (29 + strlen(community) + miblen);
+					// SNMP version 1
+					txmessage[len++] = 0x02; //int
+					txmessage[len++] = 0x01; //length of 1
+					txmessage[len++] = (special & 0xff); // 0 = SNMPv1, 1 = SNMPv2c
+					// Community name
+					txmessage[len++] = 0x04; //string
+					txmessage[len++] = strlen(community);
+					rc = sprintf(&txmessage[len], "%s", community);
+					if (rc < 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for snmp, returned %d\n", rc);
+						retval = PORTINTERROR;
+					}
+					else
+					{
+						len += rc;
+					}
+					// MIB
+					txmessage[len++] = 0xA0; // SNMP GET request
+					txmessage[len++] = (22 + miblen); //0x1c
+
+					txmessage[len++] = 0x02; // Request ID
+					txmessage[len++] = 0x04; // 4 octets length
+					txmessage[len++] = 0x21; // "Random" value
+					txmessage[len++] = 0x06;
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x08;
+
+					// Error status (0=noError)
+					txmessage[len++] = 0x02; //int
+					txmessage[len++] = 0x01; //length of 1
+					txmessage[len++] = 0x00; // SNMP error status
+					// Error index (0)
+					txmessage[len++] = 0x02; //int
+					txmessage[len++] = 0x01; //length of 1
+					txmessage[len++] = 0x00; // SNMP error index
+					// Variable bindings
+					txmessage[len++] = 0x30; //var-bind sequence
+					txmessage[len++] = (8 + miblen);
+
+					txmessage[len++] = 0x30; //var-bind
+					txmessage[len++] = (miblen +6 );
+
+					txmessage[len++] = 0x06; // Object
+					txmessage[len++] = (miblen + 2); // MIB length
+
+					txmessage[len++] = 0x2b;
+					txmessage[len++] = 0x06;
+					// Insert the OID
+					for (i = 0; i <miblen; i++)
+					{
+						txmessage[len++] = mib[i];
+					}
+					txmessage[len++] = 0x05; // Null object
+					txmessage[len++] = 0x00; // length of 0
 				}
-				else
+				else if (2 == special)
 				{
-					len += rc;
+					// SNMPv3 engine discovery
+					txmessage[len++] = 0x30;
+					txmessage[len++] = 0x38; //(29 + strlen(community) + miblen);
+
+					// SNMP version 3
+					txmessage[len++] = 0x02; // int
+					txmessage[len++] = 0x01; // length of 1
+					txmessage[len++] = 0x03; // SNMP v3
+
+					// msgGlobalData
+					txmessage[len++] = 0x30;
+					txmessage[len++] = 0x0e;
+
+					txmessage[len++] = 0x02;
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x02; // msgID
+
+					txmessage[len++] = 0x02; //
+					txmessage[len++] = 0x03; //
+					txmessage[len++] = 0x00; // Max message size (less than 64K)
+					txmessage[len++] = 0xff; //
+					txmessage[len++] = 0xe3; //
+
+					txmessage[len++] = 0x04;
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x04; // flags (reportable, not encrypted, not authenticated)
+
+					txmessage[len++] = 0x02;
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x03; // msgSecurityModel is USM (3)
+
+					// end of GlobalData
+
+					txmessage[len++] = 0x04;
+					txmessage[len++] = 0x10; //
+
+					txmessage[len++] = 0x30; //
+					txmessage[len++] = 0x0e; // length to end of this varbind
+
+					txmessage[len++] = 0x04; //
+					txmessage[len++] = 0x00; // EngineID
+
+					txmessage[len++] = 0x02;
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x00; // EngineBoots
+
+					txmessage[len++] = 0x02;
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x00; // EngineTime
+
+					txmessage[len++] = 0x04; // UserName
+					txmessage[len++] = 0x00;
+
+					txmessage[len++] = 0x04; // Authentication Parameters
+					txmessage[len++] = 0x00;
+
+					txmessage[len++] = 0x04; // Privacy Parameters
+					txmessage[len++] = 0x00;
+
+					// msgData
+					txmessage[len++] = 0x30; //
+					txmessage[len++] = 0x11; //
+
+					txmessage[len++] = 0x04; //  Context Engine ID (missing)
+					txmessage[len++] = 0x00; //
+
+					txmessage[len++] = 0x04; //  Context Name (missing)
+					txmessage[len++] = 0x00; //
+
+					txmessage[len++] = 0xa0; //  Get Request
+					txmessage[len++] = 0x0b; //
+
+					txmessage[len++] = 0x02; // Request ID (is 0x14)
+					txmessage[len++] = 0x01; //
+					txmessage[len++] = 0x14; //
+
+					// Error status (0=noError)
+					txmessage[len++] = 0x02; //int
+					txmessage[len++] = 0x01; //length of 1
+					txmessage[len++] = 0x00; // SNMP error status
+					// Error index (0)
+					txmessage[len++] = 0x02; //int
+					txmessage[len++] = 0x01; //length of 1
+					txmessage[len++] = 0x00; // SNMP error index
+					// Variable bindings (none)
+					txmessage[len++] = 0x30; //var-bind sequence
+					txmessage[len++] = 0x00;
+
+					// End of msgData
 				}
-				// MIB
-				txmessage[len++] = 0xA0; // SNMP GET request
-				txmessage[len++] = (22 + miblen); //0x1c
 
-				txmessage[len++] = 0x02; // Request ID
-				txmessage[len++] = 0x04; // 4 octets length
-				txmessage[len++] = 0x21; // "Random" value
-				txmessage[len++] = 0x06;
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x08;
-
-				// Error status (0=noError)
-				txmessage[len++] = 0x02; //int
-				txmessage[len++] = 0x01; //length of 1
-				txmessage[len++] = 0x00; // SNMP error status
-				// Error index (0)
-				txmessage[len++] = 0x02; //int
-				txmessage[len++] = 0x01; //length of 1
-				txmessage[len++] = 0x00; // SNMP error index
-				// Variable bindings
-				txmessage[len++] = 0x30; //var-bind sequence
-				txmessage[len++] = (8 + miblen);
-
-				txmessage[len++] = 0x30; //var-bind
-				txmessage[len++] = (miblen +6 );
-
-				txmessage[len++] = 0x06; // Object
-				txmessage[len++] = (miblen + 2); // MIB length
-
-				txmessage[len++] = 0x2b;
-				txmessage[len++] = 0x06;
-				// Insert the OID
-				for (i = 0; i <miblen; i++)
-				{
-					txmessage[len++] = mib[i];
-				}
-				txmessage[len++] = 0x05; // Null object
-				txmessage[len++] = 0x00; // length of 0
 				break;
 			}
 
@@ -570,7 +669,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 			}
 
-			#ifdef UDPDEBUG
+			#ifdef RESULTSDEBUG
 			if (0 != special)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: found port %d:%d returned read = %d, errsv = %d(%s)\n",port, special, rc, errsv, strerror(errsv));
@@ -700,7 +799,7 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			rc = write_db(host_msb, host_lsb, timestamp, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): write_db returned %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db returned %d\n", rc);
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()

@@ -46,6 +46,8 @@
 // 0.25 - fix special case handling for custom ports
 // 0.26 - correct fetch tidy-up reporting
 // 0.27 - update to support further completion report types
+// 0.28 - improved error logging
+// 0.29 - use random(ish) sessions rather than getpid
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -150,6 +152,31 @@ struct rslt_struc resultsstruct[] =
 	{ PORTEOL,			-101,	-101,			"EOL",				"black",	"End of list marker."}
 };
 
+
+uint64_t get_session(void)
+{
+	uint64_t sessionnum = 0;
+	FILE *fp;
+	fp = fopen("/dev/urandom", "r");
+
+	if (NULL == fp)
+	{
+		sessionnum = (uint64_t)getpid();
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot open /dev/urandom, %d (%s), defaulting session to getpid() = %"PRIu64"\n", errno, strerror(errno), sessionnum);
+	}
+	else
+	{
+		size_t numitems = fread( &sessionnum, sizeof(sessionnum), 1, fp);
+		fclose(fp);
+
+		if (1 != numitems)
+		{
+			sessionnum = (uint64_t)getpid();
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot read /dev/urandom, defaulting session to getpid() = %"PRIu64"\n", sessionnum);
+		}
+	}
+	return (sessionnum);
+}
 
 int main(void)
 {
@@ -272,10 +299,11 @@ int main(void)
 	int64_t querysession = 0;
 
 	// Log the current time and "session" with which to initiate scan and fetch results
+	// These should ensure that each test is globally unique when client IP address is also used.
 	starttime = time(0);
-	uint64_t session = (uint64_t) getpid();
+	uint64_t session = get_session();
 
-		// QUERY_STRING / REQUEST_METHOD
+	// QUERY_STRING / REQUEST_METHOD
 	// URL  of the form: ipv6.cgi?name1=value1&name2=value2
 	// REQUEST_METHOD = GET
 	// QUERY_STRING = name1=value1&name2=value2 
@@ -307,7 +335,7 @@ int main(void)
 	}
 	else
 	{
-		#ifdef DEBUG
+		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: Request method is : %s\n", requestmethod);
 		#endif
 
@@ -340,14 +368,14 @@ int main(void)
 			}
 			else if( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
 			{
-				#ifdef DEBUG
+				#ifdef QUERYDEBUG
 				// No query string will get reported here ....
 				IPSCAN_LOG( LOGPREFIX "ipscan: Invalid query-string sscanf.\n");
 				#endif
 			}
 			else
 			{
-				#ifdef DEBUG
+				#ifdef QUERYDEBUG
 				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: Query-string : %s\n", querystring);
 				#endif
 
@@ -401,14 +429,14 @@ int main(void)
 							// Mark the entry as valid, increment the number of queries found
 							query[numqueries].varval = varval;
 							query[numqueries].valid = 1;
-							#ifdef DEBUG
+							#ifdef QUERYDEBUG
 							IPSCAN_LOG( LOGPREFIX "ipscan: Added a new query name: %s with a value of : %"PRId64"\n", query[numqueries].varname, query[numqueries].varval);
 							#endif
 							numqueries++;
 						}
 						else
 						{
-							#ifdef DEBUG
+							#ifdef QUERYDEBUG
 							IPSCAN_LOG( LOGPREFIX "ipscan: Bad value assignment for %s, setting invalid.\n", query[numqueries].varname);
 							#endif
 							query[numqueries].valid = 0;
@@ -422,7 +450,7 @@ int main(void)
 					}
 					finished = (querystring[byte] < 32 || byte >= MAXQUERYSTRLEN) ? 1 : 0;
 				}
-				#ifdef DEBUG
+				#ifdef QUERYDEBUG
 				IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %d\n", numqueries);
 				#endif
 			}
@@ -462,7 +490,7 @@ int main(void)
 	}
 	else if (strlen(remoteaddrvar) > INET6_ADDRSTRLEN)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: Host address length exceeds allocated buffer size (%d > %d)\n", (int)strlen(remoteaddrvar), INET6_ADDRSTRLEN);
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: Host address length exceeds allocated buffer size (%d > %d)\n", (int)strlen(remoteaddrvar), INET6_ADDRSTRLEN);
 		exit(EXIT_FAILURE);
 	}
 	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
@@ -475,7 +503,7 @@ int main(void)
 		rc = inet_pton(AF_INET6, remoteaddrstring, remotehost);
 		if (rc <= 0)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: Unparseable IPv6 host address : %s\n", remoteaddrstring);
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: Unparseable IPv6 host address : %s\n", remoteaddrstring);
 			exit(EXIT_FAILURE);
 		}
 		else
@@ -559,13 +587,13 @@ int main(void)
 			reconquerysize -= rc;
 			if (reconquerysize <= 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 				exit(EXIT_FAILURE);
 			}
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
 			exit(EXIT_FAILURE);
 		}
 
@@ -581,7 +609,7 @@ int main(void)
 			numports = 0;
 		}
 
-		#ifdef DEBUG
+		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: numports is initially found to be %d\n", numports);
 		#endif
 
@@ -634,13 +662,13 @@ int main(void)
 							reconquerysize -= rc;
 							if (reconquerysize <= 0)
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
+								IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 								exit(EXIT_FAILURE);
 							}
 						}
 						else
 						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: customport%d reconstitution failed, due to unexpected size.\n", customport);
+							IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: customport%d reconstitution failed, due to unexpected size.\n", customport);
 							exit(EXIT_FAILURE);
 						}
 					}
@@ -705,7 +733,7 @@ int main(void)
 		}
 
 		// Dump the variables resulting from the query-string parsing
-		#ifdef DEBUG
+		#ifdef QUERYDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numqueries = %d\n", numqueries);
 			#if (TEXTMODE != 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
@@ -740,11 +768,12 @@ int main(void)
 		{
 
 			// Take current time/PID for database logging purposes
-			starttime = time(0);
+			// TJC 8-Jun-2014 starttime = time(0);
+			// TJC 8-Jun-2014 session = get_session();
+
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scanstart = starttime;
 			#endif
-			session = (uint64_t) getpid();
 
 			// Create the header
 			create_html_common_header();
@@ -773,12 +802,28 @@ int main(void)
 			rc = write_db(remotehost_msb, remotehost_lsb, starttime, session, (0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING : write_db for ping result returned : %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : write_db for ping result returned : %d\n", rc);
 			}
 			#endif
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
+			#endif
+
+			#if (IPSCAN_INCLUDE_PING == 1)
+			printf("<P>ICMPv6 ECHO-Request:</P>\n");
+			printf("<TABLE border=\"1\">\n");
+			printf("<TR style=\"text-align:left\">\n");
+			if (pingresult >= IPSCAN_INDIRECT_RESPONSE)
+			{
+				printf("<TD TITLE=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">INDIRECT-%s (from %s)</TD>\n",resultsstruct[result].colour,resultsstruct[result].label, indirecthost);
+			}
+			else
+			{
+				printf("<TD TITLE=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">%s</TD>\n",resultsstruct[result].colour,resultsstruct[result].label);
+			}
+			printf("</TR>\n");
+			printf("</TABLE>\n");
 			#endif
 
 			// Scan the UDP ports in parallel
@@ -814,22 +859,6 @@ int main(void)
 					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
-
-			#if (IPSCAN_INCLUDE_PING == 1)
-			printf("<P>ICMPv6 ECHO-Request:</P>\n");
-			printf("<TABLE border=\"1\">\n");
-			printf("<TR style=\"text-align:left\">\n");
-			if (pingresult >= IPSCAN_INDIRECT_RESPONSE)
-			{
-				printf("<TD TITLE=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">INDIRECT-%s (from %s)</TD>\n",resultsstruct[result].colour,resultsstruct[result].label, indirecthost);
-			}
-			else
-			{
-				printf("<TD TITLE=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\">%s</TD>\n",resultsstruct[result].colour,resultsstruct[result].label);
-			}
-			printf("</TR>\n");
-			printf("</TABLE>\n");
-			#endif
 
 			#if (IPSCAN_INCLUDE_UDP == 1)
 			printf("<P>Individual UDP port scan results:</P>\n");
@@ -942,7 +971,7 @@ int main(void)
 				last = (portindex == (numports-1)) ? 1 : 0 ;
 				result = read_db_result(remotehost_msb, remotehost_lsb, starttime, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
 
-				#ifdef DEBUG
+				#ifdef RESULTSDEBUG
 				if (0 != special)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
@@ -1023,7 +1052,7 @@ int main(void)
 
 				if (rc < 0 || rc >= logbuffersize)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
 					exit(EXIT_FAILURE);
 				}
 
@@ -1046,17 +1075,17 @@ int main(void)
 			rc = delete_from_db(remotehost_msb, remotehost_lsb, starttime, session);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db return code was %d (expected 0)\n", rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
 				exit(EXIT_FAILURE);
 			}
 		}
 		#else
 
 		// *IF* we have everything we need to query the database ...
-		// session, starttime, fetch and includeexisting. Could also have one or more customports
-		// was numqueries >= 4, without includeexisting check - but javascript updateurl always minimally includes includeexisting
+		// querysession, querystarttime, fetch and includeexisting. Could also have one or more customports
+		// javascript updateurl always minimally includes includeexisting
 
-		if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0 && ((IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum && IPSCAN_UNSUCCESSFUL_COMPLETION >= fetchnum) || fetchnum >= IPSCAN_UNEXPECTED_CHANGE))
+		if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum)
 		{
 			// Put out a dummy page to keep the webserver happy
 			create_html_common_header();
@@ -1100,12 +1129,12 @@ int main(void)
 				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db return code was %d (expected 0)\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
 					exit(EXIT_FAILURE);
 				}
 			}
 		}
-		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION != fetchnum && IPSCAN_UNSUCCESSFUL_COMPLETION != fetchnum)
+		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
 		{
 			// Simplified header in which to wrap array of results
 			create_json_header();
@@ -1113,7 +1142,7 @@ int main(void)
 			rc = dump_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: dump_db return code was %d (expected 0)\n", rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: dump_db return code was %d (expected 0)\n", rc);
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -1146,7 +1175,7 @@ int main(void)
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: write_db for ping result returned non-zero: %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for ping result returned non-zero: %d\n", rc);
 				create_html_body_end();
 				exit(EXIT_FAILURE);
 			}
@@ -1321,7 +1350,7 @@ int main(void)
 
 				if (rc < 0 || rc >= logbuffersize)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
 					exit(EXIT_FAILURE);
 				}
 
@@ -1341,8 +1370,8 @@ int main(void)
 			}
 		}
 
-		// *IF* we have everything we need to create the standard results page
-		// We should have been passed (1+NUMUSERDEFPORTS) queries
+		// *IF* we have everything we need to create the standard HTML page
+		// we should have been passed (1+NUMUSERDEFPORTS) queries
 		// i.e. includeexisting (either +1 or -1) and customports 0 thru n params
 
 		else if (numqueries >= (NUMUSERDEFPORTS + 1) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 && fetch == 0)
@@ -1350,8 +1379,10 @@ int main(void)
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Creating the standard web results page start point\n");
 			#endif
-			starttime = time(0);
-			session = (uint64_t) getpid();
+
+			// TJC 8-Jun-2014 starttime = time(0);
+			// TJC 8-Jun-2014 session = get_session();
+
 			// Create the header
 			create_html_header(session, starttime, numports, numudpports, reconquery);
 			// Create the main html body

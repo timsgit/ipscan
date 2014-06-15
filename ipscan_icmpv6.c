@@ -22,6 +22,7 @@
 // 0.2				add prefixes to debug log output
 // 0.3				move to memset()
 // 0.4				ensure minimum timings are met
+// 0.5				ensure txid doesn't exceed 16-bits (move to random session ID)
 
 #include "ipscan.h"
 //
@@ -109,7 +110,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 	struct pollfd pollfiledesc[1];
 
-	unsigned int txid = (unsigned int)session;
+	unsigned int txid = (unsigned int)(session & 0xFFFF); // Maximum 16 bits
 	unsigned int rxid;
 	unsigned int txseqno = ICMPV6_MAGIC_SEQ; // MAGIC number - assume no reason to start at 1?
 	unsigned int rxseqno;

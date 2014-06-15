@@ -61,9 +61,11 @@ URIPATH=/cgi-bin6
 
 # Text-version target executable name
 TXTTARGET=ipscan-txt.cgi
+FASTTXTTARGET=ipscan-fast-txt.cgi
 
 # Javascript-version target executable name
 JSTARGET=ipscan-js.cgi
+FASTJSTARGET=ipscan-fast-js.cgi
 
 ##############################################################################
 # 
@@ -81,11 +83,14 @@ INCLUDES+=$(shell mysql_config --include)
 MYEUID=$(shell id -u)
 
 # Concatenate the necessary parameters for the two targets
-CMNPARAMS= -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\" 
+CMNPARAMS= -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\"
+CMNPARAMS+= -DEXEFASTTXTNAME=\"$(FASTTXTTARGET)\" -DEXEFASTJSNAME=\"$(FASTJSTARGET)\" 
 CMNPARAMS+= -DURIPATH=\"$(URIPATH)\" -DSETUID_AVAILABLE=$(SETUID_AVAILABLE)
 CMNPARAMS+= -DUDP_AVAILABLE=$(UDP_AVAILABLE) 
-TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 $(CMNPARAMS)
-JSPARAMS =$(CFLAGS) -DTEXTMODE=0 $(CMNPARAMS)
+TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 -DFAST=0 $(CMNPARAMS)
+JSPARAMS =$(CFLAGS) -DTEXTMODE=0 -DFAST=0 $(CMNPARAMS)
+FASTTXTPARAMS=$(CFLAGS) -DTEXTMODE=1 -DFAST=1 $(CMNPARAMS)
+FASTJSPARAMS =$(CFLAGS) -DTEXTMODE=0 -DFAST=1 $(CMNPARAMS)
 
 # Common header files which are always a dependancy
 HEADERFILES=ipscan.h ipscan_portlist.h
@@ -95,10 +100,12 @@ DEPENDFILE=Makefile
 # Generate the list of text-version and javascript-version objects from the source files
 TXTOBJS=$(patsubst %.c,%-txt.o,$(wildcard *.c))
 JSOBJS=$(patsubst %.c,%-js.o,$(wildcard *.c))
+FASTTXTOBJS=$(patsubst %.c,%-fast-txt.o,$(wildcard *.c))
+FASTJSOBJS=$(patsubst %.c,%-fast-js.o,$(wildcard *.c))
 
 # default target builds everything
 .PHONY: all
-all : $(TXTTARGET) $(JSTARGET)
+all : $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 
 # Rules to build an individual text-version object and the overall text-version target
 %-txt.o: %.c $(HEADERFILES) $(DEPENDFILE)
@@ -106,16 +113,28 @@ all : $(TXTTARGET) $(JSTARGET)
 $(TXTTARGET) : $(TXTOBJS) $(HEADERFILES) $(DEPENDFILE)
 	$(CC) $(TXTPARAMS) -o $(TXTTARGET) $(INCLUDES) $(LIBPATHS) $(TXTOBJS) $(LIBS)
 
+# Rules to build an individual text-version object and the overall text-version target
+%-fast-txt.o: %.c $(HEADERFILES) $(DEPENDFILE)
+	$(CC) $(FASTTXTPARAMS) -c $(INCLUDES) $(LIBPATHS) -o $@ $<
+$(FASTTXTTARGET) : $(FASTTXTOBJS) $(HEADERFILES) $(DEPENDFILE)
+	$(CC) $(FASTTXTPARAMS) -o $(FASTTXTTARGET) $(INCLUDES) $(LIBPATHS) $(FASTTXTOBJS) $(LIBS)
+
 # Rules to build an individual jscript-version object and the overall jscript-version target
 %-js.o: %.c $(HEADERFILES) $(DEPENDFILE)
 	$(CC) $(JSPARAMS) -c $(INCLUDES) $(LIBPATHS) -o $@ $<
 $(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
 	$(CC) $(JSPARAMS) -o $(JSTARGET) $(INCLUDES) $(LIBPATHS) $(JSOBJS) $(LIBS)
 
+# Rules to build an individual jscript-version object and the overall jscript-version target
+%-fast-js.o: %.c $(HEADERFILES) $(DEPENDFILE)
+	$(CC) $(FASTJSPARAMS) -c $(INCLUDES) $(LIBPATHS) -o $@ $<
+$(FASTJSTARGET) : $(FASTJSOBJS) $(HEADERFILES) $(DEPENDFILE)
+	$(CC) $(FASTJSPARAMS) -o $(FASTJSTARGET) $(INCLUDES) $(LIBPATHS) $(FASTJSOBJS) $(LIBS)
+
 # Rules to copy the built objects to the target installation directory
 # optionally set setuid bit on targets if required
 .PHONY: install
-install : $(TXTTARGET) $(JSTARGET)
+install : $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 ifeq ($(UDP_AVAILABLE),1)
 	@echo 
 	@echo Running with UDP_AVAILABLE in the Makefile set to 1
@@ -131,9 +150,9 @@ else
 endif
 # Strip un-needed symbols from the binaries and copy them to their
 # target location
-	strip --strip-unneeded $(TXTTARGET) $(JSTARGET)
-	cp $(TXTTARGET) $(TARGETDIR)
-	cp $(JSTARGET) $(TARGETDIR)
+	strip --strip-unneeded $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
+	cp $(TXTTARGET) $(FASTTXTTARGET) $(TARGETDIR)
+	cp $(JSTARGET) $(FASTJSTARGET) $(TARGETDIR)
 ifeq ($(SETUID_AVAILABLE),1)
 	@echo 
 	@echo Running with SETUID_AVAILABLE in the Makefile set to 1
@@ -143,6 +162,8 @@ ifeq ($(SETUID_AVAILABLE),1)
 ifeq ($(MYEUID),0)
 	chmod 4555 $(TARGETDIR)/$(TXTTARGET)
 	chmod 4555 $(TARGETDIR)/$(JSTARGET)
+	chmod 4555 $(TARGETDIR)/$(FASTTXTTARGET)
+	chmod 4555 $(TARGETDIR)/$(FASTJSTARGET)
 else
 	@echo 
 	@echo ERROR: install must be run as root in order to setuid.
@@ -160,5 +181,5 @@ endif
 # Rule to clean the source directory	
 .PHONY: clean
 clean :
-	rm -f $(TXTTARGET) $(JSTARGET) 
-	rm -f $(TXTOBJS) $(JSOBJS)
+	rm -f $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
+	rm -f $(TXTOBJS) $(JSOBJS) $(FASTTXTOBJS) $(FASTJSOBJS)

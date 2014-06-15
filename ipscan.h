@@ -33,6 +33,11 @@
 		#define TEXTMODE 0
 	#endif
 
+	// Parallel scan-mode for executable
+	// Note this is controlled by the makefile, but a default is defined here for safety
+	#ifndef FAST
+		#define FAST 0
+	#endif
 
 	// Determine which logging target to use stderr (0) or syslog(1)
 	#define LOGMODE 1
@@ -44,8 +49,22 @@
 		#define IPSCAN_LOG(...) syslog(LOG_NOTICE, __VA_ARGS__ )
 	#endif
 
-	// ipscan Version
-	#define IPSCAN_VER "1.31"
+	// ipscan Version Number
+	#define IPSCAN_VERNUM "1.36"
+
+	// Determine reported version string 
+	// and include a hint if parallel scanning (FAST) is enabled
+	//
+	#if (FAST == 1)
+		#define IPSCAN_VERFAST "-FAST"
+		#define IPSCAN_VER IPSCAN_VERNUM IPSCAN_VERFAST 
+	#else
+		#define IPSCAN_VER IPSCAN_VERNUM
+	#endif
+	//
+
+	//
+	// VERSION HISTORY
 	//
 	// 0.5  first combined text/javascript version
 	// 0.61 separate closed/timeout [CLOSED] from closed/rejected [FILTER]
@@ -118,6 +137,11 @@
 	// 1.29 additional debug support to aid javascript optimisation
 	// 1.30 additional javascript optimisation
 	// 1.31 removed unused javascript functions
+	// 1.32 auto-generate normal and fast versions
+	// 1.33 improved error reporting
+	// 1.34 added SNMPv2c and SNMPv3 support
+	// 1.35 move to random(ish) sessions rather than pid()
+	// 1.36 tidy up for push to github
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -188,6 +212,12 @@
 	//
 	// UDP Parallel processing related debug:
 	// #define UDPPARLLDEBUG 1
+	//
+	// Query string debug:
+	// #define QUERYDEBUG 1
+	//
+	// Results debug:
+	// #define RESULTSDEBUG 1
 
 	// Decide whether to include ping support (requires setuid which some servers don't allow)
 	// Do not modify this statement - adjust SETUID_AVAILABLE in the Makefile instead
@@ -205,9 +235,9 @@
 	#define IPSCAN_INCLUDE_UDP UDP_AVAILABLE
 	#endif
 
-    // Logging verbosity:
+    	// Logging verbosity:
 	//
-    // (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
+    	// (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
 	// (0) Quiet  - program/unexpected response errors only
 	//
 	// Do NOT change this value on internet facing hosts
@@ -287,12 +317,27 @@
 	#ifndef EXEJSNAME
 		#define EXEJSNAME "ipscan-js.cgi"
 	#endif
+	#ifndef EXEFASTTXTNAME
+		#define EXETXTNAME "ipscan-fast-txt.cgi"
+	#endif
+	#ifndef EXEFASTJSNAME
+		#define EXEJSNAME "ipscan-fast-js.cgi"
+	#endif
 
-	// Determine the executables' and database results' file names
+
+	// Determine the executable file name
 	#if (TEXTMODE == 1)
-		#define EXENAME EXETXTNAME
+		#if (FAST == 1)
+			#define EXENAME EXEFASTTXTNAME
+		#else
+			#define EXENAME EXETXTNAME
+		#endif
 	#else
-		#define EXENAME EXEJSNAME
+		#if (FAST == 1)
+			#define EXENAME EXEFASTJSNAME
+		#else
+			#define EXENAME EXEJSNAME
+		#endif
 	#endif
 
 	// Served HTTP URI directory path - needs a leading /, but not a trailing one ...
@@ -314,17 +359,26 @@
 
 	// Determine the maximum number of children and therefore the maximum number of
 	// port scans that can be running in parallel
-	#define MAXCHILDREN 1
-	//
 	// Determine the maximum number of port scans that can be allocated to each child
-	#define MAXPORTSPERCHILD 9
+	#if (FAST == 1)
+		#define MAXCHILDREN 7
+		#define MAXPORTSPERCHILD 9
+	#else
+		#define MAXCHILDREN 1
+		#define MAXPORTSPERCHILD 9
+	#endif
 
 	// Determine the maximum number of children and therefore the maximum number of
 	// UDP port scans that can be running in parallel
-	#define MAXUDPCHILDREN 1
-	//
 	// Determine the maximum number of UDP port scans that can be allocated to each child
-	#define MAXUDPPORTSPERCHILD 9
+	#if (FAST == 1)
+		#define MAXUDPCHILDREN 3
+		#define MAXUDPPORTSPERCHILD 3
+	#else
+		#define MAXUDPCHILDREN 1
+		#define MAXUDPPORTSPERCHILD 9
+	#endif
+
 
 	//
 	// Database related
@@ -414,14 +468,19 @@
 	#define IPSCAN_INDIRECT_MASK 255
 
 	// Completion indicators (passed in fetch querystring)
+	//
 	#define IPSCAN_UNEXPECTED_CHANGE (1000)
+	//
+	// IPSCAN_SUCCESSFUL_COMPLETION is used as a marker such that any query string fetch which
+	// exceeds this value will be assumed to be indicating feedback from the javascript client
+	//
 	enum COMPLETIONSTATE
 	{
 		IPSCAN_SUCCESSFUL_COMPLETION = 990,
 		IPSCAN_HTTPTIMEOUT_COMPLETION,
 		IPSCAN_EVAL_ERROR,
 		IPSCAN_OTHER_ERROR,
-		IPSCAN_UNSUCCESSFUL_COMPLETION
+		IPSCAN_UNSUCCESSFUL_COMPLETION,
 	};
 
 	// Mapping for connection attempt results

@@ -23,6 +23,7 @@
 // 0.03				move to memset()
 // 0.04				add support for special cases
 // 0.05				ensure minimum timings are met
+// 0.06				improve error reporting
 
 #include "ipscan.h"
 //
@@ -185,7 +186,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 					}
 				}
 
-				#ifdef DEBUG
+				#ifdef RESULTSDEBUG
 				if (0 != special)
 				{
 					IPSCAN_LOG( LOGPREFIX "check_tcp_port: found port %d:%d returned conn = %d, errsv = %d(%s)\n", port, special, conn, errsv, strerror(errsv));
@@ -266,7 +267,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			rc = write_db(host_msb, host_lsb, timestamp, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): check_tcp_port_parll() write_db returned %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: check_tcp_port_parll() write_db returned %d\n", rc);
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()
