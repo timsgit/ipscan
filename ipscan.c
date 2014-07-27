@@ -747,9 +747,6 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: reconstituted query string = %s\n", reconquery );
 		#endif
 
-		// TJC 8-Jun-2014
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: querysession = %"PRId64" querystarttime = %"PRId64"\n", querysession, querystarttime);
-
 		//
 		//
 		//

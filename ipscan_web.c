@@ -91,7 +91,6 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
  printf("<SCRIPT type = \"text/javascript\" language=\"javascript\">\n");
  printf("<!--  to hide script contents from old browsers\n");
- // printf("var myInterval = 0, myBlink = 0, myHTTPTimeout, myFetchInProgress = 0, fetches = 0, lastUpdate = 0;\n");
  printf("var myInterval = 0, myBlink = 0, myHTTPTimeout, myXmlHttpReqObj, fetches = 0, lastUpdate = 0;\n");
 
  // create a prefilled array containing the potential states returned for each port
