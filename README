@@ -19,15 +19,23 @@ along with ipscan. If not, see <http://www.gnu.org/licenses/>.
 
 ---
 
-ipscan requires access to a MySQL database and the associated client development libraries (libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. ipscan is known to build on: Opensuse versions 11.1/11.4/12.1/13.1, Centos 6.2, Fedora 16, Ubuntu 12.04, Mint 12, FreeBSD 9 and Arch Linux ARM (Raspberry Pi) and run alongside Apache version 2.2 and 2.4. Please let me know of any other build successes/failures on unlisted platforms.
+ipscan requires access to a MySQL database and the associated client development libraries 
+(libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. 
+ipscan is known to build on: Opensuse versions 11.1/11.4/12.1/13.1, Centos 6.2, Fedora 16, 
+Ubuntu 12.04, Mint 12, FreeBSD 9 and Arch Linux ARM (Raspberry Pi) and run alongside 
+Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 
+unlisted platforms.
 
-IMPORTANT: when UPGRADING from versions before 0.90: a database change has occurred and consequently it is necessary that you remove your existing database prior to building and installing versions 0.90 and later. See step 4 below for details.
+IMPORTANT: when UPGRADING from versions before 0.90: a database change has occurred and consequently 
+it is necessary that you remove your existing database prior to building and installing 
+versions 0.90 and later. See step 4 below for details.
 
 Installation Steps:
 ===================
     1. edit the Makefile and adjust the following entries as required:
         a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
-                   Ensure that the selected target directory exists, with appropriate permissions, before attempting to install the final executables.
+                   Ensure that the selected target directory exists, with appropriate permissions, before 
+                   attempting to install the final executables.
         b. URIPATH - this is the request URI by which the cgi files will be accessed from your webserver
                    e.g. http://www6.ipv6.chappell-family.com/cgi-bin6/ipscan-js.cgi then set URIPATH=/cgi-bin6
         c. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
@@ -45,7 +53,8 @@ Installation Steps:
                           MYSQL_DBNAME - the name of the ipscan database.
                           MYSQL_TBLNAME - the name of the table in which ipscan results will reside.
 
-    3. edit ipscan_portlist.h and change the list of ports to be tested, if required. Note that if you add new UDP ports then you must also add a matching packet generator function to ipscan_udp.c
+    3. edit ipscan_portlist.h and change the list of ports to be tested, if required. Note that if you add 
+       new UDP ports then you must also add a matching packet generator function to ipscan_udp.c
     
     4. Create the database and user and allocate appropriate user privileges, using the following commands within the mysql shell:
 
@@ -72,8 +81,14 @@ Installation Steps:
        Bye
        
     5. make && make install
-       Given that the suid bit is set on the installed executables, in order to support raw sockets for ICMPv6 testing, it is necessary to perform the 'make install' stage as root user. 
-       Note: when updating an existing installation to version 1.10 and beyond it may be necessary to manually remove the ipscan_checks.c file, if it remains in your install directory, prior to building. The functionality within ipscan_checks.c has been redistributed to separate files which handle tcp, udp and icmpv6 testing.
+       
+       Given that the suid bit is set on the installed executables, in order to support raw sockets for ICMPv6 testing, 
+       it is necessary to perform the 'make install' stage as root user. 
+       
+       Note: when updating an existing installation to version 1.10 and beyond it may be necessary to manually 
+       remove the ipscan_checks.c file, if it remains in your install directory, prior to building. 
+       The functionality within ipscan_checks.c has been redistributed to separate files which 
+       handle tcp, udp and icmpv6 testing.
        
        Note: please use gmake under FreeBSD.
     
@@ -89,39 +104,74 @@ Installation Steps:
     
        Don't forget to restart your web server after making the appropriate modifications.
     
-    7. If you are using an SELinux-enabled distribution (e.g. Fedora 16) then it may be necessary to perform additional steps similar to those outlined below:
+    7. If you are using an SELinux-enabled distribution (e.g. Fedora 16) then it may be necessary to perform additional 
+       steps similar to those outlined below:
        a. Ensure that your Apache server is enabled to support cgi, as root type:
           # setsebool -P httpd_enable_cgi on
        b. Enable the correct execution permissions to the cgi scripts, as root type:
           # cd /srv/www/cgi-bin6/ (use your selected installation path)
           # chcon -t httpd_unconfined_script_exec_t *.cgi
           
-       IMPORTANT NOTE: the steps listed in step 7 above are only indicative of what may be required, and depend upon your existing installation. Please consult the SELinux documentation for further details. 
+       IMPORTANT NOTE: the steps listed in step 7 above are only indicative of what may be required, and 
+       depend upon your existing installation. Please consult the SELinux documentation for further details. 
           
     8. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
        w3m http://www6.ipv6.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
        or: 
        lynx http://[2001:470:1f08:185c::2]/cgi-bin6/ipscan-txt.cgi  
 
-    9. Check the web server access/error logs or syslog for messages. ipscan will place summary messages in the error log if enabled to do so (this is NOT the default option - change IPSCAN_LOGVERBOSITY to 1 to enable this). It is possible to enable copious amounts of debug by uncommenting the debug #define statements in ipscan.h.
+    9. Check the web server access/error logs or syslog for messages. ipscan will place summary messages in the 
+       web server error log or syslog if enabled to do so (this is NOT the default option - change 
+       IPSCAN_LOGVERBOSITY to 1 to enable this). It is possible to enable copious amounts of debug by 
+       uncommenting the debug #define statements in ipscan.h.
     
-    10. If you're providing public access to ipscan then please ensure that you disable verbose reporting and debug facilities and add a cron job that executes every 5 minutes and deletes expired results from the ipscan database. This not only ensures that your database remains small but more importantly it ensures the confidentiality of your users results. The database is only intended to provide short-term storage for results generated by the port scanner process until they are reported via the web browser. The database tidy up can be achieved using the included Perl sqltidy.pl script, but it will require modification to match any changes you made to the MYSQL_XXXX variables in step 2b above. The cron line to call the script would be something similar to:
+    10. If you're providing public access to ipscan then please ensure that you disable verbose reporting 
+        and debug facilities and add a cron job that executes every 5 minutes and deletes expired results 
+        from the ipscan database. This not only ensures that your database remains small but more 
+        importantly it ensures the confidentiality of your users results. The database is only intended 
+        to provide short-term storage for results generated by the port scanner process until they 
+        are reported via the web browser. The database tidy up can be achieved using the included 
+        Perl sqltidy.pl script, but it will require modification to match any changes you made to 
+        the MYSQL_XXXX variables in step 2b above. The cron line to call the script would be 
+        something similar to:
     
-    */5 * * * * /path/to/sqltidy.pl 2>&1 
+        */5 * * * * /path/to/sqltidy.pl 2>&1 
     
         You will need to install the relevant Perl MySQL integration packages for this script to work. 
 
-    Note: versions of IPscan since v1.23 automatically delete the scan results after reporting them to the user. Whilst this can be guaranteed for the text-based browser versions, in the case that a javascript browser fails to complete the test (e.g. the user navigates away from the test) then results could remain in the database and therefore it is necessary for the cron job to cleanup in these cases. 
+        Note: versions of IPscan since v1.23 automatically delete the scan results after reporting them 
+        to the user. Whilst this can be guaranteed for the text-based browser versions, in the case 
+        that a javascript browser fails to complete the test (e.g. the user navigates away from the test) 
+        then results could remain in the database and therefore it is necessary for the cron job to cleanup
+        in these cases. 
 
-    11. For those considering providing ipscan access on the public internet then consider adding a landing page which will check for host IP address suitability prior to allowing access to the cgi script(s) - most (apart from google) search engine spiders/robots currently only use IPv4. 
-        It may be advisable to only offer direct links to the cgi scripts if the address checks were successful. See http://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
+    11. For those considering providing ipscan access on the public internet then consider adding a 
+        landing page which will check for host IP address suitability prior to allowing access to the 
+        cgi script(s) - most (apart from google) search engine spiders/robots currently only use IPv4. 
+        It may be advisable to only offer direct links to the cgi scripts if the address checks 
+        were successful. See http://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
 
-    12. Notes on IPscan binaries. IPscan is provided in two basic versions, one supporting javascript-enabled browsers and the other for text-based browsers. Additionally, the standard build provides fast and standard versions of both of these tests. The fast version tests multiple TCP or UDP ports in parallel, whereas the standard version tests only 1 port at a time, at a default rate of 1 port per second. Please be aware that some OS and firewalls apply rate-limiting to their generation, or passing, of ICMPv6 responses on the basis that this behaviour is indicative of a port scan being performed. Consequently such rate-limiting might cause a port which would normally generate an ICMPv6 response (e.g. PHBTD) to send no response at all, which IPscan would report as STEALTHed. If you are testing a host or firewall (whether on the client under test or elsewhere in the path between your client and test server) which implements such rate-limiting then you are advised to use the standard, slower versions of IPscan which should not trigger the rate-limiting behaviour. If you're unsure which version is appropriate for you, then try both and compare the results. Some Linux distributions and some ISP firewalls are known to implement such rate-limiting.
+    12. Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
+        javascript-enabled browsers and the other for text-based browsers. Additionally, the standard 
+        build provides fast and standard versions of both of these tests. The fast version tests 
+        multiple TCP or UDP ports in parallel, whereas the standard version tests only 1 port at a time,
+        at a default rate of 1 port per second. Please be aware that some OS and firewalls apply 
+        rate-limiting to their generation, or passing, of ICMPv6 responses on the basis that this 
+        behaviour is indicative of a port scan being performed. Consequently such rate-limiting might 
+        cause a port which would normally generate an ICMPv6 response (e.g. PHBTD) to send no response 
+        at all, which IPscan would report as STEALTHed. If you are testing a host or firewall (whether 
+        on the client under test or elsewhere in the path between your client and test server) which 
+        implements such rate-limiting then you are advised to use the standard, slower versions of IPscan 
+        which should not trigger the rate-limiting behaviour. If you're unsure which version is appropriate 
+        for your device, then try both and compare the results. Some Linux distributions and some ISP firewalls
+        are known to implement such rate-limiting.
 
 
 Getting further help:
 =====================
 A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled clients at: http://pi.ipv6.chappell-family.co.uk
 
-If you need further help then please email me at: webmaster@chappell-family.com or visit my ipscan wiki at: http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6
+If you need further help then please email me at: webmaster@chappell-family.com or visit my ipscan wiki at: 
+http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6
+
 

@@ -42,6 +42,7 @@
 // 0.22 - move final fetch earlier
 // 0.23 - further javascript improvements
 // 0.24 - remove commented-out javascript code
+// 0.25 - move to single XML HHTP Request object
 
 
 #include "ipscan.h"
@@ -90,7 +91,8 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
  printf("<SCRIPT type = \"text/javascript\" language=\"javascript\">\n");
  printf("<!--  to hide script contents from old browsers\n");
- printf("var myInterval = 0, myBlink = 0, myHTTPTimeout, myFetchInProgress = 0, fetches = 0, lastUpdate = 0;\n");
+ // printf("var myInterval = 0, myBlink = 0, myHTTPTimeout, myFetchInProgress = 0, fetches = 0, lastUpdate = 0;\n");
+ printf("var myInterval = 0, myBlink = 0, myHTTPTimeout, myXmlHttpReqObj, fetches = 0, lastUpdate = 0;\n");
 
  // create a prefilled array containing the potential states returned for each port
  printf("var retVals = [");
@@ -138,63 +140,60 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" } ");
  printf("}\n");
 
- printf("function HTTPTimedOut(xhr)");
+ printf("function HTTPTimedOut()");
  printf(" {");
- printf(" xhr.abort();");
- printf(" var badfinishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
- printf(" var finishreq = makeHttpObject();");
- printf(" finishreq.open(\"GET\", badfinishURL, true);");
- // Send indication that HTTP GET timed out (it may not be successful if this one fails to complete too)
- printf(" finishreq.send(\"\");");
+  printf(" var badfinishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
+ printf(" clearTimeout(myHTTPTimeout);");
+ printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+ printf(" myXmlHttpReqObj.open(\"GET\", badfinishURL, true);");
+ printf(" myXmlHttpReqObj.send(\"\");");
  printf(" }\n");
 
  printf("function HTTPUnfinished()");
  printf(" {");
- printf(" clearInterval(myBlink);");
- printf(" document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";");
- printf(" document.getElementById(\"scanstate\").style.color = \"red\";");
  printf(" var badfinishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
- printf(" var finishreq = makeHttpObject();");
- printf(" finishreq.open(\"GET\", badfinishURL, true);");
- printf(" finishreq.send(\"\");");
+ printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+ printf(" myXmlHttpReqObj.open(\"GET\", badfinishURL, true);");
+ printf(" myXmlHttpReqObj.send(\"\");");
  printf(" }\n");
 
  printf("function HTTPFinished()");
  printf(" {");
- printf(" clearInterval(myInterval);");
- printf(" clearInterval(myBlink);");
+ //If we get to here then we've managed to fetch all the results and the test is complete
  printf(" var finishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
  // Send indication that fetch is complete and results can be deleted.
- printf(" var finishreq = makeHttpObject();");
- printf(" finishreq.open(\"GET\", finishURL, true);");
- printf(" finishreq.send(\"\");");
+ printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+ printf(" myXmlHttpReqObj.open(\"GET\", finishURL, true);");
+ printf(" myXmlHttpReqObj.send(\"\");");
  printf(" }\n");
 
  printf("function HTTPUnexpected(myReadyState,myStatus)");
  printf(" {");
  printf(" var unexpectedURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + myReadyState + myStatus + %d;", session, (uint32_t)timestamp, reconquery, IPSCAN_UNEXPECTED_CHANGE);
- printf(" var finishreq = makeHttpObject();");
- printf(" finishreq.open(\"GET\", unexpectedURL, true);");
  // HTTP GET completed, but with an unexpected HTTP status code (i.e. not 200 OK)
- printf(" finishreq.send(\"\");");
+ printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+ printf(" myXmlHttpReqObj.open(\"GET\", unexpectedURL, true);");
+ printf(" myXmlHttpReqObj.send(\"\");");
  printf(" }\n");
 
- printf("function HTTPEvalError()");
+ printf("function HTTPEvalError(errorstring)");
  printf(" {");
- printf(" var evalErrorURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_EVAL_ERROR);
- printf(" var finishreq = makeHttpObject();");
- printf(" finishreq.open(\"GET\", evalErrorURL, true);");
+ // This function indicates an eval error (internal server issue) - hopefully it will never arise
+ printf(" var evalErrorURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d&string=\" + errorstring;", session, (uint32_t)timestamp, reconquery, IPSCAN_EVAL_ERROR);
  // Indicate that eval of the JSON array caused an EvalError to be thrown
- printf(" finishreq.send(\"\");");
+ printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+ printf(" myXmlHttpReqObj.open(\"GET\", evalErrorURL, true);");
+ printf(" myXmlHttpReqObj.send(\"\");");
  printf(" }\n");
 
- printf("function HTTPOtherError()");
+ printf("function HTTPOtherError(errorstring)");
  printf(" {");
- printf(" var otherErrorURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_OTHER_ERROR);
- printf(" var finishreq = makeHttpObject();");
- printf(" finishreq.open(\"GET\", otherErrorURL, true);");
+ // This function indicates another error during eval (internal server issue) - hopefully it will never arise
+ printf(" var otherErrorURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d&string=\" + errorstring;", session, (uint32_t)timestamp, reconquery, IPSCAN_OTHER_ERROR);
  // Indicate that eval of the JSON array was unsuccessful, but not an EvalError
- printf(" finishreq.send(\"\");");
+ printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+ printf(" myXmlHttpReqObj.open(\"GET\", otherErrorURL, true);");
+ printf(" myXmlHttpReqObj.send(\"\");");
  printf(" }\n");
 
  printf("function myStateChange(request) ");
@@ -209,9 +208,9 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" catch(e)");
  printf(" {");
  printf(" if (e instanceof EvalError) {");
- printf(" HTTPEvalError();");
+ printf(" HTTPEvalError(e.tostring());");
  printf(" } else {");
- printf(" HTTPOtherError();");
+ printf(" HTTPOtherError(e.tostring());");
  printf(" }");
  printf(" }");
 
@@ -226,7 +225,11 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  // we expect (numudpports+numports)*3+3 (final 3 are end of JSON array dummies) results
  printf(" if (latestState.length >= %d)", 3+((numudpports+numports)*3) );
  #endif
+ printf(" {");
+ printf(" clearInterval(myInterval);");
+ printf(" clearInterval(myBlink);");
  printf(" HTTPFinished();");
+ printf(" }");
 
  // go around the latest received state and update display as required
  printf(" for (i = 0; i < (latestState.length - 3); i += 3) {");
@@ -295,7 +298,6 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" }");
 
  printf(" }"); // end of main if (more than 3 elements in array)
- printf(" myFetchInProgress -= 1;");
  printf(" }"); // if (return code == 200)
 
  // The following piece of code is evaluated irrespective of the HTTP return code
@@ -307,6 +309,9 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" else if (request.readyState === 4 && latestState.length < %d && lastUpdate === 1)",3+((numudpports+numports)*3));
  #endif
  printf(" {");
+ printf(" clearInterval(myBlink);");
+ printf(" document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";");
+ printf(" document.getElementById(\"scanstate\").style.color = \"red\";");
  printf(" HTTPUnexpected(request.readyState, request.status);");
  printf(" HTTPUnfinished();");
  printf(" }");
@@ -322,12 +327,12 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" clearInterval(myInterval);");
  printf(" lastUpdate = 1; ");
  printf("}");
- printf(" var reqHTTPObj = makeHttpObject();");
- printf(" reqHTTPObj.open(\"GET\", updateURL, true);");
+ printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+ printf(" myXmlHttpReqObj.open(\"GET\", updateURL, true);");
  // the myStateChange() function waits for the asynchronous HTTP 200 code to be received and then evaluates the returned JSON array.
- printf(" reqHTTPObj.onreadystatechange = function(){myStateChange(reqHTTPObj); };");
- printf(" myHTTPTimeout = setTimeout(function() {HTTPTimedOut(reqHTTPObj); }, %d);", ((JSONFETCHEVERY - 1) * 1000) );
- printf(" reqHTTPObj.send(\"\");");
+ printf(" myXmlHttpReqObj.onreadystatechange = function(){myStateChange(myXmlHttpReqObj); };");
+ printf(" myHTTPTimeout = setTimeout(function() {HTTPTimedOut(); }, %d);", ((JSONFETCHEVERY - 1) * 1000) );
+ printf(" myXmlHttpReqObj.send(\"\");");
  // end of function update()
  printf("}\n");
 
@@ -340,9 +345,9 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
  printf(" myBlink = setInterval(function(){blink(); }, 1000);");
  printf(" var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\";", MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
- printf(" var initReq = makeHttpObject();");
- printf(" initReq.open(\"GET\", startURL, true);");
- printf(" initReq.send(\"\");");
+ printf(" myXmlHttpReqObj = makeHttpObject();");
+ printf(" myXmlHttpReqObj.open(\"GET\", startURL, true);");
+ printf(" myXmlHttpReqObj.send(\"\");");
  printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
  printf(" }\n"); // end of function startTimer()
 

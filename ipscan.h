@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.36"
+	#define IPSCAN_VERNUM "1.37"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -142,6 +142,7 @@
 	// 1.34 added SNMPv2c and SNMPv3 support
 	// 1.35 move to random(ish) sessions rather than pid()
 	// 1.36 tidy up for push to github
+	// 1.37 move to single XML HTTP Request object
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -235,9 +236,9 @@
 	#define IPSCAN_INCLUDE_UDP UDP_AVAILABLE
 	#endif
 
-    	// Logging verbosity:
+    // Logging verbosity:
 	//
-    	// (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
+    // (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
 	// (0) Quiet  - program/unexpected response errors only
 	//
 	// Do NOT change this value on internet facing hosts
@@ -247,7 +248,7 @@
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
 	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
-    	// available using an URL similar to:
+    // available using an URL similar to:
 	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
