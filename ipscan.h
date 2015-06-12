@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2014 Tim Chappell.
+//    Copyright (C) 2011-2015 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.37"
+	#define IPSCAN_VERNUM "1.38"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -143,6 +143,7 @@
 	// 1.35 move to random(ish) sessions rather than pid()
 	// 1.36 tidy up for push to github
 	// 1.37 move to single XML HTTP Request object
+	// 1.38 Variety of minor tweaks (CGI environment variable parsing)
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -150,7 +151,7 @@
 	// Determine whether to include terms of use link (0 = don't include; 1 = include)
 	#define INCLUDETERMSOFUSE 1
 	// Link for terms of use - please update to reference a page from your website
-	#define TERMSOFUSEURL "http://ipv6.chappell-family.com/html/termsofuse.html"
+	#define TERMSOFUSEURL "http://ipv6.chappell-family.com/timswiki/index.php5?title=Timswiki:About"
 
 	// Determine whether to offer help for bad/incomplete/unrecognised URLs
 	// 0=offer no help, 1=offer help - need to define URL

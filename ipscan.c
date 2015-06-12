@@ -1,6 +1,6 @@
 //    ipscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2014 Tim Chappell.
+//    Copyright (C) 2011-2015 Tim Chappell.
 //
 //    This file is part of ipscan.
 //
@@ -48,6 +48,8 @@
 // 0.27 - update to support further completion report types
 // 0.28 - improved error logging
 // 0.29 - use random(ish) sessions rather than getpid
+// 0.30 - move to use strnlen() in getenv lookups
+// 0.31 - improved querystring parsing, truncated session id
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -156,6 +158,7 @@ struct rslt_struc resultsstruct[] =
 uint64_t get_session(void)
 {
 	uint64_t sessionnum = 0;
+	uint64_t fetchedsession = 0;
 	FILE *fp;
 	fp = fopen("/dev/urandom", "r");
 
@@ -166,8 +169,14 @@ uint64_t get_session(void)
 	}
 	else
 	{
-		size_t numitems = fread( &sessionnum, sizeof(sessionnum), 1, fp);
+		size_t numitems = fread( &fetchedsession, sizeof(fetchedsession), 1, fp);
 		fclose(fp);
+		// Clear the MSB of the random session ID so that we're sure it will fit into an int64_t which the QUERY_STRING parser assumes
+		sessionnum = fetchedsession & ( ((uint64_t)~0) >> 1);
+
+		#ifdef QUERYDEBUG
+		IPSCAN_LOG( LOGPREFIX "ipscan: Session number modification check, before = %"PRIu64" after = %"PRIu64"\n", fetchedsession, sessionnum);
+		#endif
 
 		if (1 != numitems)
 		{
@@ -257,14 +266,14 @@ int main(void)
 
 	// Structure to hold querystring variable names, their values and a validity indication
 	typedef struct {
-		char varname[MAXQUERYNAMELEN];
-		int64_t varval;
+		char varname[(MAXQUERYNAMELEN+2)];
+		int64_t varval; // Signed since some values will be negative
 		int valid;
 	} queries;
 
 	queries query[MAXQUERIES];
 	unsigned int numqueries = 0;
-	int64_t varval = 0;
+	int64_t varval = 0; // temporary storage for query string parameters
 	// value string - add two chars to cope with trailing \0
 	char valstring[ (MAXQUERYVALLEN + 2) ];
 	
@@ -296,6 +305,7 @@ int main(void)
 	}
 
 	// Process id related - this version is extracted from the querystring
+	// note: this is signed, whereas original value is a suitably truncated unsigned integer
 	int64_t querysession = 0;
 
 	// Log the current time and "session" with which to initiate scan and fetch results
@@ -304,7 +314,7 @@ int main(void)
 	uint64_t session = get_session();
 
 	// QUERY_STRING / REQUEST_METHOD
-	// URL  of the form: ipv6.cgi?name1=value1&name2=value2
+	// URL is of the form: ipv6.cgi?name1=value1&name2=value2
 	// REQUEST_METHOD = GET
 	// QUERY_STRING = name1=value1&name2=value2 
 	reqmethodvar = getenv("REQUEST_METHOD");
@@ -313,18 +323,18 @@ int main(void)
 	// ensure length OK
 	if (NULL == reqmethodvar)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: Error in passing request-method from form to script.");
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : REQUEST_METHOD variable lookup returned NULL.");
 	}
-	else if ( strlen(reqmethodvar) > MAXREQMETHODLEN )
+	else if ( strnlen(reqmethodvar, (MAXREQMETHODLEN+1)) > MAXREQMETHODLEN )
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: Request-method environment string is longer than allocated buffer (%d > %d)\n", (int)strlen(reqmethodvar), MAXREQMETHODLEN);
+		IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: REQUEST_METHOD variable string is longer than allocated buffer (%d > %d)\n", (int)strnlen(reqmethodvar, (MAXREQMETHODLEN+1)), MAXREQMETHODLEN);
 		// Create the header
 		create_html_common_header();
 		// Now finish the header
 		printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 		printf("</HEAD>\n");
 		printf("<BODY>\n");
-		printf("<P>I was called with request-method longer than my allocated buffer. That is very disappointing.</P>\n");
+		printf("<P>I was called with REQUEST_METHOD longer than my allocated buffer. That is very disappointing.</P>\n");
 		// Finish the html
 		create_html_body_end();
 		exit(EXIT_FAILURE);
@@ -340,7 +350,7 @@ int main(void)
 		#endif
 
 		// Force Uppercase to ease comparison
-		for (i = 0; i < strlen(requestmethod); i++)
+		for (i = 0; i < strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
 		{
 			thischar=requestmethod[i];
 			requestmethod[i]=toupper(thischar);
@@ -350,18 +360,18 @@ int main(void)
 		{
 			if(NULL == querystringvar)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: Error in passing null query-string from form to script.\n");
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: QUERY_STRING variable lookup returned NULL.\n");
 			}
-			else if ( strlen(querystringvar) > MAXQUERYSTRLEN)
+			else if ( strnlen(querystringvar, MAXQUERYSTRLEN+1) > MAXQUERYSTRLEN)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: Query-string environment string is longer than allocated buffer (%d > %d)\n", (int)strlen(querystringvar), MAXQUERYSTRLEN);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: QUERY_STRING environment string is longer than allocated buffer (%d > %d)\n", (int)strnlen(querystringvar, MAXQUERYSTRLEN+1), MAXQUERYSTRLEN);
 				// Create the header
 				create_html_common_header();
 				// Now finish the header
 				printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 				printf("</HEAD>\n");
 				printf("<BODY>\n");
-				printf("<P>I was called with a query-string longer than my allocated buffer. That is very disappointing.</P>\n");
+				printf("<P>I was called with a QUERY_STRING longer than my allocated buffer. That is very disappointing.</P>\n");
 				// Finish the html
 				create_html_body_end();
 				exit(EXIT_FAILURE);
@@ -381,48 +391,61 @@ int main(void)
 
 
 				// Force lowercase to ease later comparison
-				for (i = 0; i < strlen(querystring); i++)
+				for (i = 0; i < strnlen(querystring,(MAXQUERYSTRLEN)); i++)
 				{
 					thischar=querystring[i];
 					querystring[i]=tolower(thischar);
 				}
 
+				//
 				// Split the query string into variable names and values
-				int byte = 0;
+				//
+				// URL is of the form: ipv6.cgi?name1=value1&name2=value2
+				unsigned int queryindex = 0;
 				int finished = 0;
-				while (byte < MAXQUERYSTRLEN && querystring[byte] >= 32 && finished == 0 && numqueries < MAXQUERIES)
+
+				while (queryindex < MAXQUERYSTRLEN && querystring[queryindex] >= 32 && finished == 0 && numqueries < MAXQUERIES)
 				{
-					int varnamenum = 0;
+					int varnameindex = 0;
 					query[numqueries].valid = 0;
-					while ( querystring[byte] >= 32 && querystring[byte] != '='
-						&& querystring[byte] != '&' && varnamenum<MAXQUERYNAMELEN && finished == 0)
+					while ( querystring[queryindex] >= 32 && querystring[queryindex] < 127 && querystring[queryindex] != '='
+						&& querystring[queryindex] != '&' && queryindex < MAXQUERYSTRLEN && varnameindex < MAXQUERYNAMELEN && finished == 0)
 					{
-						query[numqueries].varname[varnamenum] = querystring[byte];
-						varnamenum ++;
-						byte ++;	
+						query[numqueries].varname[varnameindex] = querystring[queryindex];
+						varnameindex ++;
+						queryindex ++;
 					}
-					if (varnamenum >= MAXQUERYNAMELEN)
+					if (varnameindex >= MAXQUERYNAMELEN)
 					{
 						IPSCAN_LOG( LOGPREFIX "ipscan: query parameter name string is too long : %s\n", querystring);
+						varnameindex = MAXQUERYNAMELEN; // Truncate
 					}
-					query[numqueries].varname[varnamenum]=0;
-					finished = (querystring[byte] < 32 || byte >= MAXQUERYSTRLEN) ? 1 : 0;
-					if (querystring[byte] == '=' && finished == 0)
+					query[numqueries].varname[varnameindex]=0; // Add termination
+
+					finished = (querystring[queryindex] < 32 || querystring[queryindex] > 126 || queryindex >= MAXQUERYSTRLEN) ? 1 : 0;
+					if (finished == 0 && querystring[queryindex] == '=')
 					{
-						byte++;
-						int valbyte = 0;
-						while ( querystring[byte] >= 32 && querystring[byte] != '='
-                                && querystring[byte] != '&' && valbyte< MAXQUERYVALLEN && byte < MAXQUERYSTRLEN)
+						// Jump over '='
+						while (querystring[queryindex] == '=' && queryindex < MAXQUERYSTRLEN)
 						{
-							valstring[valbyte] = querystring[byte];
-							byte++;
-							valbyte++;
+							queryindex++;
 						}
-						valstring[valbyte]=0;
-						if (valbyte >= MAXQUERYVALLEN)
+						int valueindex = 0;
+						while ( querystring[queryindex] >= 32 && querystring[queryindex] < 127 && querystring[queryindex] != '='
+                                && querystring[queryindex] != '&' && valueindex < MAXQUERYVALLEN && queryindex < MAXQUERYSTRLEN)
 						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: query parameter value string is too long for %s : %s\n", query[numqueries].varname, querystring);
+							valstring[valueindex] = querystring[queryindex];
+							queryindex++;
+							valueindex++;
 						}
+
+						if (valueindex >= MAXQUERYVALLEN)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: query parameter value string is too long : %s\n", querystring);
+							valueindex = MAXQUERYVALLEN; // Truncate
+						}
+						valstring[valueindex]=0; // Add termination
+
 						rc = sscanf(valstring,"%"SCNd64, &varval );
 						if (rc == 1)
 						{
@@ -439,16 +462,17 @@ int main(void)
 							#ifdef QUERYDEBUG
 							IPSCAN_LOG( LOGPREFIX "ipscan: Bad value assignment for %s, setting invalid.\n", query[numqueries].varname);
 							#endif
+							query[numqueries].varval = 0;
 							query[numqueries].valid = 0;
 							numqueries++;
 						}
 					}
 					// Move past the '&' sign
-					while (querystring[byte] == '&' && querystring[byte] >= 32 && byte < MAXQUERYSTRLEN && finished == 0)
+					while (querystring[queryindex] == '&' && queryindex < MAXQUERYSTRLEN && finished == 0)
 					{
-						byte++;
+						queryindex++;
 					}
-					finished = (querystring[byte] < 32 || byte >= MAXQUERYSTRLEN) ? 1 : 0;
+					finished = (querystring[queryindex] < 32 || queryindex >= MAXQUERYSTRLEN) ? 1 : 0;
 				}
 				#ifdef QUERYDEBUG
 				IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %d\n", numqueries);
@@ -486,16 +510,16 @@ int main(void)
 	remoteaddrvar = getenv("REMOTE_ADDR");
 	if(NULL == remoteaddrvar)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: Error in passing remoteaddr data from form to script.\n");
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable lookup returned NULL.\n");
 	}
-	else if (strlen(remoteaddrvar) > INET6_ADDRSTRLEN)
+	else if (strnlen(remoteaddrvar,(INET6_ADDRSTRLEN+1)) > INET6_ADDRSTRLEN)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: Host address length exceeds allocated buffer size (%d > %d)\n", (int)strlen(remoteaddrvar), INET6_ADDRSTRLEN);
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable length exceeds allocated buffer size (%d > %d)\n", (int)strnlen(remoteaddrvar, (INET6_ADDRSTRLEN+1)), INET6_ADDRSTRLEN);
 		exit(EXIT_FAILURE);
 	}
 	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid remoteaddr data.\n");
+		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid REMOTE_ADDR variable data.\n");
 	}
 	else
 	{	
@@ -1166,7 +1190,7 @@ int main(void)
 
 			// Only include this section if ping is compiled in ...
 			#if (IPSCAN_INCLUDE_PING == 1)
-			pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, indirecthost);
+			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)querystarttime, (uint64_t)querysession, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
