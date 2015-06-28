@@ -50,6 +50,7 @@
 // 0.29 - use random(ish) sessions rather than getpid
 // 0.30 - move to use strnlen() in getenv lookups
 // 0.31 - improved querystring parsing, truncated session id
+// 0.32 - add Navigate away detection
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -1140,6 +1141,10 @@ int main(void)
 			else if (IPSCAN_OTHER_ERROR == fetchnum)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated OTHER ERROR.\n");
+			}
+			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated user NAVIGATED AWAY.\n");
 			}
 			else if (IPSCAN_UNEXPECTED_CHANGE <= fetchnum)
 			{

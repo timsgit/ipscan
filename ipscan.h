@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.38"
+	#define IPSCAN_VERNUM "1.39"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -144,6 +144,7 @@
 	// 1.36 tidy up for push to github
 	// 1.37 move to single XML HTTP Request object
 	// 1.38 Variety of minor tweaks (CGI environment variable parsing)
+	// 1.39 Add 'navigate away' detection to javascript version
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -237,9 +238,9 @@
 	#define IPSCAN_INCLUDE_UDP UDP_AVAILABLE
 	#endif
 
-    // Logging verbosity:
+	// Logging verbosity:
 	//
-    // (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
+	// (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
 	// (0) Quiet  - program/unexpected response errors only
 	//
 	// Do NOT change this value on internet facing hosts
@@ -249,7 +250,7 @@
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a potential security risk, so use cautiously and definitely choose
 	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
-    // available using an URL similar to:
+	// available using an URL similar to:
 	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
@@ -420,7 +421,8 @@
 	#define UDPTIMEOUTSECS 2
 	#define UDPTIMEOUTMICROSECS 20000
 
-	// An estimate of the time to perform the test - assumes num ports is always smaller than (MAXPORTSPERCHILD * MAX_CHILDREN) for each protocol
+	// An estimate of the time to perform the test - assumes num ports is always
+	// smaller than (MAXPORTSPERCHILD * MAX_CHILDREN) for each protocol
 	#define UDPSTATICTIME 2
 	#define TCPSTATICTIME 2
 	#define ICMP6STATICTIME 2
@@ -471,10 +473,10 @@
 
 	// Completion indicators (passed in fetch querystring)
 	//
-	#define IPSCAN_UNEXPECTED_CHANGE (1000)
-	//
 	// IPSCAN_SUCCESSFUL_COMPLETION is used as a marker such that any query string fetch which
 	// exceeds this value will be assumed to be indicating feedback from the javascript client
+	//
+	// IPSCAN_UNEXPECTED_CHANGE MUST be the last entry in the enumerated list
 	//
 	enum COMPLETIONSTATE
 	{
@@ -483,6 +485,8 @@
 		IPSCAN_EVAL_ERROR,
 		IPSCAN_OTHER_ERROR,
 		IPSCAN_UNSUCCESSFUL_COMPLETION,
+		IPSCAN_NAVIGATE_AWAY,
+		IPSCAN_UNEXPECTED_CHANGE,
 	};
 
 	// Mapping for connection attempt results

@@ -43,6 +43,7 @@
 // 0.23 - further javascript improvements
 // 0.24 - remove commented-out javascript code
 // 0.25 - move to single XML HHTP Request object
+// 0.26 - add 'navigate away' handler to javascript version
 
 
 #include "ipscan.h"
@@ -114,6 +115,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
   if (0 == i) printf("\"%s\"",resultsstruct[i].colour); else printf(", \"%s\"",resultsstruct[i].colour);
  }
  printf("];\n");
+
  // create an HTTP object which copes with each of the various browser vagaries
  printf("function makeHttpObject() ");
  printf("{");
@@ -178,7 +180,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("function HTTPEvalError(errorstring)");
  printf(" {");
  // This function indicates an eval error (internal server issue) - hopefully it will never arise
- printf(" var evalErrorURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d&string=\" + errorstring;", session, (uint32_t)timestamp, reconquery, IPSCAN_EVAL_ERROR);
+ printf(" var evalErrorURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d&string=\" + encodeURIComponent(errorstring);", session, (uint32_t)timestamp, reconquery, IPSCAN_EVAL_ERROR);
  // Indicate that eval of the JSON array caused an EvalError to be thrown
  printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
  printf(" myXmlHttpReqObj.open(\"GET\", evalErrorURL, true);");
@@ -187,12 +189,33 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 
  printf("function HTTPOtherError(errorstring)");
  printf(" {");
- // This function indicates another error during eval (internal server issue) - hopefully it will never arise
- printf(" var otherErrorURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d&string=\" + errorstring;", session, (uint32_t)timestamp, reconquery, IPSCAN_OTHER_ERROR);
- // Indicate that eval of the JSON array was unsuccessful, but not an EvalError
+ // This function indicates another error - string can indicate more
+ printf(" var otherErrorURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d&string=\" + encodeURIComponent(errorstring);", session, (uint32_t)timestamp, reconquery, IPSCAN_OTHER_ERROR);
  printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
  printf(" myXmlHttpReqObj.open(\"GET\", otherErrorURL, true);");
  printf(" myXmlHttpReqObj.send(\"\");");
+ printf(" }\n");
+
+ printf("function HTTPNavAway()");
+ printf(" {");
+ printf(" var navAwayURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_NAVIGATE_AWAY);
+ printf(" clearTimeout(myHTTPTimeout);");
+ printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+ printf(" myXmlHttpReqObj.open(\"GET\", navAwayURL, true);");
+ printf(" myXmlHttpReqObj.send(\"\");");
+ printf(" }\n");
+
+ // Page Exit Handler
+ printf("var pageExitHandler = function(e)");
+ printf(" {");
+ // Include window.event in case the causative event wasn't passed in directly
+ printf(" if (!e) var e = window.event;");
+ printf(" var message = 'Do you wish to end the IPv6 port scan prematurely?';");
+ printf(" HTTPNavAway();");
+ // For legacy browsers
+ printf(" if (e) { e.returnValue = message; }");
+ // For modern browsers
+ printf(" return message;");
  printf(" }\n");
 
  printf("function myStateChange(request) ");
@@ -294,6 +317,8 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" {");
  printf(" document.getElementById(\"scanstate\").innerHTML = \"COMPLETE.\";");
  printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
+ // Disable the Page Exit handler
+ printf(" window.onbeforeunload = null;\n");
  printf(" }");
 
  printf(" }"); // end of main if (more than 3 elements in array)
@@ -311,6 +336,8 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" clearInterval(myBlink);");
  printf(" document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";");
  printf(" document.getElementById(\"scanstate\").style.color = \"red\";");
+ // Disable the Page Exit handler
+ printf(" window.onbeforeunload = null;\n");
  printf(" HTTPUnexpected(request.readyState, request.status);");
  printf(" HTTPUnfinished();");
  printf(" }");
@@ -342,6 +369,8 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf(" {");
  printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING.\";");
  printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
+ // Install the page exit handler
+ printf(" window.onbeforeunload = pageExitHandler;\n");
  printf(" myBlink = setInterval(function(){blink(); }, 1000);");
  printf(" var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\";", MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
  printf(" myXmlHttpReqObj = makeHttpObject();");
