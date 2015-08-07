@@ -24,6 +24,7 @@
 // 0.04				add support for special cases
 // 0.05				ensure minimum timings are met
 // 0.06				improve error reporting
+// 0.07				ensure fd closure is handled cleanly
 
 #include "ipscan.h"
 //
@@ -226,6 +227,10 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 				if (-1 != sock)
 				{
 					cl = close(sock);
+					if (cl == -1)
+					{
+						IPSCAN_LOG( LOGPREFIX "check_tcp_port: close unexpected failure : %d (%s)\n", errno, strerror(errno));
+					}
 				}
 			}
 

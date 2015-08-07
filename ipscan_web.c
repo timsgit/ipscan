@@ -44,6 +44,7 @@
 // 0.24 - remove commented-out javascript code
 // 0.25 - move to single XML HHTP Request object
 // 0.26 - add 'navigate away' handler to javascript version
+// 0.27 - fix cut'n'paste error, spotted by coverity
 
 
 #include "ipscan.h"
@@ -465,7 +466,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
   {
    port = udpportlist[portindex].port_num;
    special = udpportlist[portindex].special;
-   last = (portindex == (numports-1)) ? 1 : 0 ;
+   last = (portindex == (numudpports-1)) ? 1 : 0 ;
 
    if (position ==0) printf("<TR style=\"text-align:center\">\n");
    if (0 != special)

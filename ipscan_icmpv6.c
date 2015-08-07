@@ -23,6 +23,7 @@
 // 0.3				move to memset()
 // 0.4				ensure minimum timings are met
 // 0.5				ensure txid doesn't exceed 16-bits (move to random session ID)
+// 0.6				clear msghdr.msg_flags
 
 #include "ipscan.h"
 //
@@ -404,6 +405,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		rmsghdr.msg_iovlen = 1;
 		rmsghdr.msg_control = (caddr_t)rxbuf;
 		rmsghdr.msg_controllen = sizeof(rxbuf);
+		rmsghdr.msg_flags = 0; // filled on receive
 		rc = recvmsg(sock, &rmsghdr, 0);
 		errsv = errno;
 		if (rc < 0)

@@ -29,6 +29,8 @@
 // 0.09			ensure minimum timings are met
 // 0.10			improve error handling
 // 0.11			snmpv3 support
+// 0.12			initialise sin6_scope_id, although unused
+// 0.13			add logging for DNS query term creation
 
 #include "ipscan.h"
 //
@@ -117,6 +119,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	remoteaddr.sin6_port = htons(port);
 	remoteaddr.sin6_family = AF_INET6;
 	remoteaddr.sin6_flowinfo = 0;
+	remoteaddr.sin6_scope_id = 0; // unused in our case
 
 	// Attempt to create a socket
 	if (retval == PORTUNKNOWN)
@@ -218,12 +221,28 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// Need one extra octet for trailing 0, however this will be overwritten
 				// by the length of the next part of the host name in standard DNS format
 				rc = snprintf(&txmessage[13], 5, "%s", "www4");
+				if (rc < 0 || rc >=5)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+				}
 				txmessage[17]= 4;
 				rc = snprintf(&txmessage[18], 5, "%s", "ipv6");
+				if (rc < 0 || rc >= 5)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+				}
 				txmessage[22]= 15;
 				rc = snprintf(&txmessage[23], 16, "%s", "chappell-family");
+				if (rc < 0 || rc >= 16)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+				}
 				txmessage[38]= 3;
 				rc = snprintf(&txmessage[39], 4, "%s", "com");
+				if (rc < 0 || rc >= 4)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+				}
 				txmessage[42]= 0;
 				// Question type - 1 = host address, 2=NS, 255 is request all
 				txmessage[43] = 0;

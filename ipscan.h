@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.39"
+	#define IPSCAN_VERNUM "1.40"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -145,6 +145,7 @@
 	// 1.37 move to single XML HTTP Request object
 	// 1.38 Variety of minor tweaks (CGI environment variable parsing)
 	// 1.39 Add 'navigate away' detection to javascript version
+	// 1.40 Correct some Coverity reported issues
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
