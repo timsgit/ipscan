@@ -177,4 +177,4 @@ http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6
 
 
 ---
-<a href="https://scan.coverity.com/projects/timsgit-ipscan"><img alt="Coverity Scan Build Status" src="https://scan.coverity.com/projects/5978/badge.svg"/></a>
+Coverity results can be found at: https://scan.coverity.com/projects/timsgit-ipscan
