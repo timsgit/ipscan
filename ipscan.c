@@ -51,6 +51,7 @@
 // 0.30 - move to use strnlen() in getenv lookups
 // 0.31 - improved querystring parsing, truncated session id
 // 0.32 - add Navigate away detection
+// 0.33 - add reporting for fork() issues
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -855,6 +856,7 @@ int main(void)
 			remaining = numudpports;
 			porti = 0;
 			numchildren = 0;
+			rc = 0;
 			while (remaining > 0 || numchildren > 0)
 			{
 				while (remaining > 0)
@@ -865,7 +867,7 @@ int main(void)
 						#ifdef UDPPARLLDEBUG
 						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
-						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &udpportlist[0]);
+						rc |= check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &udpportlist[0]);
 						porti += todo;
 						numchildren ++;
 						remaining = (numudpports - porti);
@@ -883,6 +885,11 @@ int main(void)
 					numchildren--;
 					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
+			}
+
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_udp_ports_parll() exited with ORed value of %d\n",rc);
 			}
 
 			#if (IPSCAN_INCLUDE_UDP == 1)
@@ -957,6 +964,7 @@ int main(void)
 			remaining = numports;
 			porti = 0;
 			numchildren = 0;
+			rc = 0;
 			while (remaining > 0 || numchildren > 0)
 			{
 				while (remaining > 0)
@@ -967,7 +975,7 @@ int main(void)
 						#ifdef PARLLDEBUG
 						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
-						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &portlist[0]);
+						rc |= check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &portlist[0]);
 						porti += todo;
 						numchildren ++;
 						remaining = (numports - porti);
@@ -985,6 +993,11 @@ int main(void)
 					numchildren--;
 					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
+			}
+
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_tcp_ports_parll() exited with ORed value of %d\n",rc);
 			}
 
 			// Start of TCP port scan results table
