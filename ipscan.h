@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.41"
+	#define IPSCAN_VERNUM "1.42"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -147,6 +147,7 @@
 	// 1.39 Add 'navigate away' detection to javascript version
 	// 1.40 Correct some Coverity reported issues
 	// 1.41 Add fork() issue reporting to aid debug
+	// 1.42 Add automatic deletion of all results
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -247,12 +248,12 @@
 	//
 	// Do NOT change this value on internet facing hosts
 	//
-	#define IPSCAN_LOGVERBOSITY 0
+	#define IPSCAN_LOGVERBOSITY 1
 
 	// Enable the generation of a summary of scans page (1) or not (0)
-	// This is a potential security risk, so use cautiously and definitely choose
-	// a new value for MAGICSUMMARY before enabling it! if enabled then access is
-	// available using an URL similar to:
+	// This is a definite security risk, so use cautiously, NEVER on an internet
+	// facing host and definitely choose a new value for MAGICSUMMARY before
+	// enabling it! if enabled then access is available using an URL similar to:
 	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
 	#define SUMMARYENABLE 0
 
@@ -466,6 +467,14 @@
 	#define IPSCAN_PROTO_TCP (0)
 	#define IPSCAN_PROTO_ICMPV6 (1)
 	#define IPSCAN_PROTO_UDP (2)
+	#define IPSCAN_PROTO_TESTSTATE (3)
+
+	// TESTSTATE values
+	#define IPSCAN_TESTSTATE_RUNNING (1)
+	#define IPSCAN_TESTSTATE_COMPLETE (2)
+
+	// Timeout before results are deleted ...
+	#define IPSCAN_DELETE_TIMEOUT (180)
 
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router

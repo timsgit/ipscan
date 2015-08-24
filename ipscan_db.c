@@ -37,6 +37,7 @@
 // 0.16 - add delete support
 // 0.17 - include debug reporting of number of rows sent to client
 // 0.18 - further debug log improvements
+// 0.19 - handle addition of test-state field which shouldn't be reported to client
 
 #include "ipscan.h"
 //
@@ -273,10 +274,21 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 
 									if ( rcres == 1 && rchost == 1 && rcport == 1 )
 									{
-										printf("%d, %d, \"%s\", ", port, res, hostind);
-										#if (IPSCAN_LOGVERBOSITY == 1)
-										nump += 1;
-										#endif
+										int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
+										// Report everything to the client apart from the test-state
+										if (IPSCAN_PROTO_TESTSTATE != proto)
+										{
+											printf("%d, %d, \"%s\", ", port, res, hostind);
+											#if (IPSCAN_LOGVERBOSITY == 1)
+											nump += 1;
+											#endif
+										}
+										else
+										{
+											#ifdef DBDEBUG
+											IPSCAN_LOG( LOGPREFIX "dump_db: found port 0x%08x with proto %d, result %d\n", port, proto, res);
+											#endif
+										}
 									}
 									else
 									{
@@ -295,7 +307,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							printf(" -9999, -9999, \"::1\" ]\n");
 							mysql_free_result(result);
 							#if (IPSCAN_LOGVERBOSITY == 1)
-							IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: reported %d actual results to the client.\n", nump);
+							IPSCAN_LOG( LOGPREFIX "dump_db: reported %d actual results to the client.\n", nump);
 							#endif
 						}
 						else

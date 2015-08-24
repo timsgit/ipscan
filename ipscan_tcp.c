@@ -25,6 +25,7 @@
 // 0.05				ensure minimum timings are met
 // 0.06				improve error reporting
 // 0.07				ensure fd closure is handled cleanly
+// 0.08				add null termination to unusedfield
 
 #include "ipscan.h"
 //
@@ -262,7 +263,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): startindex %d, todo %d\n",portindex,todo);
 		#endif
 		// child - actually do the work here - and then exit successfully
-		char unusedfield[8] = "unused";
+		char unusedfield[8] = "unused\0";
 		for (i = 0 ; i <(int)todo ; i++)
 		{
 			uint16_t port = portlist[portindex+i].port_num;

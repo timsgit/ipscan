@@ -52,6 +52,7 @@
 // 0.31 - improved querystring parsing, truncated session id
 // 0.32 - add Navigate away detection
 // 0.33 - add reporting for fork() issues
+// 0.34 - add automated results deletion for javascript clients
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -203,6 +204,11 @@ int main(void)
 	struct portlist_struc portlist[MAXPORTS];
 
 	int result;
+
+	#if (TEXTMODE != 1)
+	// Default for unused database entries
+	char unusedfield[8] = "unused\0";
+	#endif
 
 	// Only necessary if we're including ping support
 	#if (IPSCAN_INCLUDE_PING == 1)
@@ -402,7 +408,7 @@ int main(void)
 				//
 				// Split the query string into variable names and values
 				//
-				// URL is of the form: ipv6.cgi?name1=value1&name2=value2
+				// URL is of the form: ipscan-js.cgi?name1=value1&name2=value2
 				unsigned int queryindex = 0;
 				int finished = 0;
 
@@ -703,8 +709,8 @@ int main(void)
 			customport++;
 		}
 
-		// Look for Tims magic query string
-		// Could be desirable to make things more secure by comparing remote hosts IPv6 address too ...
+		// Look for magic query string
+		// NEVER use the summary facility on an internet-facing host.
 		i = 0;
 		magic = -1;
 		while (i < numqueries && strncmp("magic",query[i].varname,5)!= 0) i++;
@@ -1119,6 +1125,8 @@ int main(void)
 		}
 		#else
 
+		// These handle the calls by the javascript version of the tester
+
 		// *IF* we have everything we need to query the database ...
 		// querysession, querystarttime, fetch and includeexisting. Could also have one or more customports
 		// javascript updateurl always minimally includes includeexisting
@@ -1165,14 +1173,14 @@ int main(void)
 			}
 			#endif
 
-			// If the scan is complete then delete the results from the database
 			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum || IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
 			{
-				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
+				// Store an indication in the database that the test results have all been received
+				// by the browser and so the results can be safely deleted ...
+				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_COMPLETE, unusedfield);
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
-					exit(EXIT_FAILURE);
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_TESTSTATE COMPLETE returned non-zero: %d\n", rc);
 				}
 			}
 		}
@@ -1195,9 +1203,7 @@ int main(void)
 
 		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && includeexisting != 0 && fetch == 0)
 		{
-			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scanstart = time(0);
-			#endif
 
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
@@ -1205,6 +1211,13 @@ int main(void)
 			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
+
+			// Generate database entry for test state
+			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING, unusedfield);
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
+			}
 
 			// Only include this section if ping is compiled in ...
 			#if (IPSCAN_INCLUDE_PING == 1)
@@ -1410,6 +1423,43 @@ int main(void)
 				}
 				i++ ;
 			}
+
+			// Wait until the javascript client has flagged the test as complete or we've run out of time ...
+			time_t deletenowtime = time(0);
+			time_t timeouttime = (scanstart + IPSCAN_DELETE_TIMEOUT);
+			unsigned int client_finished = 0;
+			while (deletenowtime < timeouttime && client_finished == 0)
+			{
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
+				if (IPSCAN_TESTSTATE_COMPLETE == result) client_finished = 1;
+				sleep(5);
+				deletenowtime = time(0);
+			}
+
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			if (client_finished == 1)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop because client signalled.\n");
+			}
+			else
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop with no client response.\n");
+			}
+			#endif
+
+			#ifdef DBDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Deleting test results for %"PRIx64"%"PRIx64"\n", remotehost_msb, remotehost_lsb);
+			IPSCAN_LOG( LOGPREFIX "ipscan: starttime   was : %"PRId64"\n", scanstart);
+			IPSCAN_LOG( LOGPREFIX "ipscan: timeouttime was : %"PRId64"\n", timeouttime);
+			#endif
+
+			// Delete the results
+			rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
+			if (rc != 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
+			}
+
 		}
 
 		// *IF* we have everything we need to create the standard HTML page
@@ -1421,9 +1471,6 @@ int main(void)
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Creating the standard web results page start point\n");
 			#endif
-
-			// TJC 8-Jun-2014 starttime = time(0);
-			// TJC 8-Jun-2014 session = get_session();
 
 			// Create the header
 			create_html_header(session, starttime, numports, numudpports, reconquery);
