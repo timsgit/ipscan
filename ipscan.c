@@ -53,6 +53,8 @@
 // 0.32 - add Navigate away detection
 // 0.33 - add reporting for fork() issues
 // 0.34 - add automated results deletion for javascript clients
+// 0.35 - add support for deletion of orphaned results
+// 0.36 - add time() response checks
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -97,6 +99,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
 int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
+int tidy_up_db(uint64_t time_now);
 
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
@@ -319,7 +322,20 @@ int main(void)
 	// Log the current time and "session" with which to initiate scan and fetch results
 	// These should ensure that each test is globally unique when client IP address is also used.
 	starttime = time(0);
+	if (starttime < 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for starttime %d (%s)\n", errno, strerror(errno));
+	}
 	uint64_t session = get_session();
+
+	// Tidy up the database - really only required for orphaned results
+	// e.g. caused by server shutdown whilst a scan is in progress
+	//
+	if (starttime > 0)
+	{
+		rc = tidy_up_db( (uint64_t)starttime );
+		if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() returned %d\n", rc);
+	}
 
 	// QUERY_STRING / REQUEST_METHOD
 	// URL is of the form: ipv6.cgi?name1=value1&name2=value2
@@ -799,10 +815,6 @@ int main(void)
 		if ( numqueries >= (NUMUSERDEFPORTS + 1) && (numcustomports == NUMUSERDEFPORTS) && includeexisting != 0 )
 		{
 
-			// Take current time/PID for database logging purposes
-			// TJC 8-Jun-2014 starttime = time(0);
-			// TJC 8-Jun-2014 session = get_session();
-
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scanstart = starttime;
 			#endif
@@ -1068,6 +1080,10 @@ int main(void)
 			printf("</TABLE>\n");
 
 			time_t nowtime = time(0);
+			if (nowtime < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for nowtime %d (%s)\n", errno, strerror(errno));
+			}
 			printf("<P>Scan of %d ports complete at: %s.</P>\n", numports, asctime(localtime(&nowtime)));
 
 			// Create results key table
@@ -1077,6 +1093,10 @@ int main(void)
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scancomplete = time(0);
+			if (scancomplete < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for scancomplete %d (%s)\n", errno, strerror(errno));
+			}
 			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
 
@@ -1204,6 +1224,10 @@ int main(void)
 		else if ( numqueries >= 4 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 && includeexisting != 0 && fetch == 0)
 		{
 			time_t scanstart = time(0);
+			if (scanstart < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for scanstart %d (%s)\n", errno, strerror(errno));
+			}
 
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
@@ -1386,6 +1410,10 @@ int main(void)
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scancomplete = time(0);
+			if (scancomplete < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for scancomplete %d (%s)\n", errno, strerror(errno));
+			}
 			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
 
@@ -1426,14 +1454,22 @@ int main(void)
 
 			// Wait until the javascript client has flagged the test as complete or we've run out of time ...
 			time_t deletenowtime = time(0);
+			if (deletenowtime < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for deletenowtime %d (%s)\n", errno, strerror(errno));
+			}
 			time_t timeouttime = (scanstart + IPSCAN_DELETE_TIMEOUT);
 			unsigned int client_finished = 0;
 			while (deletenowtime < timeouttime && client_finished == 0)
 			{
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
 				if (IPSCAN_TESTSTATE_COMPLETE == result) client_finished = 1;
-				sleep(5);
+				sleep(IPSCAN_TESTSTATE_COMPLETE_SLEEP);
 				deletenowtime = time(0);
+				if (deletenowtime < 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for deletenowtime %d (%s)\n", errno, strerror(errno));
+				}
 			}
 
 			#if (IPSCAN_LOGVERBOSITY == 1)

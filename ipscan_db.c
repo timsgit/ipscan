@@ -38,6 +38,7 @@
 // 0.17 - include debug reporting of number of rows sent to client
 // 0.18 - further debug log improvements
 // 0.19 - handle addition of test-state field which shouldn't be reported to client
+// 0.20 - add support for database tidy up (deletion of orphaned results)
 
 #include "ipscan.h"
 //
@@ -405,7 +406,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						else
 						{
 							#if (IPSCAN_LOGVERBOSITY == 1)
-							IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
+							IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
 							#endif
 						}
 					}
@@ -702,4 +703,98 @@ if (PORTUNKNOWN == retres)
 }
 
 return (retres);
+}
+
+// ----------------------------------------------------------------------------------------
+//
+// Function to tidy up old results from the database
+//
+// ----------------------------------------------------------------------------------------
+int tidy_up_db(uint64_t time_now)
+{
+	int rc;
+	int retval = 0;
+	unsigned int qrylen;
+	char query[MAXDBQUERYSIZE];
+	MYSQL *connection;
+	MYSQL *mysqlrc;
+	if (time_now <= IPSCAN_DELETE_TIME_OFFSET)
+	{
+		IPSCAN_LOG( LOGPREFIX "tidy_up_db: Called with invalid time_now - %"PRIu64"\n", time_now);
+		return (1);
+	}
+	// Calculate ( now - IPSCAN_DELETE_TIME_OFFSET ).
+	// We'll delete everything older than this.
+	uint64_t delete_before_time = (time_now - IPSCAN_DELETE_TIME_OFFSET);
+
+	connection = mysql_init(NULL);
+	if (NULL == connection)
+	{
+		IPSCAN_LOG( LOGPREFIX "tidy_up_db: Failed to initialise MySQL\n");
+		retval = 1;
+	}
+	else
+	{
+		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
+		// in the my.cnf file which ensures that your program works, even if someone has set
+		// up MySQL in some nonstandard way.
+		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
+		if (0 == rc)
+		{
+
+			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			if (NULL == mysqlrc)
+			{
+				IPSCAN_LOG( LOGPREFIX "tidy_up_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+				IPSCAN_LOG( LOGPREFIX "tidy_up_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				retval = 3;
+			}
+			else
+			{
+				// DELETE FROM t1 WHERE a = b ;
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= '%"PRIu64"' )", MYSQL_TBLNAME, delete_before_time);
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				{
+
+					#ifdef DBDEBUG
+					IPSCAN_LOG( LOGPREFIX "tidy_up_db: MySQL Query is : %s\n", query);
+					#endif
+					rc = mysql_real_query(connection, query, qrylen);
+					if (0 == rc)
+					{
+						my_ulonglong affected_rows = mysql_affected_rows(connection);
+						if ( ((my_ulonglong)-1) == affected_rows)
+						{
+							IPSCAN_LOG( LOGPREFIX "tidy_up_db: surprisingly delete returned successfully, but mysql_affected_rows() did not.\n");
+							retval = 11;
+						}
+						else
+						{
+							#if (IPSCAN_LOGVERBOSITY == 1)
+							if (affected_rows > 0 ) IPSCAN_LOG( LOGPREFIX "tidy_up_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
+							#endif
+						}
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "tidy_up_db: Delete failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						retval = 10;
+					}
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "tidy_up_db: Failed to create select query\n");
+					retval = 4;
+				}
+			}
+			mysql_commit(connection);
+			mysql_close(connection);
+		}
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "tidy_up_db: mysql_options() failed - check your my.cnf file\n");
+			retval = 9;
+		}
+	}
+return (retval);
 }

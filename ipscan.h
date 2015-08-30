@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.42"
+	#define IPSCAN_VERNUM "1.43"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -148,6 +148,7 @@
 	// 1.40 Correct some Coverity reported issues
 	// 1.41 Add fork() issue reporting to aid debug
 	// 1.42 Add automatic deletion of all results
+	// 1.43 Add support for automatic deletion of orphaned results
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -475,6 +476,14 @@
 
 	// Timeout before results are deleted ...
 	#define IPSCAN_DELETE_TIMEOUT (180)
+
+	// Sleep time between polls when waiting to delete results
+	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (5)
+
+	// Offset from now in seconds. All results older than (now-this) are deleted
+	// Should hardly ever be used, but ensures tests which were in progress when
+	// the server was shutdown/rebooted, etc. are deleted
+	#define IPSCAN_DELETE_TIME_OFFSET (600)
 
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router

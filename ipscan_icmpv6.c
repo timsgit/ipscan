@@ -24,6 +24,7 @@
 // 0.4				ensure minimum timings are met
 // 0.5				ensure txid doesn't exceed 16-bits (move to random session ID)
 // 0.6				clear msghdr.msg_flags
+// 0.7				add time() checks
 
 #include "ipscan.h"
 //
@@ -352,6 +353,10 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	// indirect determines whether a host other than the intended target has replied
 	int indirect = 0;
 	time_t timestart = time(0);
+	if (timestart < 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: time() returned bad value for timestart %d (%s)\n", errno, strerror(errno));
+	}
 	time_t timenow = timestart;
 	unsigned int loopcount = 0;
 
@@ -372,6 +377,10 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		errsv = errno;
 		// Capture current time for next timeout comparison
 		timenow = time(0);
+		if (timenow < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: time() returned bad value for timenow %d (%s)\n", errno, strerror(errno));
+		}
 
 		if (rc < 0)
 		{
