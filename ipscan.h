@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.43"
+	#define IPSCAN_VERNUM "1.44"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -149,6 +149,7 @@
 	// 1.41 Add fork() issue reporting to aid debug
 	// 1.42 Add automatic deletion of all results
 	// 1.43 Add support for automatic deletion of orphaned results
+	// 1.44 Add support for RIPng and IKEv2 SA_INIT
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -166,7 +167,6 @@
 
 	// URL providing description special protocol tests
 	#define IPSCAN_SPECIALTESTS_URL "http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6_SpecialTests"
-
 
 	// MySQL database-related globals
 	#define MYSQL_HOST "localhost"

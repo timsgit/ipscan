@@ -29,6 +29,8 @@
 // 0.06 - add NTP special case
 // 0.07 - add TCP/32764 router backdoor port (may be IPv4 only)
 // 0.08 - add SNMPv2c and SNMPv3
+// 0.09 - slight tweaks to a few Microsoft ports
+//        as per https://msdn.microsoft.com/en-us/library/cc875824.aspx
 
 #include "ipscan.h"
 
@@ -50,36 +52,36 @@
 		{   53, 0, "DNS" },\
 		{   79, 0, "Finger" },\
 		{   80, 0, "HTTP" },\
-		{   88, 0, "Kerberos" },\
 		{  110, 0, "POP3" },\
 		{  111, 0, "SUN-RPC" },\
 		{  113, 0, "Ident, Auth" },\
 		{  119, 0, "NNTP" },\
-		{  123, 0, "NTP" },\
 		{  135, 0, "Microsoft-EPMAP" },\
-		{  137, 0, "NetBIOS Naming" },\
-		{  138, 0, "NetBIOS Datagram" },\
 		{  139, 0, "NetBIOS Session" },\
 		{  143, 0, "IMAP" },\
+		{  179, 0, "BGP" },\
 		{  311, 0, "Apple-WebAdmin" },\
 		{  389, 0, "LDAP" },\
 		{  427, 0, "SLP" },\
 		{  443, 0, "HTTPS" },\
 		{  445, 0, "Microsoft-DS" },\
-		{  514, 0, "Shell" },\
+		{  515, 0, "LPD" },\
 		{  543, 0, "Kerberos Login" },\
 		{  544, 0, "Kerberos RSH" },\
 		{  548, 0, "Apple-File" },\
+		{  587, 0, "ESMTP" },\
 		{  631, 0, "IPP" },\
 		{  749, 0, "Kerberos Admin" },\
 		{  873, 0, "Rsync" },\
 		{  993, 0, "IMAPS" },\
+		{  995, 0, "POP3S" },\
 		{ 1025, 0, "Blackjack, NFS, IIS or RFS" },\
 		{ 1026, 0, "CAP, Microsoft DCOM" },\
 		{ 1029, 0, "Microsoft DCOM" },\
 		{ 1030, 0, "BBN IAD" },\
 		{ 1080, 0, "Socks" },\
 		{ 1720, 0, "H323, Microsoft Netmeeting" },\
+		{ 1723, 0, "PPTP" },\
 		{ 2869, 0, "SSDP Event Notification" },\
 		{ 3128, 0, "Active API, or Squid Proxy" },\
 		{ 3306, 0, "MySQL" },\
@@ -109,7 +111,10 @@
 			{  161, 0, "SNMPv1" },\
 			{  161, 1, "SNMPv2c" },\
 			{  161, 2, "SNMPv3" },\
+			{  500, 0, "IKEv2 SA_INIT" },\
+			{  521, 0, "RIPng" },\
 			{ 1900, 0, "UPnP SSDP" },\
+			{ 4500, 0, "IKEv2 NAT-T SA_INIT" },\
 		};
 
 #if (IPSCAN_INCLUDE_UDP == 1)

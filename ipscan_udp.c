@@ -32,6 +32,7 @@
 // 0.12			initialise sin6_scope_id, although unused
 // 0.13			add logging for DNS query term creation
 // 0.14			add null termination to unusedfield
+// 0.15			add RIPng
 
 #include "ipscan.h"
 //
@@ -515,7 +516,9 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				break;
 			}
 
+			// IKEv2
 			case 500:
+			case 4500:
 			{
 				// ISAKMP
 				len = 0;
@@ -537,25 +540,73 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				txmessage[len++] = 0;
 				txmessage[len++] = 0;
 				txmessage[len++] = 0;
-				// Next payload 0=None, 2=proposal, 4=key exchange
-				txmessage[len++] = 4;
-				// Version Major/Minor 1.0
-				txmessage[len++] = 16;
-				// Exchange type 4=aggressive
-				txmessage[len++] = 4;
-				// Flags
-				txmessage[len++] = 0;
+				// Next payload 0=None, 2=proposal, 4=key exchange, 33=SA
+				txmessage[len++] = 33;
+				// Version Major/Minor 2.0
+				txmessage[len++] = 32;
+				// Exchange type 4=aggressive, 34=IKE_SA_INIT
+				txmessage[len++] = 34;
+				// Flags 8=initiator
+				txmessage[len++] = 8;
 
 				// Message ID (4 bytes)
-				txmessage[len++] = 128;
+				txmessage[len++] = 0;
 				txmessage[len++] = 0;
 				txmessage[len++] = 0;
 				txmessage[len++] = 0;
 				// Length (4 bytes)
 				txmessage[len++] = 0;
 				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = (28+12); // includes key exchange payload
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x2c; // includes key exchange payload
+
+				// SA=33
+				// Next payload 0=None, 2=proposal, 4=key exchange, 33=SA, 34=KeyEx
+				txmessage[len++] = 34;
+				txmessage[len++] = 0; // Not critical
+				txmessage[len++] = 0; // Length 44
+				txmessage[len++] = 44;
+
+				txmessage[len++] = 0x00; // No next payload
+				txmessage[len++] = 0x00; // Not critical
+				txmessage[len++] = 0x00; // Length 40
+				txmessage[len++] = 0x28;
+				txmessage[len++] = 0x01; // Proposal 1
+				txmessage[len++] = 0x01; // IKE
+				txmessage[len++] = 0x00; // SPI size 0
+				txmessage[len++] = 0x04; // Number of transforms
+				txmessage[len++] = 0x03; // Payload type is transform
+				txmessage[len++] = 0x00; // Not critical
+				txmessage[len++] = 0x00; // Length 8
+				txmessage[len++] = 0x08;
+				txmessage[len++] = 0x01; // ENCRYPTION Algorithm
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // 3=3DES
+				txmessage[len++] = 0x03;
+				txmessage[len++] = 0x03; // Payload type is transform
+				txmessage[len++] = 0x00; // Not critical
+				txmessage[len++] = 0x00; // Length 8
+				txmessage[len++] = 0x08;
+				txmessage[len++] = 0x03; // INTEGRITY Algorithm
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // 2=AUTH_HMAC_SHA1_96
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x03; // Payload type is transform
+				txmessage[len++] = 0x00; // Not critical
+				txmessage[len++] = 0x00; // Length 8
+				txmessage[len++] = 0x08;
+				txmessage[len++] = 0x02; // PRF Algorithm
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // 2=PRF_HMAC_SHA1
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x00; // Next Payload type is NONE
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // Length 8
+				txmessage[len++] = 0x08;
+				txmessage[len++] = 0x04; // 4=Diffie-Hellman Group
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // 1024-bit MODP group
+				txmessage[len++] = 0x02;
 
 				// Key Exchange payload
 				//      		   	  1                   2                   3
@@ -567,22 +618,280 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				//~                       Key Exchange Data                       ~
 				//!                                                               !
 				//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				// next payload 0=none
-				txmessage[len++] = 0;
-				// reserved
-				txmessage[len++] = 0;
-				// length
-				txmessage[len++] = 0;
-				txmessage[len++] = 12;
-				// Key exchange data
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
+				//
+
+				txmessage[len++] = 0x28; // Next Payload type is None (40)
+				txmessage[len++] = 0x00; // Not critical
+				txmessage[len++] = 0x00; // Length 136
+				txmessage[len++] = 0x88;
+				txmessage[len++] = 0x00; // DH group 1024-bit MODP (2)
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x2d; // Key Exchange data (128 octets)
+				txmessage[len++] = 0x54;
+				txmessage[len++] = 0x91;
+				txmessage[len++] = 0xfa;
+				txmessage[len++] = 0x0c;
+				txmessage[len++] = 0xd4;
+				txmessage[len++] = 0xd4;
+				txmessage[len++] = 0xcc;
+				txmessage[len++] = 0x77;
+				txmessage[len++] = 0xf8;
+				txmessage[len++] = 0xce;
+				txmessage[len++] = 0x08;
+				txmessage[len++] = 0x98;
+				txmessage[len++] = 0x45;
+				txmessage[len++] = 0x40;
+				txmessage[len++] = 0xb7;
+				txmessage[len++] = 0xc6;
+				txmessage[len++] = 0x8c;
+				txmessage[len++] = 0x08;
+				txmessage[len++] = 0x93;
+				txmessage[len++] = 0x2c;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0xf7;
+				txmessage[len++] = 0xc1;
+				txmessage[len++] = 0x5b;
+				txmessage[len++] = 0xf1;
+				txmessage[len++] = 0x04;
+				txmessage[len++] = 0xb0;
+				txmessage[len++] = 0x94;
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x1a;
+				txmessage[len++] = 0xf9;
+				txmessage[len++] = 0x95;
+				txmessage[len++] = 0x29;
+				txmessage[len++] = 0x6c;
+				txmessage[len++] = 0x4a;
+				txmessage[len++] = 0x26;
+				txmessage[len++] = 0x12;
+				txmessage[len++] = 0x18;
+				txmessage[len++] = 0x75;
+				txmessage[len++] = 0x21;
+				txmessage[len++] = 0x0e;
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x06;
+				txmessage[len++] = 0x11;
+				txmessage[len++] = 0x49;
+				txmessage[len++] = 0xc1;
+				txmessage[len++] = 0xa0;
+				txmessage[len++] = 0xc5;
+				txmessage[len++] = 0x82;
+				txmessage[len++] = 0xe1;
+				txmessage[len++] = 0x11;
+				txmessage[len++] = 0x30;
+				txmessage[len++] = 0xab;
+				txmessage[len++] = 0xc4;
+				txmessage[len++] = 0x31;
+				txmessage[len++] = 0xde;
+				txmessage[len++] = 0x49;
+				txmessage[len++] = 0x7d;
+				txmessage[len++] = 0xd3;
+				txmessage[len++] = 0xe6;
+				txmessage[len++] = 0xfb;
+				txmessage[len++] = 0x42;
+				txmessage[len++] = 0x08;
+				txmessage[len++] = 0xfd;
+				txmessage[len++] = 0x72;
+				txmessage[len++] = 0x74;
+				txmessage[len++] = 0xbf;
+				txmessage[len++] = 0x34;
+				txmessage[len++] = 0x60;
+				txmessage[len++] = 0xdc;
+				txmessage[len++] = 0x98;
+				txmessage[len++] = 0x97;
+				txmessage[len++] = 0xd3;
+				txmessage[len++] = 0xb5;
+				txmessage[len++] = 0x5b;
+				txmessage[len++] = 0x82;
+				txmessage[len++] = 0xec;
+				txmessage[len++] = 0x77;
+				txmessage[len++] = 0x0d;
+				txmessage[len++] = 0xae;
+				txmessage[len++] = 0xca;
+				txmessage[len++] = 0x39;
+				txmessage[len++] = 0xfd;
+				txmessage[len++] = 0x9a;
+				txmessage[len++] = 0x08;
+				txmessage[len++] = 0x8f;
+				txmessage[len++] = 0x5a;
+				txmessage[len++] = 0x73;
+				txmessage[len++] = 0xa1;
+				txmessage[len++] = 0xfd;
+				txmessage[len++] = 0x60;
+				txmessage[len++] = 0x98;
+				txmessage[len++] = 0xa8;
+				txmessage[len++] = 0xc8;
+				txmessage[len++] = 0xdf;
+				txmessage[len++] = 0x16;
+				txmessage[len++] = 0x3d;
+				txmessage[len++] = 0x55;
+				txmessage[len++] = 0xff;
+				txmessage[len++] = 0x6d;
+				txmessage[len++] = 0xe0;
+				txmessage[len++] = 0x94;
+				txmessage[len++] = 0xd7;
+				txmessage[len++] = 0x93;
+				txmessage[len++] = 0xa6;
+				txmessage[len++] = 0x82;
+				txmessage[len++] = 0x1f;
+				txmessage[len++] = 0xce;
+				txmessage[len++] = 0x07;
+				txmessage[len++] = 0x0a;
+				txmessage[len++] = 0x17;
+				txmessage[len++] = 0xf4;
+				txmessage[len++] = 0x87;
+				txmessage[len++] = 0x0b;
+				txmessage[len++] = 0xc7;
+				txmessage[len++] = 0x90;
+				txmessage[len++] = 0xa2;
+				txmessage[len++] = 0x47;
+				txmessage[len++] = 0x51;
+				txmessage[len++] = 0xca;
+				txmessage[len++] = 0x2c;
+				txmessage[len++] = 0xe8;
+				txmessage[len++] = 0x33;
+				txmessage[len++] = 0x3a;
+				txmessage[len++] = 0x4d;
+				txmessage[len++] = 0x5f;
+				txmessage[len++] = 0xae;
+
+				// Payload is Nonce
+				txmessage[len++] = 0x29; // Next payload is Notify (41)
+				txmessage[len++] = 0x00; // Not critical
+				txmessage[len++] = 0x00; // Length 36
+				txmessage[len++] = 0x24; // Nonce data
+				txmessage[len++] = 0xfb;
+				txmessage[len++] = 0xe5;
+				txmessage[len++] = 0x90;
+				txmessage[len++] = 0x3f;
+				txmessage[len++] = 0xc9;
+				txmessage[len++] = 0xdf;
+				txmessage[len++] = 0x47;
+				txmessage[len++] = 0x09;
+				txmessage[len++] = 0xe5;
+				txmessage[len++] = 0xd4;
+				txmessage[len++] = 0xab;
+				txmessage[len++] = 0x0a;
+				txmessage[len++] = 0xa6;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0xb3;
+				txmessage[len++] = 0xbe;
+				txmessage[len++] = 0x36;
+				txmessage[len++] = 0xeb;
+				txmessage[len++] = 0x35;
+				txmessage[len++] = 0xa6;
+				txmessage[len++] = 0xf5;
+				txmessage[len++] = 0x54;
+				txmessage[len++] = 0x47;
+				txmessage[len++] = 0xfe;
+				txmessage[len++] = 0xda;
+				txmessage[len++] = 0xb9;
+				txmessage[len++] = 0x0d;
+				txmessage[len++] = 0x67;
+				txmessage[len++] = 0x66;
+				txmessage[len++] = 0x9f;
+				txmessage[len++] = 0xab;
+				txmessage[len++] = 0x96;
+
+				// Payload is Notify
+				txmessage[len++] = 0x29; // Next payload is also notify
+				txmessage[len++] = 0x00; // Not critical
+				txmessage[len++] = 0x00; // Length 28
+				txmessage[len++] = 0x1c;
+				txmessage[len++] = 0x00; // Protocol ID is RESERVED (0)
+				txmessage[len++] = 0x00; // SPI size is 0
+				txmessage[len++] = 0x40; // NAT_DETECTION_SOURCE_IP (16388)
+				txmessage[len++] = 0x04;
+				// data is SHA1(SPIs, source IP address, source port)
+				// however, we're just looking for a response, not a valid
+				// packet
+				txmessage[len++] = 0xc6; // Notification data
+				txmessage[len++] = 0x93;
+				txmessage[len++] = 0x14;
+				txmessage[len++] = 0x61;
+				txmessage[len++] = 0x31;
+				txmessage[len++] = 0xa7;
+				txmessage[len++] = 0x7f;
+				txmessage[len++] = 0xe9;
+				txmessage[len++] = 0x93;
+				txmessage[len++] = 0x47;
+				txmessage[len++] = 0x26;
+				txmessage[len++] = 0xe5;
+				txmessage[len++] = 0x23;
+				txmessage[len++] = 0x17;
+				txmessage[len++] = 0xd4;
+				txmessage[len++] = 0xec;
+				txmessage[len++] = 0x5f;
+				txmessage[len++] = 0x64;
+				txmessage[len++] = 0x45;
+				txmessage[len++] = 0xf1;
+
+				// Payload is Notify
+				txmessage[len++] = 0x00; // Next payload is NONE
+				txmessage[len++] = 0x00; // Not critical
+				txmessage[len++] = 0x00; // :ength 28
+				txmessage[len++] = 0x1c;
+				txmessage[len++] = 0x00; // Protocol ID is RESERVED(0)
+				txmessage[len++] = 0x00; // SPI size = 0
+				txmessage[len++] = 0x40; // NAT_DETECTION_DESTIANTION_IP (16389)
+				txmessage[len++] = 0x05;
+				// data is SHA1(SPIs, source IP address, source port)
+				// however, we're just looking for a response, not a valid
+				// packet
+				txmessage[len++] = 0xf9; // Notification data
+				txmessage[len++] = 0x33;
+				txmessage[len++] = 0xa1;
+				txmessage[len++] = 0x9a;
+				txmessage[len++] = 0x65;
+				txmessage[len++] = 0x1a;
+				txmessage[len++] = 0xc3;
+				txmessage[len++] = 0x73;
+				txmessage[len++] = 0x8b;
+				txmessage[len++] = 0xb7;
+				txmessage[len++] = 0xf6;
+				txmessage[len++] = 0x04;
+				txmessage[len++] = 0x43;
+				txmessage[len++] = 0x6f;
+				txmessage[len++] = 0x80;
+				txmessage[len++] = 0x12;
+				txmessage[len++] = 0x69;
+				txmessage[len++] = 0x3e;
+				txmessage[len++] = 0x6a;
+				txmessage[len++] = 0x2a;
+
+				break;
+			}
+
+			// RIPng
+			case 521:
+			{
+				len = 0;
+				txmessage[len++] = 0x01; // Command is REQUEST
+				txmessage[len++] = 0x01; // Version 1
+				txmessage[len++] = 0x00; // Reserved
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // ::
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // Route Tag
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // Prefix length
+				txmessage[len++] = 0x10; // Metric
 				break;
 			}
 
