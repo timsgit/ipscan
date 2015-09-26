@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.44"
+	#define IPSCAN_VERNUM "1.45"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -150,6 +150,7 @@
 	// 1.42 Add automatic deletion of all results
 	// 1.43 Add support for automatic deletion of orphaned results
 	// 1.44 Add support for RIPng and IKEv2 SA_INIT
+	// 1.45 Reintroduce MPLS LSP Ping
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"

@@ -114,6 +114,7 @@
 			{  500, 0, "IKEv2 SA_INIT" },\
 			{  521, 0, "RIPng" },\
 			{ 1900, 0, "UPnP SSDP" },\
+			{ 3503, 0, "MPLS LSP Ping" },\
 			{ 4500, 0, "IKEv2 NAT-T SA_INIT" },\
 		};
 

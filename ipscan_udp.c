@@ -28,11 +28,14 @@
 // 0.08                 move to memset()
 // 0.09			ensure minimum timings are met
 // 0.10			improve error handling
-// 0.11			snmpv3 support
+// 0.11			SNMPv3 support
 // 0.12			initialise sin6_scope_id, although unused
 // 0.13			add logging for DNS query term creation
 // 0.14			add null termination to unusedfield
 // 0.15			add RIPng
+// 0.16			add MPLS LSP Ping back
+// 0.17			tweaks to DNS query
+// 0.18			Improvements to MPLS LSP Ping
 
 #include "ipscan.h"
 //
@@ -86,11 +89,17 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 
 int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 {
-	char txmessage[UDP_BUFFER_SIZE],rxmessage[UDP_BUFFER_SIZE];
+	char txmessage[UDP_BUFFER_SIZE+1],rxmessage[UDP_BUFFER_SIZE+1];
 	struct sockaddr_in6 remoteaddr;
+	struct addrinfo hints;
+	struct addrinfo *res, *aip;
 	struct timeval timeout;
+	char localaddrstr[INET6_ADDRSTRLEN+1];
+	struct sockaddr_in6 localaddr;
 	int rc = 0, i;
+	const char * rccharptr;
 	int fd = -1;
+	char portnum[8];
 
 	// buffer for logging entries
 	#ifdef UDPDEBUG
@@ -108,9 +117,68 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	// Capture time of day and convert to NTP format
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
+	const unsigned long long EPOCH = 2208988800ULL;
+	const unsigned long long NTP_SCALE_FRAC = 4294967296ULL;
+	unsigned long long tv_secs = tv.tv_sec + EPOCH;
+	unsigned long long tv_usecs = (NTP_SCALE_FRAC * tv.tv_usec) / 1000000UL;
 
 	// Prefill transmit message buffer with 0s
 	memset(&txmessage, 0,  UDP_BUFFER_SIZE);
+
+	// Clear localaddr
+	memset(&localaddr, 0, sizeof(struct sockaddr_in6));
+	// unused currently, but just in case ...
+	localaddr.sin6_port = htons(port);
+	localaddr.sin6_family = AF_INET6;
+	localaddr.sin6_flowinfo = 0;
+	localaddr.sin6_scope_id = 0;
+
+	// Determine local source interface address
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_INET6;
+	hints.ai_flags = AI_NUMERICSERV; // Don't set AI_PASSIVE so results will be suitable for send()
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_protocol = 0; /* Any protocol */
+	hints.ai_canonname = NULL;
+	hints.ai_addr = NULL;
+	hints.ai_next = NULL;
+
+	rc = snprintf(portnum, 8,"%d", port);
+	if (rc < 0 || rc >= 8)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: Failed to write portnum, rc was %d\n", rc);
+		exit(EXIT_FAILURE);
+	}
+
+	rc = getaddrinfo(hostname, portnum, &hints, &res);
+	if (rc != 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: getaddrinfo: %s for host %s port %d\n", gai_strerror(errno), hostname, port);
+	    exit(EXIT_FAILURE);
+	}
+
+	for (aip = res; NULL != aip ; aip = aip->ai_next)
+	{
+		if (NULL != aip)
+		{
+			rccharptr = inet_ntop(AF_INET6, &((*((struct sockaddr_in6*)aip->ai_addr)).sin6_addr), localaddrstr, INET6_ADDRSTRLEN);
+			if (NULL == rccharptr)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: inet_ntop() returned an error (%s)\n", strerror(errno));
+			}
+			else
+			{
+				#ifdef UDPDEBUG
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: found localaddr = %s\n", localaddrstr);
+				#endif
+				// Copy result to localaddr for later use (MPLS LSP Ping)
+				memcpy(&localaddr.sin6_addr, &((*((struct sockaddr_in6*)aip->ai_addr)).sin6_addr), sizeof(struct in6_addr));
+				break;
+			}
+		}
+	}
+	// Release dynamically allocated results
+	freeaddrinfo(res);
 
 	rc = inet_pton(AF_INET6, hostname, &(remoteaddr.sin6_addr));
 	if (rc != 1)
@@ -182,6 +250,12 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			// DNS query
 			case 53:
 			{
+				// Host name to query
+				char dnsquery1[] = "www6";
+				char dnsquery2[] = "chappell-family";
+				char dnsquery3[] = "co";
+				char dnsquery4[] = "uk";
+
 				/*
 				Header - 12 bytes
 				Contains fields that describe the type of message and provide important information about it.
@@ -193,9 +267,10 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				Additional conveys one or more resource records that contain additional information related to the query that
 				is not strictly necessary to answer the queries (questions) in the message.
 				*/
+				len = 0;
 				// ID - identifier - 16 bit field
-				txmessage[0]= 21;
-				txmessage[1]= 06;
+				txmessage[len++]= 21;
+				txmessage[len++]= 6;
 				// QR - query/response flag - 0=query. 1 bit field
 				// OP - opcode - 0=query,2=status. 4 bit field
 				// AA - Authoritative Answer flag. 1 bit field
@@ -204,55 +279,90 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// RA - recursion available. 1 bit field
 				// Z  - reserved. 3 bit field
 				// Rcode - result code - 0=no error, 4=not implemented
-				txmessage[2]= 16; // 16 for server status query
-				txmessage[3]= 0;
+				txmessage[len++]= 1; // 0=Standard Query, 1=Recursion, 16 for server status query
+				txmessage[len++]= 0;
 				// QDCOUNT - question count - 16 bit field
-				txmessage[4]= 0;
-				txmessage[5]= 1;
+				txmessage[len++]= 0;
+				txmessage[len++]= 1;
 				// ANCOUNT - answer record count - 16 bit field
-				txmessage[6]= 0;
-				txmessage[7]= 0;
+				txmessage[len++]= 0;
+				txmessage[len++]= 0;
 				// NSCOUNT - authority record count (NS=name server) - 16 bit field
-				txmessage[8]= 0;
-				txmessage[9]= 0;
+				txmessage[len++]= 0;
+				txmessage[len++]= 0;
 				// ARCOUNT - 16 bit field
-				txmessage[10]= 0;
-				txmessage[11]= 0;
+				txmessage[len++]= 0;
+				txmessage[len++]= 0;
 				// Question section
-				txmessage[12]= 4;
+
+				txmessage[len++]= strlen(dnsquery1);
 				// Need one extra octet for trailing 0, however this will be overwritten
 				// by the length of the next part of the host name in standard DNS format
-				rc = snprintf(&txmessage[13], 5, "%s", "www4");
-				if (rc < 0 || rc >=5)
+				rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", dnsquery1);
+				if (rc < 0 || rc >=( UDP_BUFFER_SIZE-len ))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+					retval = PORTINTERROR;
 				}
-				txmessage[17]= 4;
-				rc = snprintf(&txmessage[18], 5, "%s", "ipv6");
-				if (rc < 0 || rc >= 5)
+				else
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+					len += rc;
 				}
-				txmessage[22]= 15;
-				rc = snprintf(&txmessage[23], 16, "%s", "chappell-family");
-				if (rc < 0 || rc >= 16)
+
+				if (retval == PORTUNKNOWN)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+					txmessage[len++]= strlen(dnsquery2);
+					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", dnsquery2);
+					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
+					{
+						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+						retval = PORTINTERROR;
+					}
+					else
+					{
+						len += rc;
+					}
 				}
-				txmessage[38]= 3;
-				rc = snprintf(&txmessage[39], 4, "%s", "com");
-				if (rc < 0 || rc >= 4)
+
+				if (retval == PORTUNKNOWN)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+					txmessage[len++]= strlen(dnsquery3);
+					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", dnsquery3);
+					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
+					{
+						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+						retval = PORTINTERROR;
+					}
+					else
+					{
+						len += rc;
+					}
 				}
-				txmessage[42]= 0;
+
+				if (retval == PORTUNKNOWN)
+				{
+					txmessage[len++]= strlen(dnsquery4);
+					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", dnsquery4);
+					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
+					{
+						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+						retval = PORTINTERROR;
+					}
+					else
+					{
+						len += rc;
+					}
+				}
+
+				// End of name
+				txmessage[len++]= 0;
+
 				// Question type - 1 = host address, 2=NS, 255 is request all
-				txmessage[43] = 0;
-				txmessage[44] = 255;
+				txmessage[len++] = 0;
+				txmessage[len++] = 255;
 				// Qclass - 1=INternet
-				txmessage[45] = 0;
-				txmessage[46] = 1;
-				len=47;
+				txmessage[len++] = 0;
+				txmessage[len++] = 1;
 				break;
 			}
 
@@ -371,10 +481,10 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					// Community name
 					txmessage[len++] = 0x04; //string
 					txmessage[len++] = strlen(community);
-					rc = sprintf(&txmessage[len], "%s", community);
-					if (rc < 0)
+					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", community);
+					if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 					{
-						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for snmp, returned %d\n", rc);
+						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for SNMP, returned %d\n", rc);
 						retval = PORTINTERROR;
 					}
 					else
@@ -902,12 +1012,182 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				//
 				len = snprintf(&txmessage[0], UDP_BUFFER_SIZE, \
 				"M-SEARCH * HTTP/1.1\r\nHost:[%s]:1900\r\nMan: \"ssdp:discover\"\r\nMX:1\r\nST: \"ssdp:all\"\r\nUSER-AGENT: linux/2.6 UPnP/1.1 TimsTester/1.0\r\n\r\n", hostname);
-				if (len < 0)
+				if (len < 0 || len >= UDP_BUFFER_SIZE)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for upnp, returned %d\n", len);
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for UPnP, returned %d\n", len);
 					len = 0;
 					retval = PORTINTERROR;
 				}
+
+				break;
+			}
+
+			// LSP Ping
+			case 3503:
+			{
+				// Taken from RFC4379
+				//
+				//             0                   1                   2                   3
+				//		       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |         Version Number        |         Global Flags          |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |  Message Type |   Reply mode  |  Return Code  | Return Subcode|
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                        Sender's Handle                        |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                        Sequence Number                        |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                    TimeStamp Sent (seconds)                   |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                  TimeStamp Sent (microseconds)                |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                  TimeStamp Received (seconds)                 |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                TimeStamp Received (microseconds)              |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//		      |                            TLVs ...                           |
+				//		      .                                                               .
+				//		      .                                                               .
+				//		      .                                                               .
+				//		      |                                                               |
+				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				// Version
+				txmessage[len++] = 0;
+				txmessage[len++] = 1; // Version 1
+				// Global flags
+				txmessage[len++] = 0;
+				txmessage[len++] = 1; // Global Flags 1=Validate FEC Stack
+				// Message type
+				txmessage[len++] = 1; // Message type 1=echo request
+				// Reply mode
+				txmessage[len++] = 2; // Reply Mode (1=don't;2=ip udp;3=ip udp + router alert; 4 = app level control channel)
+				// Return code
+				txmessage[len++] = 0; // Filled in by responder
+				// Return subcode
+				txmessage[len++] = 0; // Filled in by responder
+				// Sender's Handle
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				// Sequence Number
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 1;
+				// Timestamp sent (seconds)
+				txmessage[len++] = (tv_secs >> 24) & 0xff;
+				txmessage[len++] = (tv_secs >> 16) & 0xff;
+				txmessage[len++] = (tv_secs >>  8) & 0xff;
+				txmessage[len++] = tv_secs         & 0xff;
+				// Timestamp sent (microseconds)
+				txmessage[len++] = (tv_usecs >> 24) & 0xff;
+				txmessage[len++] = (tv_usecs >> 16) & 0xff;
+				txmessage[len++] = (tv_usecs >>  8) & 0xff;
+				txmessage[len++] = tv_usecs         & 0xff;
+				// Timestamp received (seconds)
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				// Timestamp received (microseconds)
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
+				//
+				// TLVs
+				//
+				//			TLVs (Type-Length-Value tuples) have the following format:
+				//
+				//			       0                   1                   2                   3
+				//			       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//			      |             Type              |            Length             |
+				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//			      |                             Value                             |
+				//			      .                                                               .
+				//			      .                                                               .
+				//			      .                                                               .
+				//			      |                                                               |
+				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//			   Types are defined below; Length is the length of the Value field in
+				//			   octets.  The Value field depends on the Type; it is zero padded to
+				//			   align to a 4-octet boundary.  TLVs may be nested within other TLVs,
+				//			   in which case the nested TLVs are called sub-TLVs.  Sub-TLVs have
+				//			   independent types and MUST also be 4-octet aligned.
+				//
+				//			   A description of the Types and Values of the top-level TLVs for LSP
+				//			   ping are given below:
+				//
+				//			          Type #                  Value Field
+				//			          ------                  -----------
+				//			               1                  Target FEC Stack
+				//			               2                  Downstream Mapping
+				//			               3                  Pad
+				//			               4                  Not Assigned
+				//			               5                  Vendor Enterprise Number
+				//			               6                  Not Assigned
+				//			               7                  Interface and Label Stack
+				//			               8                  Not Assigned
+				//			               9                  Errored TLVs
+				//			              10                  Reply TOS Byte
+				//
+				// Always include a FEC TLV
+				txmessage[len++] = 0;
+				txmessage[len++] = 1; // Target FEC Stack (from types listed above)
+				txmessage[len++] = 0;
+				txmessage[len++] = 24; // length of LDP IPv6 prefix that follows
+				//
+				// A Target FEC Stack is a list of sub-TLVs.  The number of elements is
+				//   determined by looking at the sub-TLV length fields.
+				//
+				//    Sub-Type       Length            Value Field
+				//    --------       ------            -----------
+				//           1            5            LDP IPv4 prefix
+				//           2           17            LDP IPv6 prefix
+				//           3           20            RSVP IPv4 LSP
+				//           4           56            RSVP IPv6 LSP
+				//           5                         Not Assigned
+				//           6           13            VPN IPv4 prefix
+				//           7           25            VPN IPv6 prefix
+				//           8           14            L2 VPN endpoint
+				//           9           10            "FEC 128" Pseudowire (deprecated)
+				//          10           14            "FEC 128" Pseudowire
+				//          11          16+            "FEC 129" Pseudowire
+				//          12            5            BGP labeled IPv4 prefix
+				//
+				txmessage[len++] = 0;
+				txmessage[len++] = 2; // Sub-type LDP IPv6 prefix
+				txmessage[len++] = 0;
+				txmessage[len++] = 17; // LDP IPv6 prefix TLV length as listed above
+				//
+				//			The Label Distribution Protocol (LDP) IPv6 FEC
+				//			sub-TLV has the following format:
+				//
+				//       0                   1                   2                   3
+				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |                          IPv6 prefix                          |
+				//      |                          (16 octets)                          |
+				//      |                                                               |
+				//      |                                                               |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      | Prefix Length |         Must Be Zero                          |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//
+				// copy the server's local address into the FEC entry
+				for (i = 0; i < 16; i++)
+				{
+					txmessage[len++] = localaddr.sin6_addr.s6_addr[i] & 0xff;
+				}
+				txmessage[len++] = 128; // single host is /128
+				txmessage[len++] = 0;   // 0-padding
+				txmessage[len++] = 0;
+				txmessage[len++] = 0;
 
 				break;
 			}
@@ -922,8 +1202,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				txmessage[len++] = 0x0A;
 				txmessage[len++] = 0x0D;
 				txmessage[len++] = 0x0;
-				rc = sprintf(&txmessage[len], "ipscan (c) 2014 Tim Chappell. This message is destined for UDP port %d\n", port);
-				if (rc < 0)
+				rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "ipscan (c) 2011-2015 Tim Chappell. This message is destined for UDP port %d\n", port);
+				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
 					retval = PORTINTERROR;
