@@ -36,6 +36,8 @@
 // 0.16			add MPLS LSP Ping back
 // 0.17			tweaks to DNS query
 // 0.18			Improvements to MPLS LSP Ping
+// 0.19			Further DNS test error handling improvements
+// 0.20			SNMP test error handling improvement
 
 #include "ipscan.h"
 //
@@ -309,6 +311,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					len += rc;
 				}
 
+				// Only add new octets if no internal error has been encountered
+				//
 				if (retval == PORTUNKNOWN)
 				{
 					txmessage[len++]= strlen(dnsquery2);
@@ -324,6 +328,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					}
 				}
 
+				// Only add new octets if no internal error has been encountered
+				//
 				if (retval == PORTUNKNOWN)
 				{
 					txmessage[len++]= strlen(dnsquery3);
@@ -339,6 +345,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					}
 				}
 
+				// Only add new octets if no internal error has been encountered
+				//
 				if (retval == PORTUNKNOWN)
 				{
 					txmessage[len++]= strlen(dnsquery4);
@@ -354,15 +362,20 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					}
 				}
 
-				// End of name
-				txmessage[len++]= 0;
+				// Only add new octets if no internal error has been encountered
+				//
+				if (retval == PORTUNKNOWN)
+				{
+					// End of name
+					txmessage[len++]= 0;
 
-				// Question type - 1 = host address, 2=NS, 255 is request all
-				txmessage[len++] = 0;
-				txmessage[len++] = 255;
-				// Qclass - 1=INternet
-				txmessage[len++] = 0;
-				txmessage[len++] = 1;
+					// Question type - 1 = host address, 2=NS, 255 is request all
+					txmessage[len++] = 0;
+					txmessage[len++] = 255;
+					// Qclass - 1=INternet
+					txmessage[len++] = 0;
+					txmessage[len++] = 1;
+				}
 				break;
 			}
 
@@ -462,6 +475,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 			case 161:
 			{
+				len = 0;
 
 				if (0 == special || 1 == special)
 				{
@@ -470,7 +484,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					char community[16] = "public";
 					char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
 					int miblen = 6;
-					len = 0;
 					// SNMP packet start
 					txmessage[len++] = 0x30;
 					txmessage[len++] = (29 + strlen(community) + miblen);
@@ -491,44 +504,53 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					{
 						len += rc;
 					}
-					// MIB
-					txmessage[len++] = 0xA0; // SNMP GET request
-					txmessage[len++] = (22 + miblen); //0x1c
 
-					txmessage[len++] = 0x02; // Request ID
-					txmessage[len++] = 0x04; // 4 octets length
-					txmessage[len++] = 0x21; // "Random" value
-					txmessage[len++] = 0x06;
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x08;
-
-					// Error status (0=noError)
-					txmessage[len++] = 0x02; //int
-					txmessage[len++] = 0x01; //length of 1
-					txmessage[len++] = 0x00; // SNMP error status
-					// Error index (0)
-					txmessage[len++] = 0x02; //int
-					txmessage[len++] = 0x01; //length of 1
-					txmessage[len++] = 0x00; // SNMP error index
-					// Variable bindings
-					txmessage[len++] = 0x30; //var-bind sequence
-					txmessage[len++] = (8 + miblen);
-
-					txmessage[len++] = 0x30; //var-bind
-					txmessage[len++] = (miblen +6 );
-
-					txmessage[len++] = 0x06; // Object
-					txmessage[len++] = (miblen + 2); // MIB length
-
-					txmessage[len++] = 0x2b;
-					txmessage[len++] = 0x06;
-					// Insert the OID
-					for (i = 0; i <miblen; i++)
+					// MIB - check there's enough room before adding
+					if (retval == PORTUNKNOWN && (len < (UDP_BUFFER_SIZE-24-miblen)) )
 					{
-						txmessage[len++] = mib[i];
+						txmessage[len++] = 0xA0; // SNMP GET request
+						txmessage[len++] = (22 + miblen); //0x1c
+
+						txmessage[len++] = 0x02; // Request ID
+						txmessage[len++] = 0x04; // 4 octets length
+						txmessage[len++] = 0x21; // "Random" value
+						txmessage[len++] = 0x06;
+						txmessage[len++] = 0x01;
+						txmessage[len++] = 0x08;
+
+						// Error status (0=noError)
+						txmessage[len++] = 0x02; //int
+						txmessage[len++] = 0x01; //length of 1
+						txmessage[len++] = 0x00; // SNMP error status
+						// Error index (0)
+						txmessage[len++] = 0x02; //int
+						txmessage[len++] = 0x01; //length of 1
+						txmessage[len++] = 0x00; // SNMP error index
+						// Variable bindings
+						txmessage[len++] = 0x30; //var-bind sequence
+						txmessage[len++] = (8 + miblen);
+
+						txmessage[len++] = 0x30; //var-bind
+						txmessage[len++] = (miblen +6 );
+
+						txmessage[len++] = 0x06; // Object
+						txmessage[len++] = (miblen + 2); // MIB length
+
+						txmessage[len++] = 0x2b;
+						txmessage[len++] = 0x06;
+						// Insert the OID
+						for (i = 0; i <miblen; i++)
+						{
+							txmessage[len++] = mib[i];
+						}
+						txmessage[len++] = 0x05; // Null object
+						txmessage[len++] = 0x00; // length of 0
 					}
-					txmessage[len++] = 0x05; // Null object
-					txmessage[len++] = 0x00; // length of 0
+					else if (retval == PORTUNKNOWN && (len >= (UDP_BUFFER_SIZE-24-miblen)))
+					{
+						IPSCAN_LOG( LOGPREFIX "check_udp_port: Insufficient room to add OID, len = %d\n", len);
+						retval = PORTINTERROR;
+					}
 				}
 				else if (2 == special)
 				{
