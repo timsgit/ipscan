@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.47"
+	#define IPSCAN_VERNUM "1.48"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -153,6 +153,7 @@
 	// 1.45 Reintroduce MPLS LSP Ping
 	// 1.46 Further DNS test error handling
 	// 1.47 SNMP error handling improvement
+	// 1.48 Different community strings for SNMPv1 and SNMPv2c
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"

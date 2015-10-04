@@ -38,6 +38,7 @@
 // 0.18			Improvements to MPLS LSP Ping
 // 0.19			Further DNS test error handling improvements
 // 0.20			SNMP test error handling improvement
+// 0.21			Separate community strings for SNMPv1 and SNMPv2c
 
 #include "ipscan.h"
 //
@@ -103,6 +104,9 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	int fd = -1;
 	char portnum[8];
 
+	// Use different community strings for SNMPv1 (index 0) and SNMPv2c (index 1)
+	char community[2][16] = { "public", "private" };
+
 	// buffer for logging entries
 	#ifdef UDPDEBUG
 	int udplogbuffersize = LOGENTRYSIZE;
@@ -110,7 +114,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	char *udplogbufferptr = &udplogbuffer[0];
 	#endif
 
-	// Holds length of transmitted UDP packet, which since they are representative packets, depends on the port being tested
+	// Holds length of transmitted UDP packet, which since they are representative packets,
+	//  depends on the port being tested
 	int len = 0;
 
 	// set return value to a known default
@@ -125,7 +130,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	unsigned long long tv_usecs = (NTP_SCALE_FRAC * tv.tv_usec) / 1000000UL;
 
 	// Prefill transmit message buffer with 0s
-	memset(&txmessage, 0,  UDP_BUFFER_SIZE);
+	memset(&txmessage, 0,  UDP_BUFFER_SIZE+1);
 
 	// Clear localaddr
 	memset(&localaddr, 0, sizeof(struct sockaddr_in6));
@@ -481,20 +486,20 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				{
 					// SNMPv1 or SNMPv2c get
 					// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
-					char community[16] = "public";
 					char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
 					int miblen = 6;
+
 					// SNMP packet start
 					txmessage[len++] = 0x30;
-					txmessage[len++] = (29 + strlen(community) + miblen);
+					txmessage[len++] = (29 + strlen(community[special]) + miblen);
 					// SNMP version 1
 					txmessage[len++] = 0x02; //int
 					txmessage[len++] = 0x01; //length of 1
 					txmessage[len++] = (special & 0xff); // 0 = SNMPv1, 1 = SNMPv2c
 					// Community name
 					txmessage[len++] = 0x04; //string
-					txmessage[len++] = strlen(community);
-					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", community);
+					txmessage[len++] = strlen(community[special]);
+					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", community[special]);
 					if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 					{
 						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for SNMP, returned %d\n", rc);
@@ -556,7 +561,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				{
 					// SNMPv3 engine discovery
 					txmessage[len++] = 0x30;
-					txmessage[len++] = 0x38; //(29 + strlen(community) + miblen);
+					txmessage[len++] = 0x38;
 
 					// SNMP version 3
 					txmessage[len++] = 0x02; // int
