@@ -21,7 +21,7 @@ along with ipscan. If not, see <http://www.gnu.org/licenses/>.
 
 ipscan requires access to a MySQL database and the associated client development libraries 
 (libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. 
-ipscan is known to build on: Opensuse versions 11.1/11.4/12.1/13.1, Centos 6.2, Fedora 16, 
+ipscan is known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 6.2, Fedora 16, 
 Ubuntu 12.04, Mint 12, FreeBSD 9 and Arch Linux ARM (Raspberry Pi) and run alongside 
 Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 
 unlisted platforms.
@@ -46,7 +46,8 @@ Installation Steps:
     2. edit ipscan.h and adjust *at least* the following entries:
         a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will be world-accessible
         b. INCLUDETERMSOFUSE and TERMSOFUSEURL if you wish to reference a terms of use page on your website.
-        c. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
+        c. IPSCAN_INTERFACE_NAME - modify this to match the server's interface to which clients will browse.  
+        d. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
                           MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
                           MYSQL_USER - the username used to access the ipscan database.
                           MYSQL_PASSWD - the password used to identify the MySQL user.

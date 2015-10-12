@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.48"
+	#define IPSCAN_VERNUM "1.49"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -154,6 +154,7 @@
 	// 1.46 Further DNS test error handling
 	// 1.47 SNMP error handling improvement
 	// 1.48 Different community strings for SNMPv1 and SNMPv2c
+	// 1.49 Add DHCPv6 support
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -171,6 +172,11 @@
 
 	// URL providing description special protocol tests
 	#define IPSCAN_SPECIALTESTS_URL "http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6_SpecialTests"
+
+	// Interface name on which the test server listens
+	// Note this is only used to determine the IPv6 address inserted in MPLS LSP Ping packets
+	// and the Link-local address sent in DHCPv6 requests.
+	#define IPSCAN_INTERFACE_NAME "sit1"
 
 	// MySQL database-related globals
 	#define MYSQL_HOST "localhost"

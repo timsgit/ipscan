@@ -39,6 +39,7 @@
 // 0.19			Further DNS test error handling improvements
 // 0.20			SNMP test error handling improvement
 // 0.21			Separate community strings for SNMPv1 and SNMPv2c
+// 0.22			Add DHCPv6 support
 
 #include "ipscan.h"
 //
@@ -67,8 +68,15 @@
 // gettimeofday()
 #include <sys/time.h>
 
+// getifaddrs()
+#include <ifaddrs.h>
+
 // Include externals : resultsstruct
 extern struct rslt_struc resultsstruct[];
+
+// Link layer
+#include <linux/if_packet.h>
+#include <net/ethernet.h>
 
 //
 // Prototype declarations
@@ -94,15 +102,16 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 {
 	char txmessage[UDP_BUFFER_SIZE+1],rxmessage[UDP_BUFFER_SIZE+1];
 	struct sockaddr_in6 remoteaddr;
-	struct addrinfo hints;
-	struct addrinfo *res, *aip;
 	struct timeval timeout;
 	char localaddrstr[INET6_ADDRSTRLEN+1];
 	struct sockaddr_in6 localaddr;
+
+	// Local address update indication
+	int la_update = 0;
+
 	int rc = 0, i;
 	const char * rccharptr;
 	int fd = -1;
-	char portnum[8];
 
 	// Use different community strings for SNMPv1 (index 0) and SNMPv2c (index 1)
 	char community[2][16] = { "public", "private" };
@@ -132,60 +141,82 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	// Prefill transmit message buffer with 0s
 	memset(&txmessage, 0,  UDP_BUFFER_SIZE+1);
 
+	// Local MAC address lookup and storage
+	struct ifaddrs *ifaddr, *ifa;
+	int family;
+	unsigned char localmacaddr[6];
+	memset( &localmacaddr, 0, sizeof(localmacaddr));
+	// Fill in a default MAC in case getifaddrs() is unsuccessful
+	localmacaddr[5] = 0x01;
+	// Local MAC address update indication
+	int lam_update = 0;
+
 	// Clear localaddr
 	memset(&localaddr, 0, sizeof(struct sockaddr_in6));
-	// unused currently, but just in case ...
+	// Fill in a default address in case getifaddrs() is unsuccessful
+	rc = inet_pton(AF_INET6, "::1", &(localaddr.sin6_addr));
+
+	if (rc != 1)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad inet_pton() call for localaddr, returned %d with errno %d (%s)\n", rc, errno, strerror(errno));
+	}
 	localaddr.sin6_port = htons(port);
 	localaddr.sin6_family = AF_INET6;
 	localaddr.sin6_flowinfo = 0;
 	localaddr.sin6_scope_id = 0;
 
-	// Determine local source interface address
-	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = AF_INET6;
-	hints.ai_flags = AI_NUMERICSERV; // Don't set AI_PASSIVE so results will be suitable for send()
-	hints.ai_socktype = SOCK_DGRAM;
-	hints.ai_protocol = 0; /* Any protocol */
-	hints.ai_canonname = NULL;
-	hints.ai_addr = NULL;
-	hints.ai_next = NULL;
-
-	rc = snprintf(portnum, 8,"%d", port);
-	if (rc < 0 || rc >= 8)
+	// Determine local address and its related MAC address
+	// Modify IPSCAN_INTERFACE_NAME in ipscan.h to match the server
+	rc = getifaddrs( &ifaddr );
+	if (rc == -1)
 	{
-		IPSCAN_LOG( LOGPREFIX "check_udp_port: Failed to write portnum, rc was %d\n", rc);
-		exit(EXIT_FAILURE);
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: getifaddrs failed, returned %d (%s)\n", errno, strerror(errno));
 	}
-
-	rc = getaddrinfo(hostname, portnum, &hints, &res);
-	if (rc != 0)
+	else
 	{
-		IPSCAN_LOG( LOGPREFIX "check_udp_port: getaddrinfo: %s for host %s port %d\n", gai_strerror(errno), hostname, port);
-	    exit(EXIT_FAILURE);
-	}
-
-	for (aip = res; NULL != aip ; aip = aip->ai_next)
-	{
-		if (NULL != aip)
+		for (ifa = ifaddr; (NULL != ifa); ifa = ifa->ifa_next)
 		{
-			rccharptr = inet_ntop(AF_INET6, &((*((struct sockaddr_in6*)aip->ai_addr)).sin6_addr), localaddrstr, INET6_ADDRSTRLEN);
-			if (NULL == rccharptr)
+			if (ifa->ifa_addr == NULL) continue;
+
+			family = ifa->ifa_addr->sa_family;
+
+			if ( family == AF_INET6 && strcasecmp(IPSCAN_INTERFACE_NAME, ifa->ifa_name) == 0 && la_update == 0 )
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: inet_ntop() returned an error (%s)\n", strerror(errno));
+				rccharptr = inet_ntop(AF_INET6, &((*((struct sockaddr_in6*)ifa->ifa_addr)).sin6_addr), localaddrstr, INET6_ADDRSTRLEN);
+				if (NULL == rccharptr)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: inet_ntop() returned an error (%s)\n", strerror(errno));
+				}
+				else
+				{
+					// Copy result to localaddr for later use (MPLS LSP Ping)
+					memcpy(&localaddr.sin6_addr, &((*((struct sockaddr_in6*)ifa->ifa_addr)).sin6_addr), sizeof(struct in6_addr));
+					la_update = 1;
+					#ifdef UDPDEBUG
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: found localaddr = %s\n", localaddrstr);
+					#endif
+				}
 			}
-			else
+
+			if ( family == AF_PACKET && strcasecmp(IPSCAN_INTERFACE_NAME, ifa->ifa_name) == 0 && lam_update == 0 )
 			{
+				// Copy result to localmacaddr for later use (DHCPv6)
+				struct sockaddr_ll *sa_ll = (struct sockaddr_ll * )ifa->ifa_addr;
+				for (i = 0; i < 6; i++) localmacaddr[i] = sa_ll->sll_addr[i];
+				lam_update = 1;
 				#ifdef UDPDEBUG
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: found localaddr = %s\n", localaddrstr);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: found MAC address %02x:%02x:%02x:%02x:%02x:%02x\n", localmacaddr[0], localmacaddr[1], localmacaddr[2], localmacaddr[3], localmacaddr[4], localmacaddr[5]);
 				#endif
-				// Copy result to localaddr for later use (MPLS LSP Ping)
-				memcpy(&localaddr.sin6_addr, &((*((struct sockaddr_in6*)aip->ai_addr)).sin6_addr), sizeof(struct in6_addr));
-				break;
 			}
 		}
+		freeifaddrs(ifaddr);
 	}
-	// Release dynamically allocated results
-	freeaddrinfo(res);
+
+	if (la_update == 0 && lam_update == 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: WARNING - Failed to determine the link-local or MAC address for interface %s\n", IPSCAN_INTERFACE_NAME);
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: Check whether IPSCAN_INTERFACE_NAME defined in ipscan.h is correct.\n");
+	}
 
 	rc = inet_pton(AF_INET6, hostname, &(remoteaddr.sin6_addr));
 	if (rc != 1)
@@ -1031,6 +1062,365 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				txmessage[len++] = 0x10; // Metric
 				break;
 			}
+
+			case 547:
+			{
+				// DHCPv6 defined in https://tools.ietf.org/html/rfc3315
+				//       0                   1                   2                   3
+				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |    msg-type   |               transaction-id                  |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |                                                               |
+				//      .                            options                            .
+				//      .                           (variable)                          .
+				//      |                                                               |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				len = 0;
+				txmessage[len++] = 0x01; // msg-type = 0x01 (Solicit)
+				txmessage[len++] = 0xde; // transaction-id
+				txmessage[len++] = 0xad;
+				txmessage[len++] = 0xfa;
+
+				//       0                   1                   2                   3
+				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |        OPTION_CLIENTID        |          option-len           |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      .                                                               .
+				//      .                              DUID                             .
+				//      .                        (variable length)                      .
+				//      .                                                               .
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+				txmessage[len++] = 0x00; // Option 1 is Client Identifier
+				txmessage[len++] = 0x01;
+
+				txmessage[len++] = 0x00; // Length field
+				txmessage[len++] = 0x0e;
+
+
+				// The following diagram illustrates the format of a DUID-LLT:
+				//
+				//     0                   1                   2                   3
+				//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |               1               |    hardware type (16 bits)    |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |                        time (32 bits)                         |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    .                                                               .
+				//    .             link-layer address (variable length)              .
+				//    .                                                               .
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+
+				txmessage[len++] = 0x00; // DUID-LLT
+				txmessage[len++] = 0x01;
+
+				txmessage[len++] = 0x00; // Hardware type: Ethernet
+				txmessage[len++] = 0x01;
+
+				txmessage[len++] = 0x00; // Time
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x01;
+
+				// Copy in the local MAC address as the Link-layer address
+				for (i = 0; i < 6 ; i++) txmessage[len++] = localmacaddr[i];
+
+				//  0                   1                   2                   3
+				//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |     OPTION_RECONF_ACCEPT      |               0               |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//      option-code   OPTION_RECONF_ACCEPT (20).
+				//
+				//      option-len    0.
+				//
+
+				txmessage[len++] = 0x00; // Reconfigure Accept option
+				txmessage[len++] = 0x14;
+
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+
+				// The format of the IA_NA option is:
+				//
+				//       0                   1                   2                   3
+				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |          OPTION_IA_NA         |          option-len           |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |                        IAID (4 octets)                        |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |                              T1                               |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |                              T2                               |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |                                                               |
+				//      .                         IA_NA-options                         .
+				//      .                                                               .
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//      option-code          OPTION_IA_NA (3).
+				//
+				//      option-len           12 + length of IA_NA-options field.
+				//
+				//      IAID                 The unique identifier for this IA_NA; the
+				//                           IAID must be unique among the identifiers for
+				//                           all of this client's IA_NAs.  The number
+				//                           space for IA_NA IAIDs is separate from the
+				//                           number space for IA_TA IAIDs.
+				//
+				//      T1                   The time at which the client contacts the
+				//                           server from which the addresses in the IA_NA
+				//                           were obtained to extend the lifetimes of the
+				//                           addresses assigned to the IA_NA; T1 is a
+				//                           time duration relative to the current time
+				//                           expressed in units of seconds.
+				//
+				//      T2                   The time at which the client contacts any
+				//                           available server to extend the lifetimes of
+				//                           the addresses assigned to the IA_NA; T2 is a
+				//                           time duration relative to the current time
+				//                           expressed in units of seconds.
+				//
+				//      IA_NA-options        Options associated with this IA_NA.
+
+				txmessage[len++] = 0x00; // Identity Association for Non-temporary Address (IA_NA) option
+				txmessage[len++] = 0x03;
+
+				txmessage[len++] = 0x00; // Length (options length = 0)
+				txmessage[len++] = 0x0c;
+
+				txmessage[len++] = 0x00; // IAID
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+
+				txmessage[len++] = 0x00; // T1
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+
+				txmessage[len++] = 0x00; // T2
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+
+				//       0                   1                   2                   3
+				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |      OPTION_ELAPSED_TIME      |           option-len          |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |          elapsed-time         |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//      option-code   OPTION_ELAPSED_TIME (8).
+				//
+				//      option-len    2.
+				//
+				//      elapsed-time  The amount of time since the client began its
+				//                    current DHCP transaction.  This time is expressed in
+				//                    hundredths of a second (10^-2 seconds).
+
+
+				txmessage[len++] = 0x00; // Elapsed Time Option
+				txmessage[len++] = 0x08;
+
+				txmessage[len++] = 0x00; // Length
+				txmessage[len++] = 0x02;
+
+				txmessage[len++] = 0x00; // We just started ..
+				txmessage[len++] = 0x00;
+
+				//   The Option Request option is used to identify a list of options in a
+				//   message between a client and a server.  The format of the Option
+				//   Request option is:
+				//
+				//       0                   1                   2                   3
+				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |           OPTION_ORO          |           option-len          |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |    requested-option-code-1    |    requested-option-code-2    |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//      |                              ...                              |
+				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//      option-code   OPTION_ORO (6).
+				//
+				//      option-len    2 * number of requested options.
+				//
+				//      requested-option-code-n The option code for an option requested by
+				//      the client.
+
+				txmessage[len++] = 0x00; // Option Request Option Option
+				txmessage[len++] = 0x06;
+
+				txmessage[len++] = 0x00; // Option length
+				txmessage[len++] = 0x04;
+
+				txmessage[len++] = 0x00; // Recursive DNS server
+				txmessage[len++] = 0x17;
+
+				txmessage[len++] = 0x00; // Domain Search List
+				txmessage[len++] = 0x18;
+
+				// From RFC 3633
+				// The IA_PD option is used to carry a prefix delegation identity
+				//   association, the parameters associated with the IA_PD and the
+				//   prefixes associated with it.
+				//
+				//   The format of the IA_PD option is:
+				//
+				//     0                   1                   2                   3
+				//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |         OPTION_IA_PD          |         option-length         |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |                         IAID (4 octets)                       |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |                              T1                               |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |                              T2                               |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    .                                                               .
+				//    .                          IA_PD-options                        .
+				//    .                                                               .
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//   option-code:      OPTION_IA_PD (25)
+				//
+				//   option-length:    12 + length of IA_PD-options field.
+				//
+				//   IAID:             The unique identifier for this IA_PD; the IAID must
+				//                     be unique among the identifiers for all of this
+				//                     requesting router's IA_PDs.
+				//
+				//   T1:               The time at which the requesting router should
+				//                     contact the delegating router from which the
+				//                     prefixes in the IA_PD were obtained to extend the
+				//                     lifetimes of the prefixes delegated to the IA_PD;
+				//                     T1 is a time duration relative to the current time
+				//                     expressed in units of seconds.
+				//
+				//   T2:               The time at which the requesting router should
+				//                     contact any available delegating router to extend
+				//                     the lifetimes of the prefixes assigned to the
+				//                     IA_PD; T2 is a time duration relative to the
+				//                     current time expressed in units of seconds.
+				//
+				//   IA_PD-options:    Options associated with this IA_PD.
+
+				txmessage[len++] = 0x00; // IA_PD Option
+				txmessage[len++] = 0x19;
+
+				txmessage[len++] = 0x00; // Length
+				txmessage[len++] = 0x29;
+
+				txmessage[len++] = 0x00; // IAID
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+
+				txmessage[len++] = 0x00; // T1
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+
+				txmessage[len++] = 0x00; // T2
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+
+				//   The IA_PD Prefix option is used to specify IPv6 address prefixes
+				//   associated with an IA_PD.  The IA_PD Prefix option must be
+				//   encapsulated in the IA_PD-options field of an IA_PD option.
+				//
+				//   The format of the IA_PD Prefix option is:
+				//
+				//     0                   1                   2                   3
+				//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |        OPTION_IAPREFIX        |         option-length         |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |                      preferred-lifetime                       |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |                        valid-lifetime                         |
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    | prefix-length |                                               |
+				//    +-+-+-+-+-+-+-+-+          IPv6 prefix                          |
+				//    |                           (16 octets)                         |
+				//    |                                                               |
+				//    |                                                               |
+				//    |                                                               |
+				//    |               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//    |               |                                               .
+				//    +-+-+-+-+-+-+-+-+                                               .
+				//    .                       IAprefix-options                        .
+				//    .                                                               .
+				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+				//
+				//   option-code:      OPTION_IAPREFIX (26)
+				//
+				//   option-length:    25 + length of IAprefix-options field
+				//
+				//   preferred-lifetime: The recommended preferred lifetime for the IPv6
+				//                     prefix in the option, expressed in units of
+				//                     seconds.  A value of 0xFFFFFFFF represents
+				//                     infinity.
+				//
+				//   valid-lifetime:   The valid lifetime for the IPv6 prefix in the
+				//                     option, expressed in units of seconds.  A value of
+				//                     0xFFFFFFFF represents infinity.
+				//
+				//   prefix-length:    Length for this prefix in bits
+				//
+				//   IPv6-prefix:      An IPv6 prefix
+				//
+				//   IAprefix-options: Options associated with this prefix
+
+				txmessage[len++] = 0x00; // IA Prefix option
+				txmessage[len++] = 0x1a;
+
+				txmessage[len++] = 0x00; // Length (no additional options)
+				txmessage[len++] = 0x19;
+
+				txmessage[len++] = 0x00; // Preferred lifetime - 21600 seconds (6 hours)
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x54;
+				txmessage[len++] = 0x60;
+
+				txmessage[len++] = 0x00; // Valid lifetime - 86400 seconds (24 hours)
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x51;
+				txmessage[len++] = 0x80;
+
+				txmessage[len++] = 0x40; // 64-bit prefix length
+
+				txmessage[len++] = 0x00; // Prefix ::
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00;
+				break;
+			}
+
 
 			case 1900:
 			{
