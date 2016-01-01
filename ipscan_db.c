@@ -1,10 +1,10 @@
-//    ipscan - an http-initiated IPv6 port scanner.
+//    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2015 Tim Chappell.
+//    Copyright (C) 2011-2016 Tim Chappell.
 //
-//    This file is part of ipscan.
+//    This file is part of IPscan.
 //
-//    ipscan is free software: you can redistribute it and/or modify
+//    IPscan is free software: you can redistribute it and/or modify
 //    it under the terms of the GNU General Public License as published by
 //    the Free Software Foundation, either version 3 of the License, or
 //    (at your option) any later version.
@@ -15,7 +15,7 @@
 //    GNU General Public License for more details.
 //
 //    You should have received a copy of the GNU General Public License
-//    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
+//    along with IPscan.  If not, see <http://www.gnu.org/licenses/>.
 
 // ipscan_db.c version
 // 0.01 - initial version
@@ -39,6 +39,7 @@
 // 0.18 - further debug log improvements
 // 0.19 - handle addition of test-state field which shouldn't be reported to client
 // 0.20 - add support for database tidy up (deletion of orphaned results)
+// 0.21 - use memory engine table type by default
 
 #include "ipscan.h"
 //
@@ -102,7 +103,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 
 	int rc;
 	unsigned int qrylen;
-	int retval = -1;
+	int retval = -1; // do not change this
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
 	MYSQL *mysqlrc;
@@ -118,7 +119,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
 		// in the my.cnf file which ensures that your program works, even if someone has set
 		// up MySQL in some nonstandard way.
-		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
+		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
 		if (0 == rc)
 		{
 
@@ -131,53 +132,84 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 			}
 			else
 			{
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+				#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "SET max_heap_table_size = %d", MYSQL_MAX_HEAP_SIZE);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 					#endif
 					rc = mysql_real_query(connection, query, qrylen);
-					if (0 == rc)
+					if (0 != rc)
 					{
-						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
-						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-						{
-							#ifdef DBDEBUG
-							IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
-							#endif
-							rc = mysql_real_query(connection, query, qrylen);
-							if (0 == rc)
-							{
-								retval = 0;
-							}
-							else
-							{
-								IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute insert query %d (%s)\n",\
-										mysql_errno(connection), mysql_error(connection) );
-								retval = 7;
-							}
-						}
-						else
-						{
-							IPSCAN_LOG( LOGPREFIX "write_db: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
-							retval = 8;
-						}
-					}
-					else
-					{
-						IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute create_table query %d (%s)\n",\
-								mysql_errno(connection), mysql_error(connection) );
-						retval = 6;
+						IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute set max_heap_table_size %d (%s)\n",\
+						mysql_errno(connection), mysql_error(connection) );
+						retval = 32;
 					}
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "write_db: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
-					retval = 5;
+					IPSCAN_LOG( LOGPREFIX "write_db: Failed to create set max_heap_table_size command.\n");
+					retval = 64;
 				}
-			}
-		}
+				#endif
+				// retval defaults to -1, and is set to other values if an error condition occurs
+				if (retval < 0)
+				{
+					#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
+					// Use memory engine - ensures sensitive data does not persist if MySQL is stopped/restarted
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					#else
+					// Use the default engine - sensitive data may persist until next tidy_up_db() call
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					#endif
+					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+					{
+						#ifdef DBDEBUG
+						IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
+						#endif
+						rc = mysql_real_query(connection, query, qrylen);
+						if (0 == rc)
+						{
+							qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
+							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+							{
+								#ifdef DBDEBUG
+								IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
+								#endif
+								rc = mysql_real_query(connection, query, qrylen);
+								if (0 == rc)
+								{
+									retval = 0;
+								}
+								else
+								{
+									IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute insert query %d (%s)\n",\
+									mysql_errno(connection), mysql_error(connection) );
+									retval = 7;
+								}
+							}
+							else
+							{
+								IPSCAN_LOG( LOGPREFIX "write_db: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+								retval = 8;
+							}
+						}
+						else
+						{
+							IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute create_table query %d (%s)\n",\
+									mysql_errno(connection), mysql_error(connection) );
+							retval = 6;
+						}
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "write_db: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+						retval = 5;
+					}
+				} // matches with retval < 0
+			} // Matches with main else
+		} // MySQL options
 		else
 		{
 			IPSCAN_LOG( LOGPREFIX "write_db: mysql_options() failed - check your my.cnf file\n");
@@ -187,10 +219,11 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 		mysql_commit(connection);
 		mysql_close(connection);
 	}
-#ifdef DBDEBUG
-IPSCAN_LOG( LOGPREFIX "write_db: returning with retval = %d\n",retval);
-#endif
-return (retval);
+
+	#ifdef DBDEBUG
+	IPSCAN_LOG( LOGPREFIX "write_db: returning with retval = %d\n",retval);
+	#endif
+	return (retval);
 }
 
 

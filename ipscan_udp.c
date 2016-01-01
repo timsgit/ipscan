@@ -1,10 +1,10 @@
-//    ipscan - an http-initiated IPv6 port scanner.
+//    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2015 Tim Chappell.
+//    Copyright (C) 2011-2016 Tim Chappell.
 //
-//    This file is part of ipscan.
+//    This file is part of IPscan.
 //
-//    ipscan is free software: you can redistribute it and/or modify
+//    IPscan is free software: you can redistribute it and/or modify
 //    it under the terms of the GNU General Public License as published by
 //    the Free Software Foundation, either version 3 of the License, or
 //    (at your option) any later version.
@@ -15,7 +15,7 @@
 //    GNU General Public License for more details.
 //
 //    You should have received a copy of the GNU General Public License
-//    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
+//    along with IPscan.  If not, see <http://www.gnu.org/licenses/>.
 
 // ipscan_udp.c 	version
 // 0.01 		initial version after split from ipscan_checks.c
@@ -1619,7 +1619,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				txmessage[len++] = 0x0A;
 				txmessage[len++] = 0x0D;
 				txmessage[len++] = 0x0;
-				rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "ipscan (c) 2011-2015 Tim Chappell. This message is destined for UDP port %d\n", port);
+				rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2016 Tim Chappell. This message is destined for UDP port %d\n", port);
 				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);

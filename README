@@ -1,10 +1,10 @@
-ipscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
+IPscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 
-Copyright (C) 2011-2015 Tim Chappell.
+Copyright (C) 2011-2016 Tim Chappell.
 
-This file is part of ipscan.
+This file is part of IPscan.
 
-ipscan is free software: you can redistribute it and/or modify
+IPscan is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
@@ -15,13 +15,13 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with ipscan. If not, see <http://www.gnu.org/licenses/>.
+along with IPscan. If not, see <http://www.gnu.org/licenses/>.
 
 ---
 
-ipscan requires access to a MySQL database and the associated client development libraries 
+IPscan requires access to a MySQL database and the associated client development libraries 
 (libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. 
-ipscan is known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 6.2, Fedora 16, 
+IPscan is known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 6.2, Fedora 16, 
 Ubuntu 12.04, Mint 12, FreeBSD 9 and Arch Linux ARM (Raspberry Pi) and run alongside 
 Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 
 unlisted platforms.
@@ -49,10 +49,10 @@ Installation Steps:
         c. IPSCAN_INTERFACE_NAME - modify this to match the server's interface to which clients will browse.  
         d. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
                           MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
-                          MYSQL_USER - the username used to access the ipscan database.
+                          MYSQL_USER - the username used to access the IPscan database.
                           MYSQL_PASSWD - the password used to identify the MySQL user.
-                          MYSQL_DBNAME - the name of the ipscan database.
-                          MYSQL_TBLNAME - the name of the table in which ipscan results will reside.
+                          MYSQL_DBNAME - the name of the IPscan database.
+                          MYSQL_TBLNAME - the name of the table in which IPscan results will reside.
 
     3. edit ipscan_portlist.h and change the list of ports to be tested, if required. Note that if you add 
        new UDP ports then you must also add a matching packet generator function to ipscan_udp.c
@@ -61,12 +61,6 @@ Installation Steps:
 
        NB: adjust the host, user name, password and database name to match the globals you've edited in step 2 above:
        
-       If necessary to delete an existing database prior to version 0.90, then begin with:
-       
-       mysql> drop database ipscan;
-       
-       Otherwise just use the following steps:
-    
        mysql> create database ipscan;
        Query OK, 1 row affected (0.00 sec)
 
@@ -80,6 +74,16 @@ Installation Steps:
 
        mysql> exit
        Bye
+
+       If performing an upgrade from an earlier version of IPscan then either drop the table within a mysql shell, e.g. :
+       
+       mysql> use ipscan;
+       mysql> drop table if exists results;
+
+       or use the BASH upgrade script within the IPscan source directory:
+
+       $ ./upgrade.bsh
+       
        
     5. make && make install
        
@@ -121,18 +125,18 @@ Installation Steps:
        or: 
        lynx http://[2001:470:1f08:185c::2]/cgi-bin6/ipscan-txt.cgi  
 
-    9. Check the web server access/error logs or syslog for messages. ipscan will place summary messages in the 
+    9. Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
        web server error log or syslog if enabled to do so (this is NOT the default option - change 
        IPSCAN_LOGVERBOSITY to 1 to enable this). It is possible to enable copious amounts of debug by 
        uncommenting the debug #define statements in ipscan.h.
     
-    10. If you're providing public access to ipscan then please ensure that you disable verbose reporting,
+    10. If you're providing public access to IPscan then please ensure that you disable verbose reporting,
 	the summary option and ALL debug facilities.
 
         Note: versions v1.42 and later of IPscan automatically delete the scan results, for both javascript
 	and text-only clients, after reporting them to the user. 
 
-    11. For those considering providing ipscan access on the public internet then consider adding a 
+    11. For those considering providing IPscan access on the public internet then consider adding a 
         landing page which will check for host IP address suitability prior to allowing access to the 
         cgi script(s) - most (apart from google) search engine spiders/robots currently only use IPv4. 
         It may be advisable to only offer direct links to the cgi scripts if the address checks 
@@ -158,7 +162,7 @@ Getting further help:
 =====================
 A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled clients at: http://pi.ipv6.chappell-family.co.uk
 
-If you need further help then please email me at: webmaster@chappell-family.com or visit my ipscan wiki at:
+If you need further help then please email me at: webmaster@chappell-family.com or visit my IPscan wiki at:
  
 http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6
 

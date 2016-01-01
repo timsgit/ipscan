@@ -1,10 +1,10 @@
-//    ipscan - an http-initiated IPv6 port scanner.
+//    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2015 Tim Chappell.
+//    Copyright (C) 2011-2016 Tim Chappell.
 //
-//    This file is part of ipscan.
+//    This file is part of IPscan.
 //
-//    ipscan is free software: you can redistribute it and/or modify
+//    IPscan is free software: you can redistribute it and/or modify
 //    it under the terms of the GNU General Public License as published by
 //    the Free Software Foundation, either version 3 of the License, or
 //    (at your option) any later version.
@@ -15,7 +15,7 @@
 //    GNU General Public License for more details.
 //
 //    You should have received a copy of the GNU General Public License
-//    along with ipscan.  If not, see <http://www.gnu.org/licenses/>.
+//    along with IPscan.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stdlib.h>
 #include <inttypes.h>
@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.49"
+	#define IPSCAN_VERNUM "1.50"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -155,6 +155,7 @@
 	// 1.47 SNMP error handling improvement
 	// 1.48 Different community strings for SNMPv1 and SNMPv2c
 	// 1.49 Add DHCPv6 support
+	// 1.50 Use memory engine table by default
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -184,6 +185,12 @@
 	#define MYSQL_PASSWD "ipscan-passwd"
 	#define MYSQL_DBNAME "ipscan"
 	#define MYSQL_TBLNAME "results"
+
+	// MySQL - move to use memory engine type by default
+	// Change IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE to 0 to use the "default" engine type
+	#define IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE 1
+	// IPscan doesn't need a large database typically, which helps servers with small amounts of RAM
+	#define MYSQL_MAX_HEAP_SIZE (8*1024*1024)
 
 	// Steps for creating the MySQL database - this MUST be done before tests are performed!
 	// -------------------------------------------------------------------------------------

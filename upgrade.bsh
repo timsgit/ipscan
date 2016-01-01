@@ -1,0 +1,29 @@
+#!/bin/bash
+SRC=./ipscan.h
+if [ -r "${SRC}" ] ; then
+	echo "Found file containing credentials: "${SRC}
+	MYSQL_HOST=$(awk 'BEGIN{u="TJC369"};{if ($1 == "#define" && $2 == "MYSQL_HOST") {u=$3;gsub("\"","",u)}};END{print u}' ${SRC})
+	MYSQL_USER=$(awk 'BEGIN{u="TJC369"};{if ($1 == "#define" && $2 == "MYSQL_USER") {u=$3;gsub("\"","",u)}};END{print u}' ${SRC})
+	MYSQL_PASSWD=$(awk 'BEGIN{u="TJC369"};{if ($1 == "#define" && $2 == "MYSQL_PASSWD") {u=$3;gsub("\"","",u)}};END{print u}' ${SRC})
+	MYSQL_DBNAME=$(awk 'BEGIN{u="TJC369"};{if ($1 == "#define" && $2 == "MYSQL_DBNAME") {u=$3;gsub("\"","",u)}};END{print u}' ${SRC})
+	MYSQL_TBLNAME=$(awk 'BEGIN{u="TJC369"};{if ($1 == "#define" && $2 == "MYSQL_TBLNAME") {u=$3;gsub("\"","",u)}};END{print u}' ${SRC})
+	if [[ "${MYSQL_HOST}" = "TJC369"  || "${MYSQL_USER}" = "TJC369" || "${MYSQL_PASSWD}" = "TJC369" || "${MYSQL_DBNAME}" = "TJC369" || "${MYSQL_TBLNAME}" = "TJC369" ]] ; then
+		echo ""
+		echo "ERROR: Failed to find a complete set of MYSQL_ variables:"
+		echo "MYSQL_HOST   ="$MYSQL_HOST
+		echo "MYSQL_USER   ="$MYSQL_USER
+		echo "MYSQL_PASSWD ="$MYSQL_PASSWD
+		echo "MYSQL_DBNAME ="$MYSQL_DBNAME
+		echo "MYSQL_TBLNAME="$MYSQL_TBLNAME
+		exit 1
+	fi
+	mysql --user=${MYSQL_USER} --password=${MYSQL_PASSWD} --host=${MYSQL_HOST} --execute='drop table if exists '${MYSQL_TBLNAME}';' ${MYSQL_DBNAME}
+	RC=$?
+	if [ "${RC}" -eq 0 ] ; then
+		echo "MySQL command finished successfully"
+	else
+		echo "MySQL command finished unsuccessfully, with RC="${RC}
+	fi
+else
+	echo "Failed to find file containing credentials, looking for: "${SRC}
+fi
