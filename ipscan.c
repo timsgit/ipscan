@@ -55,6 +55,7 @@
 // 0.34 - add automated results deletion for javascript clients
 // 0.35 - add support for deletion of orphaned results
 // 0.36 - add time() response checks
+// 0.37	- simplify reported syslog name
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -300,7 +301,7 @@ int main(void)
 
 	// If syslog is in use then open the log
 	#if (LOGMODE == 1)
-		openlog("ipscan", LOG_PID, LOG_LOCAL0);
+		openlog(EXENAME, LOG_PID, LOG_LOCAL0);
 	#endif
 
 	// Initialise the port list
@@ -321,21 +322,13 @@ int main(void)
 
 	// Log the current time and "session" with which to initiate scan and fetch results
 	// These should ensure that each test is globally unique when client IP address is also used.
-	starttime = time(0);
+	starttime = time(NULL);
 	if (starttime < 0)
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for starttime %d (%s)\n", errno, strerror(errno));
 	}
 	uint64_t session = get_session();
 
-	// Tidy up the database - really only required for orphaned results
-	// e.g. caused by server shutdown whilst a scan is in progress
-	//
-	if (starttime > 0)
-	{
-		rc = tidy_up_db( (uint64_t)starttime );
-		if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() returned %d\n", rc);
-	}
 
 	// QUERY_STRING / REQUEST_METHOD
 	// URL is of the form: ipv6.cgi?name1=value1&name2=value2
@@ -1162,35 +1155,37 @@ int main(void)
 			// Finish the output
 			create_html_body_end();
 
-			#if (IPSCAN_LOGVERBOSITY == 1)
-			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated SUCCESSFUL completion.\n");
-			}
-			else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated HTTP TIMEOUT completion.\n");
-			}
-			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated UNSUCCESSFUL completion.\n");
-			}
-			else if (IPSCAN_EVAL_ERROR == fetchnum)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated EVAL ERROR.\n");
-			}
-			else if (IPSCAN_OTHER_ERROR == fetchnum)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated OTHER ERROR.\n");
-			}
-			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated user NAVIGATED AWAY.\n");
-			}
-			else if (IPSCAN_UNEXPECTED_CHANGE <= fetchnum)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated UNEXPECTED CHANGE: %d\n", fetchnum);
-			}
+			#ifdef RESULTSDEBUG
+				#if (IPSCAN_LOGVERBOSITY == 1)
+				if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated SUCCESSFUL completion.\n");
+				}
+				else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated HTTP TIMEOUT completion.\n");
+				}
+				else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated UNSUCCESSFUL completion.\n");
+				}
+				else if (IPSCAN_EVAL_ERROR == fetchnum)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated EVAL ERROR.\n");
+				}
+				else if (IPSCAN_OTHER_ERROR == fetchnum)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated OTHER ERROR.\n");
+				}
+				else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated user NAVIGATED AWAY.\n");
+				}
+				else if (IPSCAN_UNEXPECTED_CHANGE <= fetchnum)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated UNEXPECTED CHANGE: %d\n", fetchnum);
+				}
+				#endif
 			#endif
 
 			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum || IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
@@ -1472,15 +1467,17 @@ int main(void)
 				}
 			}
 
-			#if (IPSCAN_LOGVERBOSITY == 1)
-			if (client_finished == 1)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop because client signalled.\n");
-			}
-			else
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop with no client response.\n");
-			}
+			#ifdef RESULTSDEBUG
+				#if (IPSCAN_LOGVERBOSITY == 1)
+				if (client_finished == 1)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop because client signalled.\n");
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop with no client response.\n");
+				}
+				#endif
 			#endif
 
 			#ifdef DBDEBUG
@@ -1514,6 +1511,15 @@ int main(void)
 			create_html_body(remoteaddrstring, starttime, numports, numudpports, &portlist[0], &udpportlist[0]);
 			// Finish the html
 			create_html_body_end();
+			
+			// Tidy up the database - really only required for orphaned results
+			// e.g. caused by server shutdown whilst a scan is in progress
+			//
+			if (starttime > 0)
+			{
+				rc = tidy_up_db( (uint64_t)starttime );
+				if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() returned %d\n", rc);
+			}
 		}
 
 		#endif

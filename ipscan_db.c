@@ -40,6 +40,7 @@
 // 0.19 - handle addition of test-state field which shouldn't be reported to client
 // 0.20 - add support for database tidy up (deletion of orphaned results)
 // 0.21 - use memory engine table type by default
+// 0.22 - modify debug/test logging
 
 #include "ipscan.h"
 //
@@ -340,8 +341,10 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							}
 							printf(" -9999, -9999, \"::1\" ]\n");
 							mysql_free_result(result);
-							#if (IPSCAN_LOGVERBOSITY == 1)
-							IPSCAN_LOG( LOGPREFIX "dump_db: reported %d actual results to the client.\n", nump);
+							#ifdef RESULTSDEBUG
+								#if (IPSCAN_LOGVERBOSITY == 1)
+								IPSCAN_LOG( LOGPREFIX "dump_db: reported %d actual results to the client.\n", nump);
+								#endif
 							#endif
 						}
 						else
@@ -438,8 +441,10 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						}
 						else
 						{
-							#if (IPSCAN_LOGVERBOSITY == 1)
-							IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
+							#ifdef RESULTSDEBUG
+								#if (IPSCAN_LOGVERBOSITY == 1)
+								IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
+								#endif
 							#endif
 						}
 					}

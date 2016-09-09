@@ -436,19 +436,25 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 			if (rxpacketsize < (int)sizeof(struct icmp6_hdr))
 			{
+				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: Received packet too small - expected at least %d, got %d\n",(int)sizeof(struct icmp6_hdr),rxpacketsize);
+				#endif
 				continue;
 			}
 
 			if (rmsghdr.msg_namelen != sizeof(struct sockaddr_in6))
 			{
+				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: received bad peername length (namelen %d)\n",rmsghdr.msg_namelen);
+				#endif
 				continue;
 			}
 
 			if (((struct sockaddr *)rmsghdr.msg_name)->sa_family != AF_INET6)
 			{
+				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: received bad peername family (sa_family %d)\n",((struct sockaddr *)rmsghdr.msg_name)->sa_family);
+				#endif
 				continue;
 			}
 
@@ -462,7 +468,9 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			}
 			else
 			{
+				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: getnameinfo returned bad indication %d (%s)\n",errsv, gai_strerror(errsv));
+				#endif
 				continue;
 			}
 
@@ -520,7 +528,9 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 					// so this packet is not relevant to us ...
 					if ( IN6_ARE_ADDR_EQUAL( &orig_dst, &(destination.sin6_addr) ) == 0)
 					{
+						#ifdef PINGDEBUG
 						IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER IPv6 hdr dst %s was != our Tx dst %s\n", orig_dst_addr, tx_dst_addr);
+						#endif
 						continue;
 					}
 
@@ -537,40 +547,48 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 						// Check inner ICMPv6 packet was an ECHO_REQUEST
 						if (rx2icmp6_type != ICMP6_ECHO_REQUEST)
 						{
+							#ifdef PINGDEBUG
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6_TYPE was not ECHO_REQUEST : %d\n", rx2icmp6_type);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+							#endif
 							continue;
 						}
 
 						// Check inner ICMPv6 code was 0
 						if (rx2icmp6_code != 0)
 						{
+							#ifdef PINGDEBUG
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6_CODE was not 0\n");
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+							#endif
 							continue;
 						}
 
 						// Check sequence number matches what we transmitted
 						if (rx2seqno != txseqno)
 						{
+							#ifdef PINGDEBUG
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6_SEQN was not %d\n", txseqno);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+							#endif
 							continue;
 						}
 
 						// Check ID matches what we transmitted
 						if (rx2id != txid)
 						{
+							#ifdef PINGDEBUG
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6_ID was not %d\n", txid);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+							#endif
 							continue;
 						}
 
@@ -585,34 +603,42 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 						{
 							if (rx2starttime != starttime)
 							{
+								#ifdef PINGDEBUG
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6 magic data rx2starttime (%"PRId64") != starttime (%"PRId64")\n", rx2starttime, starttime);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+								#endif
 								continue;
 							}
 							if (rx2session != session)
 							{
+								#ifdef PINGDEBUG
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6 magic data rx2session (%"PRId64") != session (%"PRId64")\n", rx2session, session);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+								#endif
 								continue;
 							}
 							if (ICMPV6_MAGIC_VALUE1 != rx2magic1)
 							{
+								#ifdef PINGDEBUG
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6 magic data rx2magic1 (%d) != expected %d\n", rx2magic1, ICMPV6_MAGIC_VALUE1);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+								#endif
 								continue;
 							}
 							if (ICMPV6_MAGIC_VALUE2 != rx2magic2)
 							{
+								#ifdef PINGDEBUG
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6 magic data rx2magic2 (%d) != expected %d\n", rx2magic2, ICMPV6_MAGIC_VALUE2);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 								IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+								#endif
 								continue;
 							}
 
@@ -628,25 +654,32 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 						else
 						{
 							// wrong number of parameters
+							#ifdef PINGDEBUG
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER ICMPv6 packet returned number of magic parameters (%d) != 4\n", rc);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
 							IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED INNER packet icmp6 details: type %d; code %d; seq %d; id %d\n", rx2icmp6_type, rx2icmp6_code, rx2seqno, rx2id);
+							#endif
 							continue;
 						}
 					}
 					else
 					{
+						#ifdef PINGDEBUG
 						IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: INNER IPv6 next header didn't indicate an ICMPv6 packet inside\n");
 						IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 						IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);
+						#endif
 						continue;
 					}
 				}
 				else
 				{
+					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: OUTER address mismatch with INNER unexpected size : %d\n", rxpacketsize);
+
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
+					#endif
 					continue;
 				}
 
@@ -731,15 +764,19 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 			if (rxseqno != txseqno)
 			{
+				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: Sequence number mismatch - expected %d\n", txseqno);
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
+				#endif
 				continue;
 			}
 
 			if (rxid != txid)
 			{
+				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: ICMP6 id mismatch - expected %d\n", txid);
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
+				#endif
 				continue;
 			}
 
@@ -754,26 +791,34 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			{
 				if (rxstarttime != starttime)
 				{
+					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: magic data rxstarttime (%"PRId64") != starttime (%"PRId64")\n", rxstarttime, starttime);
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
+					#endif
 					continue;
 				}
 				if (rxsession != session)
 				{
+					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: magic data rxsession (%"PRId64") != session (%"PRId64")\n", rxsession, session);
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
+					#endif
 					continue;
 				}
 				if (ICMPV6_MAGIC_VALUE1 != rxmagic1)
 				{
+					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: RX magic data 1 (%d) != expected %d\n", rxmagic1, ICMPV6_MAGIC_VALUE1);
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
+					#endif
 					continue;
 				}
 				if (ICMPV6_MAGIC_VALUE2 != rxmagic2)
 				{
+					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: RX magic data 2 (%d) != expected %d\n", rxmagic2, ICMPV6_MAGIC_VALUE2);
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
+					#endif
 					continue;
 				}
 
@@ -787,8 +832,10 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			}
 			else
 			{
+				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: number of magic parameters mismatched, got %d, expected 4\n", rc);
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARDED OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
+				#endif
 				continue;
 			}
 

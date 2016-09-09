@@ -45,6 +45,7 @@
 // 0.25 - move to single XML HHTP Request object
 // 0.26 - add 'navigate away' handler to javascript version
 // 0.27 - fix cut'n'paste error, spotted by coverity
+// 0.28 - update copyright year, and ensure charset=iso-8859-1
 
 
 #include "ipscan.h"
@@ -65,17 +66,17 @@ extern struct rslt_struc resultsstruct[];
 
 void create_html_common_header(void)
 {
-  printf("%s%c%c\n","Content-Type:text/html;charset=UTF-8",13,10);
+  printf("%s%c%c\n","Content-Type:text/html;charset=iso-8859-1",13,10);
   printf("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n");
   printf("<HTML lang=\"en\">\n");
   printf("<HEAD>\n");
   // Force later IE browsers to mimic IE7 as detailed in http://msdn.microsoft.com/library/cc288325.aspx
   printf("<meta http-equiv=\"X-UA-Compatible\" content=\"IE=EmulateIE7\">\n");
-  printf("<META HTTP-EQUIV=\"Content-type\" CONTENT=\"text/html;charset=UTF-8\">\n");
+  printf("<META HTTP-EQUIV=\"Content-type\" CONTENT=\"text/html;charset=iso-8859-1\">\n");
   printf("<META NAME=\"AUTHOR\" CONTENT=\"Tim Chappell\">\n");
   printf("<META HTTP-EQUIV=\"CACHE-CONTROL\" CONTENT=\"NO-STORE, NO-CACHE, MUST-REVALIDATE, MAX-AGE=0\">\n");
   printf("<META HTTP-EQUIV=\"PRAGMA\" CONTENT=\"NO-CACHE\">\n");
-  printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2014 Tim Chappell.\">\n");
+  printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2016 Tim Chappell.\">\n");
 
 }
 

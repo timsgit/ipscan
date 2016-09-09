@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.50"
+	#define IPSCAN_VERNUM "1.53"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -156,6 +156,10 @@
 	// 1.48 Different community strings for SNMPv1 and SNMPv2c
 	// 1.49 Add DHCPv6 support
 	// 1.50 Use memory engine table by default
+	// 1.51 Change TCP getaddrinfo call to request AF_INET6
+	// 1.52 Reduce the debug logging to make testing easier
+	// 1.53 Add some Microsft Message Queuing ports which appear
+	//      to be open in some Windows 10 installations
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -177,7 +181,7 @@
 	// Interface name on which the test server listens
 	// Note this is only used to determine the IPv6 address inserted in MPLS LSP Ping packets
 	// and the Link-local address sent in DHCPv6 requests.
-	#define IPSCAN_INTERFACE_NAME "sit1"
+	#define IPSCAN_INTERFACE_NAME "eth0"
 
 	// MySQL database-related globals
 	#define MYSQL_HOST "localhost"
@@ -374,8 +378,9 @@
 	// Must ensure MAXQUERIES exceeds NUMUSERDEFPORTS by sufficient amount!
 	#define NUMUSERDEFPORTS 4
 
-		// Logging prefix (goes into apache error_log or syslog)
-	#define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
+	// Logging prefix (goes into apache error_log or syslog)
+	// #define LOGPREFIX EXENAME" : Version "IPSCAN_VER" : "
+	#define LOGPREFIX 
 
    	//
 	// Parallel port scanning related
@@ -500,7 +505,7 @@
 	// Offset from now in seconds. All results older than (now-this) are deleted
 	// Should hardly ever be used, but ensures tests which were in progress when
 	// the server was shutdown/rebooted, etc. are deleted
-	#define IPSCAN_DELETE_TIME_OFFSET (600)
+	#define IPSCAN_DELETE_TIME_OFFSET (86400)
 
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router

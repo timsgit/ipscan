@@ -82,6 +82,10 @@
 		{ 1080, 0, "Socks" },\
 		{ 1720, 0, "H323, Microsoft Netmeeting" },\
 		{ 1723, 0, "PPTP" },\
+		{ 1801, 0, "MSMQ" },\
+		{ 2103, 0, "MSMQ-RPC" },\
+		{ 2105, 0, "MSMQ-RPC" },\
+		{ 2107, 0, "MSMQ-Mgmt" },\
 		{ 2869, 0, "SSDP Event Notification" },\
 		{ 3128, 0, "Active API, or Squid Proxy" },\
 		{ 3306, 0, "MySQL" },\

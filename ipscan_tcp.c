@@ -18,14 +18,15 @@
 //    along with IPscan.  If not, see <http://www.gnu.org/licenses/>.
 
 // ipscan_tcp.c 	version
-// 0.01  			initial version after split from ipscan_checks.c
-// 0.02				tidy up logging prefixes
-// 0.03				move to memset()
-// 0.04				add support for special cases
-// 0.05				ensure minimum timings are met
-// 0.06				improve error reporting
-// 0.07				ensure fd closure is handled cleanly
-// 0.08				add null termination to unusedfield
+// 0.01			initial version after split from ipscan_checks.c
+// 0.02			tidy up logging prefixes
+// 0.03			move to memset()
+// 0.04			add support for special cases
+// 0.05			ensure minimum timings are met
+// 0.06			improve error reporting
+// 0.07			ensure fd closure is handled cleanly
+// 0.08			add null termination to unusedfield
+// 0.09			enforce use of AF_INET6
 
 #include "ipscan.h"
 //
@@ -92,7 +93,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 	char portnum[8];
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
+	hints.ai_family = AF_INET6;
 	hints.ai_flags = AI_NUMERICSERV;
 	hints.ai_socktype = SOCK_STREAM;
 
@@ -118,7 +119,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 		// cycle around the results ...
 		for (aip = res; (NULL != aip && PORTUNKNOWN == retval) ; aip = aip->ai_next)
 		{
-			// If this is not an IPv6 address then skip
+			// If this is not an IPv6 address then skip, should never happen now AF family specified ...
 			if (aip->ai_family != AF_INET6)
 			{
 				// IPSCAN_LOG( LOGPREFIX "Skipping, because ai_family != AF_INET6 (actually %d)\n",aip->ai_family);

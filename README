@@ -123,7 +123,7 @@ Installation Steps:
     8. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
        w3m http://www6.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
        or: 
-       lynx http://[2001:470:1f08:185c::2]/cgi-bin6/ipscan-txt.cgi  
+       lynx http://[2001:470:971f:6::3]/cgi-bin6/ipscan-txt.cgi  
 
     9. Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
        web server error log or syslog if enabled to do so (this is NOT the default option - change 
@@ -140,7 +140,7 @@ Installation Steps:
         landing page which will check for host IP address suitability prior to allowing access to the 
         cgi script(s) - most (apart from google) search engine spiders/robots currently only use IPv4. 
         It may be advisable to only offer direct links to the cgi scripts if the address checks 
-        were successful. See http://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
+        were successful. See https://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
 
     12. Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
         javascript-enabled browsers and the other for text-based browsers. Additionally, the standard 
@@ -164,7 +164,7 @@ A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled 
 
 If you need further help then please email me at: webmaster@chappell-family.com or visit my IPscan wiki at:
  
-http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6
+https://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6
 
 
 ---
