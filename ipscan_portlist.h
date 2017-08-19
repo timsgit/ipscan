@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2016 Tim Chappell.
+//    Copyright (C) 2011-2017 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -31,6 +31,8 @@
 // 0.08 - add SNMPv2c and SNMPv3
 // 0.09 - slight tweaks to a few Microsoft ports
 //        as per https://msdn.microsoft.com/en-us/library/cc875824.aspx
+// 0.10 - added Intel AMT ports
+// 0.11 - update copyright dates
 
 #include "ipscan.h"
 
@@ -99,6 +101,10 @@
 		{ 8080, 0, "HTTP alternate" },\
 		{ 9090, 0, "WebSM" },\
 		{10243, 0, "Microsoft WMP HTTP"},\
+                {16992, 0, "Intel AMT SOAP/HTTP"},\
+                {16993, 0, "Intel AMT SOAP/HTTPS"},\
+                {16994, 0, "Intel AMT Redir/TCP"},\
+                {16995, 0, "Intel AMT Redir/TLS"},\
 		{32764, 0, "Router Backdoor"}\
 	};
 

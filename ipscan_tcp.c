@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2016 Tim Chappell.
+//    Copyright (C) 2011-2017 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -27,6 +27,7 @@
 // 0.07			ensure fd closure is handled cleanly
 // 0.08			add null termination to unusedfield
 // 0.09			enforce use of AF_INET6
+// 0.10			update copyright date
 
 #include "ipscan.h"
 //

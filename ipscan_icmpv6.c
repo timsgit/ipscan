@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2016 Tim Chappell.
+//    Copyright (C) 2011-2017 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -18,13 +18,14 @@
 //    along with IPscan.  If not, see <http://www.gnu.org/licenses/>.
 
 // ipscan_icmpv6.c 	version
-// 0.1				initial version after splitting from ipscan_checks.c
-// 0.2				add prefixes to debug log output
-// 0.3				move to memset()
-// 0.4				ensure minimum timings are met
-// 0.5				ensure txid doesn't exceed 16-bits (move to random session ID)
-// 0.6				clear msghdr.msg_flags
-// 0.7				add time() checks
+// 0.1			initial version after splitting from ipscan_checks.c
+// 0.2			add prefixes to debug log output
+// 0.3			move to memset()
+// 0.4			ensure minimum timings are met
+// 0.5			ensure txid doesn't exceed 16-bits (move to random session ID)
+// 0.6			clear msghdr.msg_flags
+// 0.7			add time() checks
+// 0.8			update copyright year
 
 #include "ipscan.h"
 //

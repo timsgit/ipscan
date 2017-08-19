@@ -1,6 +1,6 @@
 IPscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 
-Copyright (C) 2011-2016 Tim Chappell.
+Copyright (C) 2011-2017 Tim Chappell.
 
 This file is part of IPscan.
 
@@ -21,8 +21,8 @@ along with IPscan. If not, see <http://www.gnu.org/licenses/>.
 
 IPscan requires access to a MySQL database and the associated client development libraries 
 (libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. 
-IPscan is known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 6.2, Fedora 16, 
-Ubuntu 12.04, Mint 12, FreeBSD 9 and Arch Linux ARM (Raspberry Pi) and run alongside 
+IPscan is known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 7, Fedora 16, 
+Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and Raspbian and run alongside 
 Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 
 unlisted platforms.
 
@@ -121,9 +121,9 @@ Installation Steps:
        depend upon your existing installation. Please consult the SELinux documentation for further details. 
           
     8. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
-       w3m http://www6.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
+       w3m https://www6.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
        or: 
-       lynx http://[2001:470:971f:6::3]/cgi-bin6/ipscan-txt.cgi  
+       lynx https://[2001:470:971f:6::3]/cgi-bin6/ipscan-txt.cgi  
 
     9. Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
        web server error log or syslog if enabled to do so (this is NOT the default option - change 
@@ -134,7 +134,8 @@ Installation Steps:
 	the summary option and ALL debug facilities.
 
         Note: versions v1.42 and later of IPscan automatically delete the scan results, for both javascript
-	and text-only clients, after reporting them to the user. 
+	and text-only clients, after reporting them to the user. Earlier versions relied on a cron job
+        to achieve the same end, but this is no longer required for current versions.
 
     11. For those considering providing IPscan access on the public internet then consider adding a 
         landing page which will check for host IP address suitability prior to allowing access to the 
@@ -160,12 +161,11 @@ Installation Steps:
 
 Getting further help:
 =====================
-A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled clients at: http://www6.chappell-family.co.uk
+A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled clients at: https://www6.chappell-family.co.uk
 
 If you need further help then please email me at: webmaster@chappell-family.com or visit my IPscan wiki at:
  
 https://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6
-
 
 ---
 Coverity results can be found at: https://scan.coverity.com/projects/timsgit-ipscan

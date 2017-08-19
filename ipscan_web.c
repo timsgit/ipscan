@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2016 Tim Chappell.
+//    Copyright (C) 2011-2017 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -46,6 +46,7 @@
 // 0.26 - add 'navigate away' handler to javascript version
 // 0.27 - fix cut'n'paste error, spotted by coverity
 // 0.28 - update copyright year, and ensure charset=iso-8859-1
+// 0.29 - update copyright year
 
 
 #include "ipscan.h"
@@ -76,7 +77,7 @@ void create_html_common_header(void)
   printf("<META NAME=\"AUTHOR\" CONTENT=\"Tim Chappell\">\n");
   printf("<META HTTP-EQUIV=\"CACHE-CONTROL\" CONTENT=\"NO-STORE, NO-CACHE, MUST-REVALIDATE, MAX-AGE=0\">\n");
   printf("<META HTTP-EQUIV=\"PRAGMA\" CONTENT=\"NO-CACHE\">\n");
-  printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2016 Tim Chappell.\">\n");
+  printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2017 Tim Chappell.\">\n");
 
 }
 

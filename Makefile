@@ -1,6 +1,6 @@
 #    IPscan - an http-initiated IPv6 port scanner.
 #
-#    (C) Copyright 2011-2016 Tim Chappell.
+#    (C) Copyright 2011-2017 Tim Chappell.
 #
 #    This file is part of IPscan.
 #
@@ -32,6 +32,7 @@
 # 0.12 - tidy up
 # 0.13 - add support for servers where SETUID is missing/unavailable
 # 0.14 - add support for servers where UDP is missing/available
+# 0.15 - update copyright year
 
 # Support servers where SETUID is not available
 # Set this variable to 0 if you don't have permissions to call SETUID
@@ -51,7 +52,7 @@ CFLAGS=-Wall -Wextra -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security 
 CFLAGS+= -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4 -ftrapv -fPIE -pie -Wl,-z,relro,-z,now
 
 # Install location for the CGI files
-TARGETDIR=/srv/www/cgi-bin6
+TARGETDIR=/var/www/cgi-bin6
 
 # HTTP URI PATH by which external hosts will access the CGI files.
 # This may well be unrelated to the installation path if Apache is configured

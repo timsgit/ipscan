@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2016 Tim Chappell.
+//    Copyright (C) 2011-2017 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.53"
+	#define IPSCAN_VERNUM "1.55"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -160,6 +160,8 @@
 	// 1.52 Reduce the debug logging to make testing easier
 	// 1.53 Add some Microsft Message Queuing ports which appear
 	//      to be open in some Windows 10 installations
+	// 1.54 Add Intel AMT ports
+	// 1.55 Remove exit() calls to simplify fuzzing
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -167,16 +169,16 @@
 	// Determine whether to include terms of use link (0 = don't include; 1 = include)
 	#define INCLUDETERMSOFUSE 1
 	// Link for terms of use - please update to reference a page from your website
-	#define TERMSOFUSEURL "http://ipv6.chappell-family.com/timswiki/index.php5?title=Timswiki:About"
+	#define TERMSOFUSEURL "https://ipv6.chappell-family.com/timswiki/index.php5?title=Timswiki:About"
 
 	// Determine whether to offer help for bad/incomplete/unrecognised URLs
 	// 0=offer no help, 1=offer help - need to define URL
 	#define IPSCAN_BAD_URL_HELP 1
 	// The link that might provide some help ...
-	#define IPSCAN_BAD_URL_LINK "http://ipv6.chappell-family.com/timswiki/index.php5?title=ScanAutomation"
+	#define IPSCAN_BAD_URL_LINK "https://ipv6.chappell-family.com/timswiki/index.php5?title=ScanAutomation"
 
 	// URL providing description special protocol tests
-	#define IPSCAN_SPECIALTESTS_URL "http://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6_SpecialTests"
+	#define IPSCAN_SPECIALTESTS_URL "https://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6_SpecialTests"
 
 	// Interface name on which the test server listens
 	// Note this is only used to determine the IPv6 address inserted in MPLS LSP Ping packets

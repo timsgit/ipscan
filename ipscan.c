@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2016 Tim Chappell.
+//    Copyright (C) 2011-2017 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -56,6 +56,7 @@
 // 0.35 - add support for deletion of orphaned results
 // 0.36 - add time() response checks
 // 0.37	- simplify reported syslog name
+// 0.38 - remove exit() calls to simplify fuzzing
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -354,7 +355,7 @@ int main(void)
 		printf("<P>I was called with REQUEST_METHOD longer than my allocated buffer. That is very disappointing.</P>\n");
 		// Finish the html
 		create_html_body_end();
-		exit(EXIT_FAILURE);
+		return(EXIT_SUCCESS);
 	}
 	else if( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
 	{
@@ -391,7 +392,7 @@ int main(void)
 				printf("<P>I was called with a QUERY_STRING longer than my allocated buffer. That is very disappointing.</P>\n");
 				// Finish the html
 				create_html_body_end();
-				exit(EXIT_FAILURE);
+				return(EXIT_SUCCESS);
 			}
 			else if( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
 			{
@@ -505,7 +506,7 @@ int main(void)
         		printf("</HEAD>\n");
 		        printf("</HTML>\n");
 			IPSCAN_LOG( LOGPREFIX "ipscan: HEAD request method, sending headers only\n");
-			exit(EXIT_SUCCESS);
+			return(EXIT_SUCCESS);
 		}
 		else
 		{
@@ -519,7 +520,7 @@ int main(void)
 			printf("<P>I was called with an unsupported request-method. That is very disappointing.</P>\n");
 			// Finish the html
 			create_html_body_end();
-			exit(EXIT_FAILURE);
+			return(EXIT_SUCCESS);
 		}
 	}
 
@@ -532,7 +533,16 @@ int main(void)
 	else if (strnlen(remoteaddrvar,(INET6_ADDRSTRLEN+1)) > INET6_ADDRSTRLEN)
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable length exceeds allocated buffer size (%d > %d)\n", (int)strnlen(remoteaddrvar, (INET6_ADDRSTRLEN+1)), INET6_ADDRSTRLEN);
-		exit(EXIT_FAILURE);
+		// Create the header
+                create_html_common_header();
+                // Now finish the header
+                printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+                printf("</HEAD>\n");
+                printf("<BODY>\n");
+                printf("<P>I was called with a REMOTE_ADDR variable that exceeds the supported size. That is very disappointing.</P>\n");
+                // Finish the html
+                create_html_body_end();
+		return(EXIT_SUCCESS);
 	}
 	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
 	{
@@ -545,7 +555,16 @@ int main(void)
 		if (rc <= 0)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: Unparseable IPv6 host address : %s\n", remoteaddrstring);
-			exit(EXIT_FAILURE);
+			// Create the header
+                        create_html_common_header();
+                        // Now finish the header
+                        printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+                        printf("</HEAD>\n");
+                        printf("<BODY>\n");
+                      	printf("<P>I was called with an unparseable IPv6 host address. That is very disappointing.</P>\n");
+                        // Finish the html
+                        create_html_body_end();
+			return(EXIT_SUCCESS);
 		}
 		else
 		{
@@ -629,13 +648,31 @@ int main(void)
 			if (reconquerysize <= 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
-				exit(EXIT_FAILURE);
+				// Create the header
+                         	create_html_common_header();
+                                // Now finish the header
+                                printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+                                printf("</HEAD>\n");
+                                printf("<BODY>\n");
+                                printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
+                                // Finish the html
+                                create_html_body_end();
+				return(EXIT_SUCCESS);
 			}
 		}
 		else
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
-			exit(EXIT_FAILURE);
+			// Create the header
+                        create_html_common_header();
+                        // Now finish the header
+                        printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+                        printf("</HEAD>\n");
+                        printf("<BODY>\n");
+                        printf("<P>I was called with an unexpected query length. That is very disappointing.</P>\n");
+                        // Finish the html
+                        create_html_body_end();
+			return(EXIT_SUCCESS);
 		}
 
 		// Determine whether existing ports are to be included in the tested list or not:
@@ -704,13 +741,31 @@ int main(void)
 							if (reconquerysize <= 0)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
-								exit(EXIT_FAILURE);
+								// Create the header
+								create_html_common_header();
+		                                                // Now finish the header
+                                                                printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+                                                                printf("</HEAD>\n");
+                                                                printf("<BODY>\n");
+                                                                printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
+                                                                // Finish the html
+                                                                create_html_body_end();
+								return(EXIT_SUCCESS);
 							}
 						}
 						else
 						{
 							IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: customport%d reconstitution failed, due to unexpected size.\n", customport);
-							exit(EXIT_FAILURE);
+							// Create the header
+							create_html_common_header();
+		                                        // Now finish the header
+                                                        printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+                                                        printf("</HEAD>\n");
+                                                        printf("<BODY>\n");
+                                                        printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
+                                                        // Finish the html
+                                                        create_html_body_end();
+							return(EXIT_SUCCESS);
 						}
 					}
 				}
@@ -1110,7 +1165,7 @@ int main(void)
 				if (rc < 0 || rc >= logbuffersize)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
-					exit(EXIT_FAILURE);
+					break;
 				}
 
 				logbufferptr += rc ;
@@ -1133,7 +1188,7 @@ int main(void)
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
-				exit(EXIT_FAILURE);
+				return(EXIT_SUCCESS);
 			}
 		}
 		#else
@@ -1208,10 +1263,9 @@ int main(void)
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: dump_db return code was %d (expected 0)\n", rc);
-				exit(EXIT_FAILURE);
+				return(EXIT_SUCCESS);
 			}
 		}
-
 
 		// *IF* we have everything we need to initiate the scan
 		// session, starttime, beginscan, includeexisting and >=0 userdefined ports [NOTE: no fetch]
@@ -1251,7 +1305,7 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for ping result returned non-zero: %d\n", rc);
 				create_html_body_end();
-				exit(EXIT_FAILURE);
+				return(EXIT_SUCCESS);
 			}
 			#endif
 
@@ -1429,7 +1483,7 @@ int main(void)
 				if (rc < 0 || rc >= logbuffersize)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
-					exit(EXIT_FAILURE);
+					break;
 				}
 
 				logbufferptr += rc ;
@@ -1567,5 +1621,5 @@ int main(void)
 					querysession, querystarttime, numports, numcustomports);
 		}
 	}
-	exit(EXIT_SUCCESS);
+	return(EXIT_SUCCESS);
 }
