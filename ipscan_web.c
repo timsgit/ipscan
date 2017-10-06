@@ -47,7 +47,9 @@
 // 0.27 - fix cut'n'paste error, spotted by coverity
 // 0.28 - update copyright year, and ensure charset=iso-8859-1
 // 0.29 - update copyright year
+// 0.30 - add basic HTML5/CSS support for javascript binaries
 
+// TODO: lower-case all HTML tags
 
 #include "ipscan.h"
 
@@ -78,8 +80,51 @@ void create_html_common_header(void)
   printf("<META HTTP-EQUIV=\"CACHE-CONTROL\" CONTENT=\"NO-STORE, NO-CACHE, MUST-REVALIDATE, MAX-AGE=0\">\n");
   printf("<META HTTP-EQUIV=\"PRAGMA\" CONTENT=\"NO-CACHE\">\n");
   printf("<META NAME=\"COPYRIGHT\" CONTENT=\"Copyright (C) 2011-2017 Tim Chappell.\">\n");
+}
+
+#ifdef IPSCAN_HTML5_ENABLED
+void create_html5_common_header(void)
+{
+  printf("%s%c%c\n","Content-Type:text/html;charset=UTF-8",13,10);
+  printf("<!DOCTYPE html\">\n");
+  printf("<html lang=\"en-gb\">\n");
+  printf("<head>\n");
+  printf("<meta http-equiv=\"content-type\" content=\"text/html;charset=UTF-8\">\n");
+  printf("<meta name=\"AUTHOR\" content=\"Tim Chappell\">\n");
+  printf("<meta http-equiv=\"cache-control\" content=\"NO-STORE, NO-CACHE, MUST-REVALIDATE, MAX-AGE=0\">\n");
+  printf("<meta http-equiv=\"PRAGMA\" content=\"no-cache\">\n");
+  printf("<meta name=\"copyright\" content=\"Copyright (C) 2011-2017 Tim Chappell.\">\n");
+  printf("<style>\n");
+  printf("body {\n");
+  printf("background-color: #f0f0f2;\n");
+  printf("margin: 0;\n");
+  printf("padding: 0;\n");
+  printf("font-family: \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n");
+  printf("}\n");
+  printf("div {\n");
+  printf("width: %dpx;\n", IPSCAN_BODYDIV_WIDTH);
+  printf("margin: 5em auto;\n");
+  printf("padding: 50px;\n");
+  printf("background-color: #fff;\n");
+  printf("border-radius: 1em;\n");
+  printf("}\n");
+  printf("table {\n");
+  printf("border: 1px solid black;\n");
+  printf("font-family: \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n");
+  printf("border-collapse: collapse;\n");
+  printf("width: 100%%;\n");
+  printf("}\n");
+  printf("td, th {\n");
+  printf("border: 1px solid black;\n");
+  printf("padding: 8px;\n");
+  printf("}\n");
+  printf("tr:nth-child(even) {\n");
+  printf("background-color: #dddddd;\n");
+  printf("}\n");
+  printf("</style>\n");
 
 }
+#endif
 
 void create_json_header(void)
 {
@@ -90,7 +135,11 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 {
  uint16_t i;
 
+ #ifdef IPSCAN_HTML5_ENABLED
+ create_html5_common_header();
+ #else
  create_html_common_header();
+ #endif
 
  printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
  printf("<SCRIPT type = \"text/javascript\" language=\"javascript\">\n");
@@ -444,23 +493,28 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
  printf("<HR>\n");
  printf("</NOSCRIPT>\n");
 
- printf("<H3>IPv6 Port Scan Results</H3>\n");
- printf("<P>Results for host : %s</P>\n\n", hostname);
+ printf("<DIV>\n");
+
+ printf("<H3>IPv6 Port Scan Results for host %s</H3>\n", hostname);
 
  printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", asctime(localtime(&timestamp)), (int)ESTIMATEDTIMETORUN );
 
- // Only include the PING result if necessary
- #if (IPSCAN_INCLUDE_PING ==1)
  printf("<TABLE border=\"1\">\n");
- printf("<TR style=\"text-align:left\">\n");
- printf("<TD TITLE=\"IPv6 Ping\">ICMPv6 ECHO REQUEST returned : </TD><TD style=\"background-color:%s\" id=\"pingstate\">%s</TD>\n",resultsstruct[PORTUNKNOWN].colour,resultsstruct[PORTUNKNOWN].label);
+ // ongoing status ROW
+ printf("<TR style=\"text-align: left\">\n");
+ printf("<TD width=\"50%%\">Scan status is : </TD><TD width=\"50%%\" style=\"font-weight: bold\" id=\"scanstate\">IDLE.</TD>\n");
  printf("</TR>\n");
- printf("</TABLE>\n");
+ // Only include the PING result row if necessary
+ #if (IPSCAN_INCLUDE_PING ==1)
+ printf("<TR style=\"font-weight: normal\">\n");
+ printf("<TD width=\"50%%\" TITLE=\"IPv6 Ping\">ICMPv6 ECHO REQUEST returned : </TD><TD width=\"50%%\" style=\"background-color:%s\" id=\"pingstate\">%s</TD>\n",resultsstruct[PORTUNKNOWN].colour,resultsstruct[PORTUNKNOWN].label);
+ printf("</TR>\n");
  #endif
+ printf("</TABLE>\n");
 
  if (numudpports > 0)
  {
-  printf("<P>Individual IPv6 UDP port scan results (hover for service names):</P>\n");
+  printf("<P style=\"font-weight: bold\">Individual IPv6 UDP port scan results (hover for service names):</P>\n");
   // Start of UDP table
   printf("<TABLE border=\"1\">\n");
 
@@ -488,7 +542,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
   printf("</TABLE>\n");
  }
 
- printf("<P>Individual IPv6 TCP port scan results (hover for service names):</P>\n");
+ printf("<P style=\"font-weight: bold\">Individual IPv6 TCP port scan results (hover for service names):</P>\n");
  // Start of table
  printf("<TABLE border=\"1\">\n");
  position = 0;
@@ -517,15 +571,11 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
  // end of table
  printf("</TABLE>\n");
  printf("<BR>\n");
- // ongoing status
- printf("<TABLE>\n");
- printf("<TR style=\"text-align:left;font-size:120%%;font-weight:bold\">\n");
- printf("<TD>Scan is : </TD><TD id=\"scanstate\">IDLE.</TD>\n");
- printf("</TR>\n");
- printf("</TABLE>\n");
 
  // Create results key table
  create_results_key_table(hostname, timestamp);
+
+ printf("</DIV>\n");
 
 }
 
@@ -543,50 +593,47 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
  int position = 0;
  int last = 0;
 
- printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
- printf("</HEAD>\n");
- printf("<BODY>\n");
- printf("<H3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</H3>\n");
+ printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+ printf("</head>\n");
+ printf("<body>\n");
+ printf("<h3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</h3>\n");
 
- //printf("<P>numports = %d, numudpports = %d</P>\n", numports, numudpports);
- //printf("<P>UDPRUNTIME %d TCPRUNTIME %d ICMP6RUNTIME %d</P>\n", UDPRUNTIME, TCPRUNTIME,  ICMP6RUNTIME);
-
- printf("<P>Please note that this test may take up to %d seconds to complete.</P>\n", (int) ESTIMATEDTIMETORUN);
+ printf("<p>Please note that this test may take up to %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
  // Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
 
  if (numudpports > 0)
  {
-  printf("<P>The list of UDP ports that will be tested are:</P>\n");
+  printf("<p>The list of UDP ports that will be tested are:</p>\n");
 
   // Start of table
-  printf("<TABLE border=\"1\">\n");
+  printf("<table border=\"1\">\n");
   for (portindex= 0; portindex < numudpports ; portindex++)
   {
    port = udpportlist[portindex].port_num;
    special = udpportlist[portindex].special;
    last = (portindex == (numudpports-1)) ? 1 : 0 ;
 
-   if (position == 0) printf("<TR style=\"text-align:center\">\n");
+   if (position == 0) printf("<tr style=\"text-align:center\">\n");
    if (0 != special)
    {
-    printf("<TD width=\"%d%%\" title=\"%s\">Port %d[%d]</TD>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port, special);
+    printf("<td width=\"%d%%\" title=\"%s\">Port %d[%d]</td>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port, special);
    }
    else
    {
-    printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port);
+    printf("<td width=\"%d%%\" title=\"%s\">Port %d</td>\n",COLUMNUDPPCT, udpportlist[portindex].port_desc, port);
    }
    position++;
-   if (position >= MAXUDPCOLS || last == 1) { printf("</TR>\n"); position=0; };
+   if (position >= MAXUDPCOLS || last == 1) { printf("</tr>\n"); position=0; };
   }
   // end of table
-  printf("</TABLE>\n");
+  printf("</table>\n");
  }
 
  // Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
- printf("<P>The default list of TCP ports that will be tested are:</P>\n");
+ printf("<p>The default list of TCP ports that will be tested are:</p>\n");
 
  // Start of table
- printf("<TABLE border=\"1\">\n");
+ printf("<table border=\"1\">\n");
  position = 0;
  for (portindex= 0; portindex < numports ; portindex++)
  {
@@ -594,21 +641,21 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
   special = portlist[portindex].special;
   last = (portindex == (numports-1)) ? 1 : 0 ;
 
-  if (position == 0) printf("<TR style=\"text-align:center\">\n");
+  if (position == 0) printf("<tr style=\"text-align:center\">\n");
   if (0 != special)
   {
-   printf("<TD width=\"%d%%\" title=\"%s\">Port %d[%d]</TD>\n",COLUMNPCT, portlist[portindex].port_desc, port, special);
+   printf("<td width=\"%d%%\" title=\"%s\">Port %d[%d]</td>\n",COLUMNPCT, portlist[portindex].port_desc, port, special);
   }
   else
   {
-   printf("<TD width=\"%d%%\" title=\"%s\">Port %d</TD>\n",COLUMNPCT, portlist[portindex].port_desc, port);
+   printf("<td width=\"%d%%\" title=\"%s\">Port %d</td>\n",COLUMNPCT, portlist[portindex].port_desc, port);
   }
 
   position++;
-  if (position >= MAXCOLS || last == 1) { printf("</TR>\n"); position=0; };
+  if (position >= MAXCOLS || last == 1) { printf("</tr>\n"); position=0; };
  }
  // end of table
- printf("</TABLE>\n");
+ printf("</table>\n");
 
  printf("<P style=\"font-weight:bold\">1. Select whether to include the default list of TCP ports, or not:</P>\n");
 
@@ -641,3 +688,113 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
  printf("<INPUT type=\"submit\" value=\"Begin scan\">\n");
  printf("</FORM>\n");
 }
+
+#ifdef IPSCAN_HTML5_ENABLED
+void create_html5_form(uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist)
+{
+ int i;
+ uint16_t port,portindex;
+ uint8_t special;
+ int position = 0;
+ int last = 0;
+
+ printf("<title>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+ printf("</head>\n");
+ printf("<body>\n");
+ printf("<div>\n");
+
+ printf("<h3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</h3>\n");
+
+ printf("<p>Please note that this test may take up to %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
+ // Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
+
+ if (numudpports > 0)
+ {
+	 printf("<p>The list of UDP ports that will be tested are:</p>\n");
+
+	 // Start of table
+	 printf("<table style=\"width:%dpx\">\n", IPSCAN_BODYDIV_WIDTH);
+	 for (portindex= 0; portindex < numudpports ; portindex++)
+	 {
+		 port = udpportlist[portindex].port_num;
+	 	 special = udpportlist[portindex].special;
+	 	 last = (portindex == (numudpports-1)) ? 1 : 0 ;
+
+	 	 if (position == 0) printf("<tr>\n");
+
+	 	 if (0 != special)
+	 	 {
+	 		 printf("<td title=\"%s\">Port %d[%d]</td>\n", udpportlist[portindex].port_desc, port, special);
+	 	 }
+	 	 else
+	 	 {
+	 		 printf("<td title=\"%s\">Port %d</td>\n", udpportlist[portindex].port_desc, port);
+	 	 }
+	 	 position++;
+	 	 if (position >= MAXUDPCOLS || last == 1) { printf("</tr>\n"); position=0; };
+	 }
+	 // end of table
+	 printf("</table>\n");
+ }
+
+ // Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
+ printf("<p>The default list of TCP ports that will be tested are:</p>\n");
+
+ // Start of table
+ printf("<table style=\"width:%dpx\">\n", IPSCAN_BODYDIV_WIDTH);
+ position = 0;
+ for (portindex= 0; portindex < numports ; portindex++)
+ {
+	 port = portlist[portindex].port_num;
+	 special = portlist[portindex].special;
+	 last = (portindex == (numports-1)) ? 1 : 0 ;
+
+	 if (position == 0) printf("<tr>\n");
+	 if (0 != special)
+	 {
+		 printf("<td title=\"%s\">Port %d[%d]</td>\n", portlist[portindex].port_desc, port, special);
+	 }
+	 else
+	 {
+		 printf("<td title=\"%s\">Port %d</td>\n", portlist[portindex].port_desc, port);
+	 }
+
+	 position++;
+	 if (position >= MAXCOLS || last == 1) { printf("</tr>\n"); position=0; };
+ }
+ // end of table
+ printf("</table>\n");
+
+ printf("<p style=\"font-weight:bold\">1. Select whether to include the default list of TCP ports, or not:</p>\n");
+ printf("<form onsubmit=\"return checkForm(this);\" action=\""URIPATH"/"EXENAME"\" accept-charset=\"ISO-8859-1\" method=\"GET\">\n");
+ printf("<input type=\"radio\" name=\"includeexisting\" value=\"1\" checked> Include default TCP ports listed above in the scan<br>\n");
+ printf("<input type=\"radio\" name=\"includeexisting\" value=\"-1\"> Exclude default TCP ports, test only those specified below<br>\n");
+ printf("<p style=\"font-weight:bold\">2. Enter any custom TCP ports you wish to scan (%d-%d inclusive). Duplicate or invalid ports will be discarded:</p>\n", MINVALIDPORT, MAXVALIDPORT);
+
+ printf("<table style=\"width:%dpx\">\n", IPSCAN_BODYDIV_WIDTH);
+ position = 0;
+ for (i = 0; i < NUMUSERDEFPORTS ; i++)
+ {
+  // Start of a new row, so insert the appropriate tag if required
+  last = (i == (NUMUSERDEFPORTS-1)) ? 1 : 0;
+  if (position == 0) printf("<tr style=\"text-align:center\">\n");
+
+  printf("<td><input type=\"number\" value=\"\" min=\"%d\" max=\"%d\" alt=\"Custom TCP port #%d\" name=\"customport%d\" pattern=\"\\d+\"></td>\n", MINVALIDPORT, MAXVALIDPORT, i, i);
+
+  // Get ready for the next cell, add the end of row tag if required
+  position++;
+  if (position >= MAXCOLS || last == 1) { printf("</tr>\n"); position=0; };
+ }
+ printf("</table>\n");
+
+ #if (INCLUDETERMSOFUSE != 0)
+ printf("<p style=\"font-weight:bold\">3. Accept the <a href=\"%s\">Terms and Conditions</a> by ticking this box <input type=\"checkbox\" required name=\"termsaccepted\">.</p>\n",TERMSOFUSEURL);
+ #else
+ printf("<p style=\"font-weight:bold\">3. and finally, please click on the Begin Scan button:</p>\n");
+ #endif
+
+ printf("<input style=\"color: white; font-size: 16px; text-align: center; border-radius: 1em; text-decoration: none; background-color: red; padding: 10px 15px; font-weight:bold\" type=\"submit\" value=\"Begin Scan\" >\n");
+ printf("</form>\n");
+ printf("</div>\n");
+}
+#endif

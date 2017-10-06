@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.55"
+	#define IPSCAN_VERNUM "1.56"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -162,6 +162,7 @@
 	//      to be open in some Windows 10 installations
 	// 1.54 Add Intel AMT ports
 	// 1.55 Remove exit() calls to simplify fuzzing
+	// 1.56 Add basic HTML5/CSS support for javascript binaries
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -297,12 +298,17 @@
 	#define MINVALIDPORT 0
 	#define MAXVALIDPORT 65535
 
+	// Enable HTML5 for Javscript
+	#define IPSCAN_HTML5_ENABLED 1
+	// Maximum HTML5 body div width (pixels)
+	#define IPSCAN_BODYDIV_WIDTH 800
+
 	// Number of columns for HTML output:
 	#define MAXCOLS 6
 	#define COLUMNPCT (100/MAXCOLS)
 
 	// Number of columns for UDP HTML output:
-	#define MAXUDPCOLS 3
+	#define MAXUDPCOLS 6
 	#define COLUMNUDPPCT (100/MAXCOLS)
 
 	// Number of columns for text-only browser output case

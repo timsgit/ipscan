@@ -33,6 +33,7 @@
 # 0.13 - add support for servers where SETUID is missing/unavailable
 # 0.14 - add support for servers where UDP is missing/available
 # 0.15 - update copyright year
+# 0.16 - force warnings to be errors
 
 # Support servers where SETUID is not available
 # Set this variable to 0 if you don't have permissions to call SETUID
@@ -48,7 +49,7 @@ LIBPATHS=-L/usr/lib
 INCLUDES=-I/usr/include
 LIBS=
 CC=gcc
-CFLAGS=-Wall -Wextra -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O2 -D_FORTIFY_SOURCE=2
+CFLAGS=-Wall -Wextra -Werror -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O2 -D_FORTIFY_SOURCE=2
 CFLAGS+= -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4 -ftrapv -fPIE -pie -Wl,-z,relro,-z,now
 
 # Install location for the CGI files

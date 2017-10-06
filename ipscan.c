@@ -57,6 +57,7 @@
 // 0.36 - add time() response checks
 // 0.37	- simplify reported syslog name
 // 0.38 - remove exit() calls to simplify fuzzing
+// 0.39 - transition to HTML5 support
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -106,13 +107,22 @@ int tidy_up_db(uint64_t time_now);
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
 
-void create_html_common_header(void);
 void create_json_header(void);
 void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, uint16_t numudpports, char * reconquery);
-
 void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist);
-void create_html_body_end(void);
+
+#ifdef IPSCAN_HTML5_ENABLED
+void create_html5_common_header(void);
+void create_html5_form(uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist);
+#else
 void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist);
+#endif
+
+void create_html_common_header(void);
+void create_html_body_end(void);
+
+// from ipscan_general
+uint64_t get_session(void);
 
 // create_results_key_table is only referenced if creating the text-only version of the scanner
 #if (TEXTMODE == 1)
@@ -161,39 +171,6 @@ struct rslt_struc resultsstruct[] =
 	/* End of list marker, do NOT change */
 	{ PORTEOL,			-101,	-101,			"EOL",				"black",	"End of list marker."}
 };
-
-
-uint64_t get_session(void)
-{
-	uint64_t sessionnum = 0;
-	uint64_t fetchedsession = 0;
-	FILE *fp;
-	fp = fopen("/dev/urandom", "r");
-
-	if (NULL == fp)
-	{
-		sessionnum = (uint64_t)getpid();
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot open /dev/urandom, %d (%s), defaulting session to getpid() = %"PRIu64"\n", errno, strerror(errno), sessionnum);
-	}
-	else
-	{
-		size_t numitems = fread( &fetchedsession, sizeof(fetchedsession), 1, fp);
-		fclose(fp);
-		// Clear the MSB of the random session ID so that we're sure it will fit into an int64_t which the QUERY_STRING parser assumes
-		sessionnum = fetchedsession & ( ((uint64_t)~0) >> 1);
-
-		#ifdef QUERYDEBUG
-		IPSCAN_LOG( LOGPREFIX "ipscan: Session number modification check, before = %"PRIu64" after = %"PRIu64"\n", fetchedsession, sessionnum);
-		#endif
-
-		if (1 != numitems)
-		{
-			sessionnum = (uint64_t)getpid();
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot read /dev/urandom, defaulting session to getpid() = %"PRIu64"\n", sessionnum);
-		}
-	}
-	return (sessionnum);
-}
 
 int main(void)
 {
@@ -534,14 +511,14 @@ int main(void)
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable length exceeds allocated buffer size (%d > %d)\n", (int)strnlen(remoteaddrvar, (INET6_ADDRSTRLEN+1)), INET6_ADDRSTRLEN);
 		// Create the header
-                create_html_common_header();
-                // Now finish the header
-                printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
-                printf("</HEAD>\n");
-                printf("<BODY>\n");
-                printf("<P>I was called with a REMOTE_ADDR variable that exceeds the supported size. That is very disappointing.</P>\n");
-                // Finish the html
-                create_html_body_end();
+		create_html_common_header();
+		// Now finish the header
+		printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+		printf("</HEAD>\n");
+		printf("<BODY>\n");
+		printf("<P>I was called with a REMOTE_ADDR variable that exceeds the supported size. That is very disappointing.</P>\n");
+		// Finish the html
+		create_html_body_end();
 		return(EXIT_SUCCESS);
 	}
 	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
@@ -556,14 +533,14 @@ int main(void)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: Unparseable IPv6 host address : %s\n", remoteaddrstring);
 			// Create the header
-                        create_html_common_header();
-                        // Now finish the header
-                        printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
-                        printf("</HEAD>\n");
-                        printf("<BODY>\n");
-                      	printf("<P>I was called with an unparseable IPv6 host address. That is very disappointing.</P>\n");
-                        // Finish the html
-                        create_html_body_end();
+			create_html_common_header();
+			// Now finish the header
+			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("</HEAD>\n");
+			printf("<BODY>\n");
+			printf("<P>I was called with an unparseable IPv6 host address. That is very disappointing.</P>\n");
+			// Finish the html
+			create_html_body_end();
 			return(EXIT_SUCCESS);
 		}
 		else
@@ -604,10 +581,20 @@ int main(void)
 
 	if (numqueries == 0)
 	{
+		#ifdef IPSCAN_HTML5_ENABLED
+		// Create the HTML5 header
+		create_html5_common_header();
+		// Create the main HTML5 body
+		// TODO: create_html5_form(DEFNUMPORTS, NUMUDPPORTS, &portlist[0], &udpportlist[0]);
+		create_html5_form(DEFNUMPORTS, NUMUDPPORTS, portlist, udpportlist);
+		#else
 		// Create the header
 		create_html_common_header();
 		// Create the main html body
-		create_html_form(DEFNUMPORTS, NUMUDPPORTS, &portlist[0], &udpportlist[0]);
+		// TODO: create_html5_form(DEFNUMPORTS, NUMUDPPORTS, &portlist[0], &udpportlist[0]);
+		create_html_form(DEFNUMPORTS, NUMUDPPORTS, portlist, udpportlist);
+
+		#endif
 		// Finish the html
 		create_html_body_end();
 	}
@@ -649,14 +636,14 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 				// Create the header
-                         	create_html_common_header();
-                                // Now finish the header
-                                printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
-                                printf("</HEAD>\n");
-                                printf("<BODY>\n");
-                                printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
-                                // Finish the html
-                                create_html_body_end();
+				create_html_common_header();
+				// Now finish the header
+				printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+				printf("</HEAD>\n");
+				printf("<BODY>\n");
+				printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
+				// Finish the html
+				create_html_body_end();
 				return(EXIT_SUCCESS);
 			}
 		}
@@ -664,14 +651,14 @@ int main(void)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
 			// Create the header
-                        create_html_common_header();
-                        // Now finish the header
-                        printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
-                        printf("</HEAD>\n");
-                        printf("<BODY>\n");
-                        printf("<P>I was called with an unexpected query length. That is very disappointing.</P>\n");
-                        // Finish the html
-                        create_html_body_end();
+			create_html_common_header();
+			// Now finish the header
+			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+			printf("</HEAD>\n");
+			printf("<BODY>\n");
+			printf("<P>I was called with an unexpected query length. That is very disappointing.</P>\n");
+			// Finish the html
+			create_html_body_end();
 			return(EXIT_SUCCESS);
 		}
 
@@ -743,13 +730,13 @@ int main(void)
 								IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 								// Create the header
 								create_html_common_header();
-		                                                // Now finish the header
-                                                                printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
-                                                                printf("</HEAD>\n");
-                                                                printf("<BODY>\n");
-                                                                printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
-                                                                // Finish the html
-                                                                create_html_body_end();
+								// Now finish the header
+								printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+								printf("</HEAD>\n");
+								printf("<BODY>\n");
+								printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
+								// Finish the html
+								create_html_body_end();
 								return(EXIT_SUCCESS);
 							}
 						}
@@ -758,13 +745,13 @@ int main(void)
 							IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: customport%d reconstitution failed, due to unexpected size.\n", customport);
 							// Create the header
 							create_html_common_header();
-		                                        // Now finish the header
-                                                        printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
-                                                        printf("</HEAD>\n");
-                                                        printf("<BODY>\n");
-                                                        printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
-                                                        // Finish the html
-                                                        create_html_body_end();
+							// Now finish the header
+							printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
+							printf("</HEAD>\n");
+							printf("<BODY>\n");
+							printf("<P>I have run out of room to reconstitute the query. That is very disappointing.</P>\n");
+							// Finish the html
+							create_html_body_end();
 							return(EXIT_SUCCESS);
 						}
 					}
@@ -873,8 +860,7 @@ int main(void)
 			printf("<TITLE>IPv6 Port Scanner Version %s</TITLE>\n", IPSCAN_VER);
 			printf("</HEAD>\n");
 			printf("<BODY>\n");
-			printf("<H3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</H3>\n");
-			printf("<P>Results for host : %s</P>\n\n", remoteaddrstring);
+			printf("<H3 style=\"color:red\">IPv6 Port Scan Results for host %s</H3>\n", remoteaddrstring);
 
 			printf("<P>Scan beginning at: %s, expected to take up to %d seconds ...</P>\n", \
 					asctime(localtime(&starttime)), (int)ESTIMATEDTIMETORUN );
@@ -1562,7 +1548,8 @@ int main(void)
 			// Create the header
 			create_html_header(session, starttime, numports, numudpports, reconquery);
 			// Create the main html body
-			create_html_body(remoteaddrstring, starttime, numports, numudpports, &portlist[0], &udpportlist[0]);
+			//TODO: create_html_body(remoteaddrstring, starttime, numports, numudpports, &portlist[0], &udpportlist[0]);
+			create_html_body(remoteaddrstring, starttime, numports, numudpports, portlist, udpportlist);
 			// Finish the html
 			create_html_body_end();
 			
