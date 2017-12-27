@@ -42,6 +42,7 @@
 // 0.21 - use memory engine table type by default
 // 0.22 - modify debug/test logging
 // 0.23 - update copyright dates
+// 0.24 - further HTML tag adjustments
 
 #include "ipscan.h"
 //
@@ -537,8 +538,8 @@ int summarise_db(void)
 						if (result)
 						{
 
-							printf("<TABLE border=\"1\">\n");
-							printf("<TR style=\"text-align:center\"><TD width=\"50%%\">Host scanned:</TD><TD width=\"50%%\">Scan begin time:</TD></TR>\n");
+							printf("<table border=\"1\">\n");
+							printf("<tr style=\"text-align:center\"><td width=\"50%%\">Host scanned:</td><td width=\"50%%\">Scan begin time:</td></tr>\n");
 
 							while ((row = mysql_fetch_row(result)))
 							{
@@ -564,14 +565,14 @@ int summarise_db(void)
 
 								if (inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN) != NULL)
 								{
-									printf("<TR style=\"text-align:center\">\n");
-									printf("<TD width=\"50%%\">%s</TD>", hostname);
-									printf("<TD width=\"50%%\">%s</TD>\n", asctime(localtime(&createdate)));
-									printf("</TR>\n");
+									printf("<tr style=\"text-align:center\">\n");
+									printf("<td width=\"50%%\">%s</td>", hostname);
+									printf("<td width=\"50%%\">%s</td>\n", asctime(localtime(&createdate)));
+									printf("</tr>\n");
 								}
 							}
 
-							printf("</TABLE>\n");
+							printf("</table>\n");
 
 							mysql_free_result(result);
 						}
