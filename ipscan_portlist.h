@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2017 Tim Chappell.
+//    Copyright (C) 2011-2018 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -33,6 +33,7 @@
 //        as per https://msdn.microsoft.com/en-us/library/cc875824.aspx
 // 0.10 - added Intel AMT ports
 // 0.11 - update copyright dates
+// 0.12 - add memcached check (TCP only, UDP not supported for IPv6)
 
 #include "ipscan.h"
 
@@ -101,6 +102,7 @@
 		{ 8080, 0, "HTTP alternate" },\
 		{ 9090, 0, "WebSM" },\
 		{10243, 0, "Microsoft WMP HTTP"},\
+		{11211, 0, "memcache" },\
                 {16992, 0, "Intel AMT SOAP/HTTP"},\
                 {16993, 0, "Intel AMT SOAP/HTTPS"},\
                 {16994, 0, "Intel AMT Redir/TCP"},\

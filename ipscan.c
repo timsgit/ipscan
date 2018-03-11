@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2017 Tim Chappell.
+//    Copyright (C) 2011-2018 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -59,6 +59,7 @@
 // 0.38 - remove exit() calls to simplify fuzzing
 // 0.39 - transition to HTML5 support
 // 0.40 - further HTML tag adjustments
+// 0.41 - add TCP memcache port check
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
