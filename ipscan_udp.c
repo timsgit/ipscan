@@ -1611,6 +1611,100 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				break;
 			}
 
+			case 11211: // memcache
+			{
+				if (0 == special)
+				{
+					// ASCII mode
+					// The frame header is 8 bytes long, as follows (all values are 16-bit integers
+					// in network byte order, high byte first):
+					//	
+					// 0-1 Request ID
+					// 2-3 Sequence number
+					// 4-5 Total number of datagrams in this message
+					// 6-7 Reserved for future use; must be 0
+					// <cmd>\r\n
+
+					txmessage[len++] = 0x00; // Request ID
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x00; // Sequence ID
+					txmessage[len++] = 0x00;
+					txmessage[len++] = 0x00; // Number of datagrams
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x00; // Reserved for future use
+					txmessage[len++] = 0x00;
+
+					char mccmd[] = "version";
+
+					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
+					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
+					{
+						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for memcache command, returned %d\n", rc);
+						retval = PORTINTERROR;
+					}
+					else
+					{
+						len += rc;
+					}
+				}
+				else
+				{
+					txmessage[len++] = 0x00; // Request ID
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x00; // Sequence ID
+					txmessage[len++] = 0x00;
+					txmessage[len++] = 0x00; // Number of datagrams
+					txmessage[len++] = 0x01;
+					txmessage[len++] = 0x00; // Reserved for future use
+					txmessage[len++] = 0x00;
+					// Binary mode
+					// https://github.com/couchbase/memcached/blob/master/docs/BinaryProtocol.md#0x0b-version
+					//
+					//  Byte/     0       |       1       |       2       |       3       |
+					//     /              |               |               |               |
+					//    |0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|
+					//    +---------------+---------------+---------------+---------------+
+					//   0| 0x80          | 0x0b          | 0x00          | 0x00          |
+					//    +---------------+---------------+---------------+---------------+
+					//   4| 0x00          | 0x00          | 0x00          | 0x00          |
+					//    +---------------+---------------+---------------+---------------+
+					//   8| 0x00          | 0x00          | 0x00          | 0x00          |
+					//    +---------------+---------------+---------------+---------------+
+					//  12| 0x00          | 0x00          | 0x00          | 0x00          |
+					//    +---------------+---------------+---------------+---------------+
+					//  16| 0x00          | 0x00          | 0x00          | 0x00          |
+					//    +---------------+---------------+---------------+---------------+
+					//  20| 0x00          | 0x00          | 0x00          | 0x00          |
+					//    +---------------+---------------+---------------+---------------+
+					//
+					txmessage[len++] = 0x80; //	request
+					txmessage[len++] = 0x0b; //	opcode - Version
+					txmessage[len++] = 0; //	keylength
+					txmessage[len++] = 0; //	keylength
+					txmessage[len++] = 0; //	extras length -must be 0, else "multipart not supported"
+					txmessage[len++] = 1; //	data type    - must be 1, else "multipart not supported"
+					txmessage[len++] = 0; //	reserved
+					txmessage[len++] = 0; //	reserved
+					txmessage[len++] = 0; //	total body length
+					txmessage[len++] = 0; //	total body length
+					txmessage[len++] = 0; //	total body length
+					txmessage[len++] = 0; //	total body length
+					txmessage[len++] = 0x21; //	opaque
+					txmessage[len++] = 0x03; //	opaque
+					txmessage[len++] = 0x14; //	opaque
+					txmessage[len++] = 0x08; //	opaque
+					txmessage[len++] = 0; //	cas
+					txmessage[len++] = 0; //	cas
+					txmessage[len++] = 0; //	cas
+					txmessage[len++] = 0; //	cas
+					txmessage[len++] = 0; //	cas
+					txmessage[len++] = 0; //	cas
+					txmessage[len++] = 0; //	cas
+					txmessage[len++] = 0; //	cas
+				}	
+				break;
+			}
+
 			default:
 			{
 				// Unhandled port

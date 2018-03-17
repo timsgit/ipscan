@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.58"
+	#define IPSCAN_VERNUM "1.59"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -165,6 +165,7 @@
 	// 1.56 Add basic HTML5/CSS support for javascript binaries
 	// 1.57 Add termsaccepted value and further HTML tag tweaks
 	// 1.58 Add memcache to list of default TCP ports
+	// 1.59 Add memcache to list of default UDP ports
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"

@@ -34,6 +34,7 @@
 // 0.10 - added Intel AMT ports
 // 0.11 - update copyright dates
 // 0.12 - add memcached check (TCP only, UDP not supported for IPv6)
+// 0.13 - add memcached UDP check
 
 #include "ipscan.h"
 
@@ -129,6 +130,8 @@
 			{ 1900, 0, "UPnP SSDP" },\
 			{ 3503, 0, "MPLS LSP Ping" },\
 			{ 4500, 0, "IKEv2 NAT-T SA_INIT" },\
+			{11211, 0, "memcache ASCII" },\
+			{11211, 1, "memcache binary" },\
 		};
 
 #if (IPSCAN_INCLUDE_UDP == 1)
