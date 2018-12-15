@@ -415,8 +415,8 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
  printf("}\n");
 
  // startTimer() is really the initiation function. it sets the scanstate to RUNNING to give the user confidence that things are happening.
- // then the initial GET of the  is performed to request that the server begins the scan.
- // finally the periodic call of update() is schedule in order to retrieve and reflect the ongoing scan status.
+ // then the initial GET is performed to request that the server begins the scan.
+ // finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
  printf("function startTimer()");
  printf(" {");
  printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING.\";");

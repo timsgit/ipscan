@@ -63,12 +63,12 @@ TARGETDIR=/var/www/cgi-bin6
 URIPATH=/cgi-bin6
 
 # Text-version target executable name
-TXTTARGET=ipscan-txt.cgi
-FASTTXTTARGET=ipscan-fast-txt.cgi
+TXTTARGET=ipscantxt.cgi
+FASTTXTTARGET=ipscanfasttxt.cgi
 
 # Javascript-version target executable name
-JSTARGET=ipscan-js.cgi
-FASTJSTARGET=ipscan-fast-js.cgi
+JSTARGET=ipscanjs.cgi
+FASTJSTARGET=ipscanfastjs.cgi
 
 ##############################################################################
 # 

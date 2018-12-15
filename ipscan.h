@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.59"
+	#define IPSCAN_VERNUM "1.61"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -166,6 +166,8 @@
 	// 1.57 Add termsaccepted value and further HTML tag tweaks
 	// 1.58 Add memcache to list of default TCP ports
 	// 1.59 Add memcache to list of default UDP ports
+	// 1.60 Reduced logging option by default
+	// 1.61 Additional JS version debugging
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -252,6 +254,9 @@
 	//
 	// Results debug:
 	// #define RESULTSDEBUG 1
+	//
+	// Client (remote) debug - signalling, etc.
+	// #define CLIENTDEBUG 1
 
 	// Decide whether to include ping support (requires setuid which some servers don't allow)
 	// Do not modify this statement - adjust SETUID_AVAILABLE in the Makefile instead
@@ -503,20 +508,16 @@
 	#define IPSCAN_PROTO_UDP (2)
 	#define IPSCAN_PROTO_TESTSTATE (3)
 
-	// TESTSTATE values
-	#define IPSCAN_TESTSTATE_RUNNING (1)
-	#define IPSCAN_TESTSTATE_COMPLETE (2)
-
 	// Timeout before results are deleted ...
 	#define IPSCAN_DELETE_TIMEOUT (180)
 
 	// Sleep time between polls when waiting to delete results
-	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (5)
+	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (10)
 
 	// Offset from now in seconds. All results older than (now-this) are deleted
 	// Should hardly ever be used, but ensures tests which were in progress when
 	// the server was shutdown/rebooted, etc. are deleted
-	#define IPSCAN_DELETE_TIME_OFFSET (86400)
+	#define IPSCAN_DELETE_TIME_OFFSET (3600)
 
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router
@@ -542,11 +543,29 @@
 		IPSCAN_UNEXPECTED_CHANGE,
 	};
 
+	//
+	// TESTSTATE browser-signalled values - helps to debug javascript failures
+	// Mapped to high values so they are all out of range of PORTSTATE
+	//
+	// Size of buffer holding the flag descriptions
+	// Typically each flag is 11 characturs including trailing comma and space
+	//
+	#define IPSCAN_FLAGSBUFFER_SIZE (128)
+	//
+	#define IPSCAN_TESTSTATE_IDLE (0)
+	#define IPSCAN_TESTSTATE_RUNNING_BIT (32)
+	#define IPSCAN_TESTSTATE_COMPLETE_BIT (64)
+	#define IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT (128)
+	#define IPSCAN_TESTSTATE_EVALERROR_BIT (256)
+	#define IPSCAN_TESTSTATE_OTHERERROR_BIT (512)
+	#define IPSCAN_TESTSTATE_NAVAWAY_BIT (1024)
+	#define IPSCAN_TESTSTATE_UNEXPCHANGE_BIT (2048)
+	#define IPSCAN_TESTSTATE_BADCOMPLETE_BIT (4096)
+
 	// Mapping for connection attempt results
 	// To add a new entry first insert a new internal state in the PORTSTATE enumeration and then add a
 	// matching entry in the results structure in ipscan.c
 	// Both should be inserted before the unexpected/unknown, etc. entries
-
 	enum PORTSTATE
 	{
 		PORTOPEN = 0,

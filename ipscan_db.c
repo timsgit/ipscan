@@ -44,6 +44,7 @@
 // 0.23 - update copyright dates
 // 0.24 - further HTML tag adjustments
 // 0.25 - update copyright dates
+// 0.26 - remove memory engine resizing
 
 #include "ipscan.h"
 //
@@ -136,27 +137,6 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 			}
 			else
 			{
-				#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SET max_heap_table_size = %d", MYSQL_MAX_HEAP_SIZE);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					#ifdef DBDEBUG
-					IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
-					#endif
-					rc = mysql_real_query(connection, query, qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute set max_heap_table_size %d (%s)\n",\
-						mysql_errno(connection), mysql_error(connection) );
-						retval = 32;
-					}
-				}
-				else
-				{
-					IPSCAN_LOG( LOGPREFIX "write_db: Failed to create set max_heap_table_size command.\n");
-					retval = 64;
-				}
-				#endif
 				// retval defaults to -1, and is set to other values if an error condition occurs
 				if (retval < 0)
 				{
@@ -169,9 +149,6 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 					#endif
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
-						#ifdef DBDEBUG
-						IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
-						#endif
 						rc = mysql_real_query(connection, query, qrylen);
 						if (0 == rc)
 						{
@@ -225,7 +202,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 	}
 
 	#ifdef DBDEBUG
-	IPSCAN_LOG( LOGPREFIX "write_db: returning with retval = %d\n",retval);
+	if (0 != retval) IPSCAN_LOG( LOGPREFIX "write_db: returning with retval = %d\n",retval);
 	#endif
 	return (retval);
 }
@@ -293,9 +270,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 						if (result)
 						{
 							num_fields = mysql_num_fields(result);
-							#ifdef DBDEBUG
-							IPSCAN_LOG( LOGPREFIX "dump_db: MySQL returned num_fields : %d\n", num_fields);
-							#endif
 							#if (IPSCAN_LOGVERBOSITY == 1)
 							unsigned int nump = 0;
 							#endif
@@ -309,7 +283,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									rcport = sscanf(row[5], "%d", &port);
 									rcres = sscanf(row[6], "%d", &res);
 									rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
-
 									if ( rcres == 1 && rchost == 1 && rcport == 1 )
 									{
 										int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
@@ -317,6 +290,9 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 										if (IPSCAN_PROTO_TESTSTATE != proto)
 										{
 											printf("%d, %d, \"%s\", ", port, res, hostind);
+											#ifdef DBDEBUG
+											IPSCAN_LOG( LOGPREFIX "dump_db: raw results: proto %d, port %d, result %d, host \"%s\"\n", proto, port, res, hostind);
+											#endif
 											#if (IPSCAN_LOGVERBOSITY == 1)
 											nump += 1;
 											#endif
@@ -324,7 +300,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 										else
 										{
 											#ifdef DBDEBUG
-											IPSCAN_LOG( LOGPREFIX "dump_db: found port 0x%08x with proto %d, result %d\n", port, proto, res);
+											IPSCAN_LOG( LOGPREFIX "dump_db: raw results: TESTSTATE, port %d, result %d\n", port, res);
 											#endif
 										}
 									}
@@ -336,6 +312,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								else // original approach
 								{
 									printf("%s, ", row[num_fields-1]);
+									IPSCAN_LOG( LOGPREFIX "dump_db: MySQL returned num_fields : %d\n", num_fields);
 									IPSCAN_LOG( LOGPREFIX "dump_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
 									#if (IPSCAN_LOGVERBOSITY == 1)
 									nump += 1;
@@ -444,7 +421,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						}
 						else
 						{
-							#ifdef RESULTSDEBUG
+							#ifdef DBDEBUG
 								#if (IPSCAN_LOGVERBOSITY == 1)
 								IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
 								#endif
@@ -666,10 +643,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
-
-					#ifdef DBDEBUG
-					IPSCAN_LOG( LOGPREFIX "read_db_result: MySQL Query is : %s\n", query);
-					#endif
 					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
@@ -677,9 +650,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						if (result)
 						{
 							num_fields = mysql_num_fields(result);
-							#ifdef DBDEBUG
-							IPSCAN_LOG( LOGPREFIX "read_db_result: MySQL returned num_fields : %d\n", num_fields);
-							#endif
 							while ((row = mysql_fetch_row(result)))
 							{
 								if (num_fields == 8) // database includes indirect host field
@@ -704,6 +674,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						}
 						else
 						{
+							IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: surprisingly mysql_store_result() returned NULL\n");
 							// Didn't get any results, so check if we should have got some
 							if (mysql_field_count(connection) == 0)
 							{

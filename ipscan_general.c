@@ -20,6 +20,7 @@
 // ipscan_general.c version
 // 0.01 - first released version
 // 0.02 - update copyright dates
+// 0.03 - slight logic change
 
 #include "ipscan.h"
 //
@@ -68,14 +69,17 @@ uint64_t get_session(void)
 	{
 		size_t numitems = fread( &fetchedsession, sizeof(fetchedsession), 1, fp);
 		fclose(fp);
-		// Clear the MSB of the random session ID so that we're sure it will fit into an int64_t which the QUERY_STRING parser assumes
-		sessionnum = fetchedsession & ( ((uint64_t)~0) >> 1);
+		if (1 == numitems)
+		{
+			// Clear the MSB of the random session ID so that we're sure it will fit
+			// into an int64_t which the QUERY_STRING parser assumes
+			sessionnum = fetchedsession & ( ((uint64_t)~0) >> 1);
 
-		#ifdef QUERYDEBUG
-		IPSCAN_LOG( LOGPREFIX "ipscan: Session number modification check, before = %"PRIu64" after = %"PRIu64"\n", fetchedsession, sessionnum);
-		#endif
-
-		if (1 != numitems)
+			#ifdef QUERYDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Session number modification check, before = %"PRIu64" after = %"PRIu64"\n", fetchedsession, sessionnum);
+			#endif
+		}
+		else
 		{
 			sessionnum = (uint64_t)getpid();
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot read /dev/urandom, defaulting session to getpid() = %"PRIu64"\n", sessionnum);
