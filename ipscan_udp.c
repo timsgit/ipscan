@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2018 Tim Chappell.
+//    Copyright (C) 2011-2019 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -42,6 +42,7 @@
 // 0.22			Add DHCPv6 support
 // 0.23			Update dates
 // 0.24			Update dates
+// 0.25			Update dates
 
 #include "ipscan.h"
 //
@@ -1715,7 +1716,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				txmessage[len++] = 0x0A;
 				txmessage[len++] = 0x0D;
 				txmessage[len++] = 0x0;
-				rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2018 Tim Chappell. This message is destined for UDP port %d\n", port);
+				rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2019 Tim Chappell. This message is destined for UDP port %d\n", port);
 				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);

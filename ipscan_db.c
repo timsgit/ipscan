@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2018 Tim Chappell.
+//    Copyright (C) 2011-2019 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -45,6 +45,8 @@
 // 0.24 - further HTML tag adjustments
 // 0.25 - update copyright dates
 // 0.26 - remove memory engine resizing
+// 0.27 - updated logging for client debug (number of deleted rows)
+// 0.28 - update copyright dates
 
 #include "ipscan.h"
 //
@@ -416,15 +418,16 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						my_ulonglong affected_rows = mysql_affected_rows(connection);
 						if ( ((my_ulonglong)-1) == affected_rows)
 						{
-							IPSCAN_LOG( LOGPREFIX "delete_from_db: surprisingly delete returned successfully, but mysql_affected_rows() did not.\n");
+							IPSCAN_LOG( LOGPREFIX "delete_from_db: ERROR: surprisingly delete returned successfully, but mysql_affected_rows() did not.\n");
 							retval = 11;
 						}
 						else
 						{
-							#ifdef DBDEBUG
-								#if (IPSCAN_LOGVERBOSITY == 1)
-								IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
-								#endif
+							#ifdef CLIENTDEBUG
+							IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld rows for %04x:%04x:%04x:: from %s database.\n",\
+									(long)affected_rows, (unsigned int)((host_msb>>48) & 0xFFFF),\
+									(unsigned int)((host_msb>>32) & 0xFFFF),\
+								        (unsigned int)((host_msb>>16) & 0xFFFF), MYSQL_TBLNAME );
 							#endif
 						}
 					}

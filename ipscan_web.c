@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2018 Tim Chappell.
+//    Copyright (C) 2011-2019 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -50,6 +50,8 @@
 // 0.30 - add basic HTML5/CSS support for javascript binaries
 // 0.31 - specify value if terms accepted
 // 0.32 - update copyright year
+// 0.33 - slight tweak to error reporting (myReadyState and myStatus)
+// 0.34 - update copyright year
 
 #include "ipscan.h"
 
@@ -79,7 +81,7 @@ void create_html_common_header(void)
   printf("<meta name=\"author\" content=\"tim chappell\">\n");
   printf("<meta http-equiv=\"cache-control\" content=\"no-store, no-cache, must-revalidate, max-age=0\">\n");
   printf("<meta http-equiv=\"pragma\" content=\"no-cache\">\n");
-  printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2018 tim chappell.\">\n");
+  printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2019 tim chappell.\">\n");
 }
 
 #ifdef IPSCAN_HTML5_ENABLED
@@ -93,7 +95,7 @@ void create_html5_common_header(void)
   printf("<meta name=\"author\" content=\"tim chappell\">\n");
   printf("<meta http-equiv=\"cache-control\" content=\"no-store, no-cache, must-revalidate, max-age=0\">\n");
   printf("<meta http-equiv=\"pragma\" content=\"no-cache\">\n");
-  printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2018 tim chappell.\">\n");
+  printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2019 tim chappell.\">\n");
   printf("<style>\n");
   printf("body {\n");
   printf("background-color: #f0f0f2;\n");
@@ -222,7 +224,8 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 
  printf("function HTTPUnexpected(myReadyState,myStatus)");
  printf(" {");
- printf(" var unexpectedURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + myReadyState + myStatus + %d;", session, (uint32_t)timestamp, reconquery, IPSCAN_UNEXPECTED_CHANGE);
+ printf(" var errorstring = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
+ printf(" var unexpectedURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d&string=\" + encodeURIComponent(errorstring);", session, (uint32_t)timestamp, reconquery, IPSCAN_UNEXPECTED_CHANGE);
  // HTTP GET completed, but with an unexpected HTTP status code (i.e. not 200 OK)
  printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
  printf(" myXmlHttpReqObj.open(\"GET\", unexpectedURL, true);");

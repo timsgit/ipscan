@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2018 Tim Chappell.
+//    Copyright (C) 2011-2019 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.61"
+	#define IPSCAN_VERNUM "1.63"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -168,6 +168,8 @@
 	// 1.59 Add memcache to list of default UDP ports
 	// 1.60 Reduced logging option by default
 	// 1.61 Additional JS version debugging
+	// 1.62 Fixed logging typos
+	// 1.63 Further client debug logging improvements
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -230,6 +232,7 @@
 	// *************************************************************************************
 
 	// DEBUG build options - uncommenting these #defines will result in copious amounts of information
+	// IMPORTANT NOTE: None of these debug options should be uncommented on internet-facing servers.
 	//
 	// general debug:
 	// #define DEBUG 1
@@ -256,6 +259,7 @@
 	// #define RESULTSDEBUG 1
 	//
 	// Client (remote) debug - signalling, etc.
+	// Primarily for troublesome Javascript clients.
 	// #define CLIENTDEBUG 1
 
 	// Decide whether to include ping support (requires setuid which some servers don't allow)
@@ -276,10 +280,11 @@
 
 	// Logging verbosity:
 	//
-	// (1) Normal - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
-	// (0) Quiet  - program/unexpected response errors only
+	// (0) Quiet   - program/unexpected response errors only
+	// (1) Verbose - port scan summary of states is logged (ie number of ports of type OPEN, STLTH, RFSD, etc.)
 	//
-	// Do NOT change this value on internet facing hosts
+	// Do NOT change this value as your server's syslog may then contain personal information
+	// which you need to obtain permission to capture in order to satisfy your GDPR obligations
 	//
 	#define IPSCAN_LOGVERBOSITY 0
 

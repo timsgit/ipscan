@@ -1,6 +1,6 @@
 IPscan - an http-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 
-Copyright (C) 2011-2018 Tim Chappell.
+Copyright (C) 2011-2019 Tim Chappell.
 
 This file is part of IPscan.
 
@@ -26,12 +26,17 @@ Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and Raspbian and
 Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 
 unlisted platforms.
 
+NOTE: IPscan logging has been updated to aid operators needing to comply with regulatory
+requirements for the protection of end-users, e.g. GDPR. Where applicable, the logging-related
+recommendations outlined in: https://tools.ietf.org/id/draft-andersdotter-intarea-update-to-rfc6302-00.html#RFC6302
+have been implemented, for unmodified ipscan.h configurations. 
+
+Installation Steps:
+===================
 IMPORTANT: when UPGRADING from versions before 0.90: a database change has occurred and consequently 
 it is necessary that you remove your existing database prior to building and installing 
 versions 0.90 and later. See step 4 below for details.
 
-Installation Steps:
-===================
     1. edit the Makefile and adjust the following entries as required:
         a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
                    Ensure that the selected target directory exists, with appropriate permissions, before 

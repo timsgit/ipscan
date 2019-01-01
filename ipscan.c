@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2018 Tim Chappell.
+//    Copyright (C) 2011-2019 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -63,6 +63,7 @@
 // 0.42 - logging in spirit of RFC6302 (default logging records IPv6 addresses as /48)
 // 0.43 - exit from scan if terms were not accepted
 // 0.44 - limited IPv6 address logging and further client debug
+// 0.45 - further client debug improvements
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -926,9 +927,9 @@ else
 		printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", \
 					asctime(localtime(&starttime)), (int)ESTIMATEDTIMETORUN );
 		// Log termsaccepted
-		IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning at %s with termsaccepted = %d\n",\
+		IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
 		 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-		 (unsigned int)((remotehost_msb>>16) & 0xFFFF), asctime(localtime(&starttime)), termsaccepted );
+		 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
 
 		// Only included if ping is compiled in ...
 		#if (IPSCAN_INCLUDE_PING == 1)
@@ -937,7 +938,7 @@ else
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#else
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning ICMPv6 echo request to client: %04x:%04x:%04x::\n",\
 			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -989,7 +990,7 @@ else
 					{
 						int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : remaining;
 						#ifdef UDPPARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc |= check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &udpportlist[0]);
 						porti += todo;
@@ -1013,7 +1014,7 @@ else
 
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_udp_ports_parll() exited with ORed value of %d\n",rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll() exited with ORed value of %d\n",rc);
 			}
 
 			printf("<p>Individual UDP port scan results:</p>\n");
@@ -1030,11 +1031,11 @@ else
 				#ifdef UDPDEBUG
 				if (0 != special)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
+					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
+					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
 				}
 				#endif
 
@@ -1104,7 +1105,7 @@ else
 					{
 						int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : remaining;
 						#ifdef PARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc |= check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, &portlist[0]);
 						porti += todo;
@@ -1128,7 +1129,7 @@ else
 
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_tcp_ports_parll() exited with ORed value of %d\n",rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll() exited with ORed value of %d\n",rc);
 			}
 
 			// Start of TCP port scan results table
@@ -1144,11 +1145,11 @@ else
 				#ifdef RESULTSDEBUG
 				if (0 != special)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
+					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
+					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
 				}
 				#endif
 
@@ -1211,7 +1212,7 @@ else
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for scancomplete %d (%s)\n", errno, strerror(errno));
 			}
-			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
+			IPSCAN_LOG( LOGPREFIX "ipscan: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
 
 			// Log the summary of results internally
@@ -1332,21 +1333,27 @@ else
 			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 			{
 				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: fetch indicated user NAVIGATED AWAY for client : %04x:%04x:%04x::\n",\
+				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated user NAVIGATED AWAY for client : %04x:%04x:%04x::\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 				#endif
 				// Set COMPLETE to cause end of test, but also capture that the user navigated away
 				result = (IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT); 
 			}
-			else if (IPSCAN_UNEXPECTED_CHANGE <= fetchnum)
+			else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 			{
 				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated UNEXPECTED CHANGE: %d for client : %04x:%04x:%04x::\n",\
-                        	 fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated UNEXPECTED CHANGE for client : %04x:%04x:%04x::\n",\
+                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 				#endif
 				result |= IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
+			}
+			else
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch included unexpected value %d for client : %04x:%04x:%04x::\n",\
+                        	 fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			}
 			// Write the new value back to the database
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
@@ -1395,9 +1402,11 @@ else
 
 			// Generate database entry for test state - indicate test running
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: write_db to set IPSCAN_PROTO_TESTSATTE RUNNING for client : %04x:%04x:%04x::\n",\
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "ipscan: write_db to set IPSCAN_PROTO_TESTSTATE RUNNING for client : %04x:%04x:%04x::\n",\
                          (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                          (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#endif
 			#endif
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
 			if (rc != 0)
@@ -1406,16 +1415,16 @@ else
 			}
 
 			// Log terms accepted
-			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Client: %04x:%04x:%04x:: beginning at %s with termsaccepted = %d\n",\
+			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
 			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF), asctime(localtime((time_t *)&querystarttime)), termsaccepted );
+			 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
 
 			// Only include this section if ping is compiled in ...
 			#if (IPSCAN_INCLUDE_PING == 1)
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)querystarttime, (uint64_t)querysession, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#else
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning ICMPv6 echo request to client: %04x:%04x:%04x::\n",\
 			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -1454,7 +1463,7 @@ else
 					{
 						int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : remaining;
 						#ifdef UDPPARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, &udpportlist[0]);
 						porti += todo;
@@ -1497,7 +1506,7 @@ else
 					{
 						int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : remaining;
 						#ifdef PARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, &portlist[0]);
 						porti += todo;
@@ -1598,7 +1607,7 @@ else
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for scancomplete %d (%s)\n", errno, strerror(errno));
 			}
-			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
+			IPSCAN_LOG( LOGPREFIX "ipscan: port scan and html document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
 
 			// Log the summary of results internally
@@ -1719,8 +1728,9 @@ else
 					flagsfree -= rc;
 				}
 				rc = snprintf(flagsptr, flagsfree, "%s", "<EOL>\n\0");
-				
+				#if (IPSCAN_LOGVERBOSITY == 1)
 				IPSCAN_LOG( LOGPREFIX "ipscan: waiting for IPSCAN_TESTSTATE_COMPLETE, IPSCAN_TESTSTATE value is currently: %d\n", result);
+				#endif
 				IPSCAN_LOG( LOGPREFIX "ipscan: IPSCAN_TESTSTATE for client : %04x:%04x:%04x:: %s\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF), flags );
@@ -1749,12 +1759,9 @@ else
 			else
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop with no client response.\n");
+				IPSCAN_LOG( LOGPREFIX "ipscan: starttime   was : %d (%s)\n", (int)scanstart, asctime(localtime(&scanstart)));
+				IPSCAN_LOG( LOGPREFIX "ipscan: timeouttime was : %d (%s)\n", (int)timeouttime, asctime(localtime(&timeouttime)));
 			}
-			IPSCAN_LOG( LOGPREFIX "ipscan: Deleting test results for %04x:%04x:%04x::\n",\
-                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                         (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			IPSCAN_LOG( LOGPREFIX "ipscan: starttime   was : %d (%s)\n", (int)scanstart, asctime(localtime(&scanstart)));
-			IPSCAN_LOG( LOGPREFIX "ipscan: timeouttime was : %d (%s)\n", (int)timeouttime, asctime(localtime(&timeouttime)));
 			#endif
 
 			// Delete the results

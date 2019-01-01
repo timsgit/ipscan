@@ -2,7 +2,7 @@
 #
 #    IPscan - an http-initiated IPv6 port scanner.
 #
-#    (C) Copyright 2011-2018 Tim Chappell.
+#    (C) Copyright 2011-2019 Tim Chappell.
 #
 #    This file is part of IPscan.
 #
@@ -22,6 +22,7 @@
 # upgrade.bsh
 # version	description
 # 0.01 		initial version
+# 0.02 		update copyright year
 
 SRC=./ipscan.h
 if [ -r "${SRC}" ] ; then

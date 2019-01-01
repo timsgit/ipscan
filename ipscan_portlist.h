@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2018 Tim Chappell.
+//    Copyright (C) 2011-2019 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -35,6 +35,7 @@
 // 0.11 - update copyright dates
 // 0.12 - add memcached check (TCP only, UDP not supported for IPv6)
 // 0.13 - add memcached UDP check
+// 0.14 - update copyright dates
 
 #include "ipscan.h"
 
