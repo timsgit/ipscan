@@ -227,7 +227,6 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				ICMP6_FILTER_SETPASS(ICMP6_PARAM_PROB, &myfilter);
 				ICMP6_FILTER_SETPASS(ICMP6_TIME_EXCEEDED, &myfilter);
 				ICMP6_FILTER_SETPASS(ICMP6_PACKET_TOO_BIG, &myfilter);
-
 				rc = setsockopt(sock, IPPROTO_ICMPV6, ICMP6_FILTER, &myfilter, sizeof(myfilter));
 				errsv = errno;
 				if (rc < 0)

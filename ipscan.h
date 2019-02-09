@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.63"
+	#define IPSCAN_VERNUM "1.65"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -170,6 +170,8 @@
 	// 1.61 Additional JS version debugging
 	// 1.62 Fixed logging typos
 	// 1.63 Further client debug logging improvements
+	// 1.64 Yet more client debug logging improvements
+	// 1.65 signed/unsigned conflicts corrected
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -310,6 +312,7 @@
 	// as long as the default port list is updated as well
 	#define MINVALIDPORT 0
 	#define MAXVALIDPORT 65535
+	#define VALIDPORTMASK (65535)
 
 	// Enable HTML5 for Javscript
 	#define IPSCAN_HTML5_ENABLED 1

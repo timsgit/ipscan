@@ -64,6 +64,7 @@
 // 0.43 - exit from scan if terms were not accepted
 // 0.44 - limited IPv6 address logging and further client debug
 // 0.45 - further client debug improvements
+// 0.46 - yet more client debug improvements
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -227,7 +228,7 @@ uint16_t portindex;
 int numchildren;
 int remaining;
 int childstatus;
-int porti;
+unsigned int porti;
 
 // Ports to be tested
 uint16_t numports = 0;
@@ -251,12 +252,14 @@ char querystring[ (MAXQUERYSTRLEN + 1) ];
 
 
 // buffer for reconstituted querystring
-int reconquerysize = MAXQUERYSTRLEN;
+// was int reconquerysize = MAXQUERYSTRLEN;
+size_t reconquerysize = MAXQUERYSTRLEN;
 char reconquery[ (MAXQUERYSTRLEN + 1) ];
 char *reconptr = &reconquery[0];
 
 // buffer for logging entries
-int logbuffersize = LOGENTRYLEN;
+// was int logbuffersize = LOGENTRYLEN;
+size_t logbuffersize = LOGENTRYLEN;
 char logbuffer[ (LOGENTRYLEN + 1) ];
 char *logbufferptr = &logbuffer[0];
 
@@ -355,7 +358,7 @@ else
 	for (i = 0; i < strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
 	{
 		thischar=requestmethod[i];
-		requestmethod[i]=toupper(thischar);
+		requestmethod[i]=(char)(toupper(thischar) &0xFF);
 	}
 
 	if (strncmp("GET", requestmethod, 3) == 0)
@@ -396,7 +399,7 @@ else
 			for (i = 0; i < strnlen(querystring,(MAXQUERYSTRLEN)); i++)
 			{
 				thischar=querystring[i];
-				querystring[i]=tolower(thischar);
+				querystring[i]=(char)(tolower(thischar) & 0xFF);
 			}
 
 			//
@@ -619,9 +622,9 @@ else
 	while (i < numqueries && strncmp("includeexisting",query[i].varname,15)!= 0) i++;
 	if (i < numqueries && query[i].valid == 1)
 	{
-		if ( abs((int) query[i].varval) == 1 )
+		if ( abs((int)query[i].varval) == 1 )
 		{
-			includeexisting = query[i].varval;
+			includeexisting = (int)query[i].varval;
 		}
 		else
 		{
@@ -638,9 +641,10 @@ else
 	while (i < numqueries && strncmp("termsaccepted",query[i].varname,13)!= 0) i++;
 	if (i < numqueries && query[i].valid == 1)
 	{
-		if ( abs((int) query[i].varval) == 1 )
+		if ( abs((int)query[i].varval) == 1 )
 		{
-			termsaccepted = query[i].varval;
+			// was termsaccepted = query[i].varval;
+			termsaccepted = 1;
 		}
 		else
 		{
@@ -657,7 +661,7 @@ else
 	if (rc > 16 && rc < 19)
 	{
 		reconptr += rc;
-		reconquerysize -= rc;
+		reconquerysize -= (size_t)rc;
 		if (reconquerysize <= 0)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
@@ -693,7 +697,7 @@ else
 	if (rc == 16)
 	{
 		reconptr += rc;
-		reconquerysize -= rc;
+		reconquerysize -= (size_t)rc;
 		if (reconquerysize <= 0)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to continue reconstituting query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
@@ -745,15 +749,16 @@ else
 	//
 
 	int customport = 0;
-	char cpnum[16];
-	int cplen;
+	char cpnum[17];
+	// was int cplen;
+	size_t cplen;
 
 	// Counter holding the number of received customportN statements
 	unsigned int numcustomports = 0;
 
 	while (customport < NUMUSERDEFPORTS)
 	{
-		cplen = snprintf(cpnum, 16, "customport%d", customport);
+		cplen = (size_t)snprintf(cpnum, 16, "customport%d", customport);
 		i = 0;
 		while (i < numqueries && strncmp(cpnum,query[i].varname,cplen)!= 0) i++;
 
@@ -773,7 +778,7 @@ else
 				// add it to the port list
 				if (j == numports)
 				{
-					portlist[numports].port_num = query[i].varval;
+					portlist[numports].port_num = (uint16_t)(query[i].varval & VALIDPORTMASK);
 					portlist[numports].special = 0;
 					rc = snprintf(&portlist[numports].port_desc[0], PORTDESCSIZE, "User-specified: %d",(int)query[i].varval);
 					if (rc < 0 || rc >= PORTDESCSIZE)
@@ -786,7 +791,7 @@ else
 					if (rc >= 14 && rc <= 22)
 					{
 						reconptr += rc;
-						reconquerysize -= rc;
+						reconquerysize -= (size_t)rc;
 						if (reconquerysize <= 0)
 						{
 							IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
@@ -873,7 +878,7 @@ else
 	{
 		fetch = (query[i].varval >0) ? 1 : 0;
 		#if (TEXTMODE != 1)
-		if (1 == fetch) fetchnum = query[i].varval;
+		if (1 == fetch && (int)(query[i].varval < 4096)) fetchnum = (int)query[i].varval;
 		#endif
 	}
 
@@ -930,6 +935,7 @@ else
 		IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
 		 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 		 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+		IPSCAN_LOG( LOGPREFIX "ipscan: at time %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
 
 		// Only included if ping is compiled in ...
 		#if (IPSCAN_INCLUDE_PING == 1)
@@ -988,14 +994,14 @@ else
 				{
 					if (numchildren < MAXUDPCHILDREN && remaining > 0)
 					{
-						int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : remaining;
+						unsigned int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef UDPPARLLDEBUG
 						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
-						rc |= check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, starttime, session, &udpportlist[0]);
+						rc |= check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)starttime, session, &udpportlist[0]);
 						porti += todo;
 						numchildren ++;
-						remaining = (numudpports - porti);
+						remaining = (int)(numudpports - porti);
 					}
 					if (numchildren == MAXUDPCHILDREN && remaining > 0)
 					{
@@ -1025,7 +1031,7 @@ else
 				port = udpportlist[portindex].port_num;
 				special = udpportlist[portindex].special;
 				last = (portindex == (NUMUDPPORTS-1)) ? 1 : 0 ;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
 				if ( PORTUNKNOWN == result ) IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: UDP port scan results table\n" );
 
 				#ifdef UDPDEBUG
@@ -1093,7 +1099,7 @@ else
 			printf("<p>Individual TCP port scan results:</p>\n");
 
 			// Scan the TCP ports in parallel
-			remaining = numports;
+			remaining = (int)numports;
 			porti = 0;
 			numchildren = 0;
 			rc = 0;
@@ -1103,14 +1109,14 @@ else
 				{
 					if (numchildren < MAXCHILDREN && remaining > 0)
 					{
-						int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : remaining;
+						unsigned int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef PARLLDEBUG
 						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc |= check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, &portlist[0]);
 						porti += todo;
 						numchildren ++;
-						remaining = (numports - porti);
+						remaining = (int)(numports - porti);
 					}
 					if (numchildren == MAXCHILDREN && remaining > 0)
 					{
@@ -1139,7 +1145,7 @@ else
 				port = portlist[portindex].port_num;
 				special = portlist[portindex].special;
 				last = (portindex == (numports-1)) ? 1 : 0 ;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
 				if ( PORTUNKNOWN == result ) IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: TCP port scan results table\n" );
 
 				#ifdef RESULTSDEBUG
@@ -1229,14 +1235,14 @@ else
 					rc = snprintf(logbufferptr, logbuffersize, ", %d %s", portsstats[i], resultsstruct[i].label);
 				}
 
-				if (rc < 0 || rc >= logbuffersize)
+				if (rc < 0 || rc >= (int)logbuffersize)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
 					break;
 				}
 
 				logbufferptr += rc ;
-				logbuffersize -= rc;
+				logbuffersize -= (size_t)rc;
 				position ++ ;
 				if ( position >= LOGMAXCOLS || i == (NUMRESULTTYPES -1) )
 				{
@@ -1289,6 +1295,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated SUCCESSFUL completion for client : %04x:%04x:%04x::\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				#endif
 				// Overwrite any other bits in this ONE case
 				result = IPSCAN_TESTSTATE_COMPLETE_BIT;
@@ -1299,6 +1306,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated HTTP TIMEOUT completion for client : %04x:%04x:%04x::\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				#endif
 				result |= IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
 			}
@@ -1308,6 +1316,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated UNSUCCESSFUL completion for client : %04x:%04x:%04x::\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				#endif
 				// Set COMPLETE to cause end of test, but also capture that is was a bad completion
 				result = (IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_BADCOMPLETE_BIT);
@@ -1318,6 +1327,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated EVAL ERROR for client : %04x:%04x:%04x::\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				#endif
         			result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
@@ -1327,6 +1337,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated OTHER ERROR for client : %04x:%04x:%04x::\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				#endif
 				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 			}
@@ -1336,6 +1347,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated user NAVIGATED AWAY for client : %04x:%04x:%04x::\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				#endif
 				// Set COMPLETE to cause end of test, but also capture that the user navigated away
 				result = (IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT); 
@@ -1346,6 +1358,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated UNEXPECTED CHANGE for client : %04x:%04x:%04x::\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				#endif
 				result |= IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
 			}
@@ -1354,6 +1367,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch included unexpected value %d for client : %04x:%04x:%04x::\n",\
                         	 fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 			}
 			// Write the new value back to the database
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
@@ -1406,6 +1420,7 @@ else
 			IPSCAN_LOG( LOGPREFIX "ipscan: write_db to set IPSCAN_PROTO_TESTSTATE RUNNING for client : %04x:%04x:%04x::\n",\
                          (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                          (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 			#endif
 			#endif
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
@@ -1418,6 +1433,7 @@ else
 			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
 			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 			 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 
 			// Only include this section if ping is compiled in ...
 			#if (IPSCAN_INCLUDE_PING == 1)
@@ -1452,7 +1468,7 @@ else
 			#endif
 
 			// Scan the UDP ports in parallel
-			remaining = numudpports;
+			remaining = (int)numudpports;
 			porti = 0;
 			numchildren = 0;
 			while (remaining > 0 || numchildren > 0)
@@ -1461,14 +1477,14 @@ else
 				{
 					if (numchildren < MAXUDPCHILDREN && remaining > 0)
 					{
-						int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : remaining;
+						unsigned int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef UDPPARLLDEBUG
 						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, &udpportlist[0]);
 						porti += todo;
 						numchildren ++;
-						remaining = (numudpports - porti);
+						remaining = (int)(numudpports - porti);
 					}
 					if (numchildren == MAXUDPCHILDREN && remaining > 0)
 					{
@@ -1495,7 +1511,7 @@ else
 			#endif
 
 			// Scan the TCP ports in parallel
-			remaining = numports;
+			remaining = (int)numports;
 			porti = 0;
 			numchildren = 0;
 			while (remaining > 0 || numchildren > 0)
@@ -1504,14 +1520,14 @@ else
 				{
 					if (numchildren < MAXCHILDREN && remaining > 0)
 					{
-						int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : remaining;
+						unsigned int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef PARLLDEBUG
 						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
 						#endif
 						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, &portlist[0]);
 						porti += todo;
 						numchildren ++;
-						remaining = (numports - porti);
+						remaining = (int)(numports - porti);
 					}
 					if (numchildren == MAXCHILDREN && remaining > 0)
 					{
@@ -1535,7 +1551,7 @@ else
 			{
 				port = udpportlist[portindex].port_num;
 				special = udpportlist[portindex].special;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
 				if ( PORTUNKNOWN == result ) IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: UDP creating stats\n" );
 
 				// Find a matching returnval, or else flag it as unknown
@@ -1564,7 +1580,7 @@ else
 			{
 				port = portlist[portindex].port_num;
 				special = portlist[portindex].special;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
 				if ( PORTUNKNOWN == result ) IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: TCP creating stats\n" );
 
 				// Find a matching returnval, or else flag it as unknown
@@ -1624,14 +1640,14 @@ else
 					rc = snprintf(logbufferptr, logbuffersize, ", %d %s", portsstats[i], resultsstruct[i].label);
 				}
 
-				if (rc < 0 || rc >= logbuffersize)
+				if (rc < 0 || rc >= (int)logbuffersize)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: logbuffer write truncated, increase LOGENTRYLEN (currently %d) and recompile.\n", LOGENTRYLEN);
 					break;
 				}
 
 				logbufferptr += rc ;
-				logbuffersize -= rc;
+				logbuffersize -= (size_t)rc;
 				position ++ ;
 				if ( position >= LOGMAXCOLS || i == (NUMRESULTTYPES -1) )
 				{
@@ -1672,60 +1688,60 @@ else
 				flagsfree = IPSCAN_FLAGSBUFFER_SIZE;
 				rc = snprintf(flagsptr, flagsfree, "%s", "flags: ");
 				flagsptr += rc;
-				flagsfree -= rc;
+				flagsfree -= (unsigned int)rc;
 				if (0 != (result & PORTUNKNOWN))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "UNKNOWN, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				if (0 != (result & IPSCAN_TESTSTATE_RUNNING_BIT))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "RUNNING, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				if (0 != (result & IPSCAN_TESTSTATE_COMPLETE_BIT))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "COMPLETE, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				if (0 != (result & IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "TIMEOUT, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				if (0 != (result & IPSCAN_TESTSTATE_EVALERROR_BIT))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "EVALERROR, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				if (0 != (result & IPSCAN_TESTSTATE_OTHERERROR_BIT))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "OTHERERROR, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				if (0 != (result & IPSCAN_TESTSTATE_NAVAWAY_BIT))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "NAVAWAY, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				if (0 != (result & IPSCAN_TESTSTATE_UNEXPCHANGE_BIT))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "UNEXPECTED, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				if (0 != (result & IPSCAN_TESTSTATE_BADCOMPLETE_BIT))
 				{
 					rc = snprintf(flagsptr, flagsfree, "%s", "BADCOMPLETE, ");
 					flagsptr += rc;
-					flagsfree -= rc;
+					flagsfree -= (unsigned int)rc;
 				}
 				rc = snprintf(flagsptr, flagsfree, "%s", "<EOL>\n\0");
 				#if (IPSCAN_LOGVERBOSITY == 1)
@@ -1734,6 +1750,7 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: IPSCAN_TESTSTATE for client : %04x:%04x:%04x:: %s\n",\
                         	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                         	 (unsigned int)((remotehost_msb>>16) & 0xFFFF), flags );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querytime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				#endif
 
 				if (IPSCAN_TESTSTATE_COMPLETE_BIT == (result & IPSCAN_TESTSTATE_COMPLETE_BIT) \

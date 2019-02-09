@@ -112,7 +112,9 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	// Local address update indication
 	int la_update = 0;
 
-	int rc = 0, i;
+	// was int rc = 0, i;
+	int rc = 0;
+	unsigned int i;
 	const char * rccharptr;
 	int fd = -1;
 
@@ -122,7 +124,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	// buffer for logging entries
 	#ifdef UDPDEBUG
 	int udplogbuffersize = LOGENTRYSIZE;
-	char udplogbuffer[ (LOGENTRYSIZE + 1) ];
+	char udplogbuffer[ (size_t)(LOGENTRYSIZE + 1) ];
 	char *udplogbufferptr = &udplogbuffer[0];
 	#endif
 
@@ -138,8 +140,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	gettimeofday(&tv, NULL);
 	const unsigned long long EPOCH = 2208988800ULL;
 	const unsigned long long NTP_SCALE_FRAC = 4294967296ULL;
-	unsigned long long tv_secs = tv.tv_sec + EPOCH;
-	unsigned long long tv_usecs = (NTP_SCALE_FRAC * tv.tv_usec) / 1000000UL;
+	long long unsigned int tv_secs  = (long long unsigned int)(tv.tv_sec) + EPOCH;
+	long long unsigned int tv_usecs = ((NTP_SCALE_FRAC * (long long unsigned int)tv.tv_usec) / 1000000UL);
 
 	// Prefill transmit message buffer with 0s
 	memset(&txmessage, 0,  UDP_BUFFER_SIZE+1);
@@ -336,10 +338,10 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				txmessage[len++]= 0;
 				// Question section
 
-				txmessage[len++]= strlen(dnsquery1);
+				txmessage[len++] = (char)strlen(dnsquery1);
 				// Need one extra octet for trailing 0, however this will be overwritten
 				// by the length of the next part of the host name in standard DNS format
-				rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", dnsquery1);
+				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery1);
 				if (rc < 0 || rc >=( UDP_BUFFER_SIZE-len ))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
@@ -354,8 +356,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				//
 				if (retval == PORTUNKNOWN)
 				{
-					txmessage[len++]= strlen(dnsquery2);
-					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", dnsquery2);
+					txmessage[len++]= (char)strlen(dnsquery2);
+					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
 					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 					{
 						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
@@ -371,8 +373,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				//
 				if (retval == PORTUNKNOWN)
 				{
-					txmessage[len++]= strlen(dnsquery3);
-					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", dnsquery3);
+					txmessage[len++]= (char)strlen(dnsquery3);
+					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
 					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 					{
 						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
@@ -388,8 +390,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				//
 				if (retval == PORTUNKNOWN)
 				{
-					txmessage[len++]= strlen(dnsquery4);
-					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", dnsquery4);
+					txmessage[len++]= (char)strlen(dnsquery4);
+					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
 					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 					{
 						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
@@ -521,19 +523,20 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					// SNMPv1 or SNMPv2c get
 					// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
 					char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
-					int miblen = 6;
+					// was int miblen = 6;
+					unsigned int miblen = 6;
 
 					// SNMP packet start
 					txmessage[len++] = 0x30;
-					txmessage[len++] = (29 + strlen(community[special]) + miblen);
+					txmessage[len++] = (char)(29 + strlen(community[special]) + miblen);
 					// SNMP version 1
 					txmessage[len++] = 0x02; //int
 					txmessage[len++] = 0x01; //length of 1
 					txmessage[len++] = (special & 0xff); // 0 = SNMPv1, 1 = SNMPv2c
 					// Community name
 					txmessage[len++] = 0x04; //string
-					txmessage[len++] = strlen(community[special]);
-					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s", community[special]);
+					txmessage[len++] = (char)strlen(community[special]);
+					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", community[special]);
 					if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 					{
 						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for SNMP, returned %d\n", rc);
@@ -545,10 +548,10 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					}
 
 					// MIB - check there's enough room before adding
-					if (retval == PORTUNKNOWN && (len < (UDP_BUFFER_SIZE-24-miblen)) )
+					if (retval == PORTUNKNOWN && (len < (int)(UDP_BUFFER_SIZE-24-miblen)) )
 					{
 						txmessage[len++] = 0xA0; // SNMP GET request
-						txmessage[len++] = (22 + miblen); //0x1c
+						txmessage[len++] = (char)(22 + miblen); //0x1c
 
 						txmessage[len++] = 0x02; // Request ID
 						txmessage[len++] = 0x04; // 4 octets length
@@ -567,13 +570,13 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 						txmessage[len++] = 0x00; // SNMP error index
 						// Variable bindings
 						txmessage[len++] = 0x30; //var-bind sequence
-						txmessage[len++] = (8 + miblen);
+						txmessage[len++] = (char)(8 + miblen);
 
 						txmessage[len++] = 0x30; //var-bind
-						txmessage[len++] = (miblen +6 );
+						txmessage[len++] = (char)(miblen +6 );
 
 						txmessage[len++] = 0x06; // Object
-						txmessage[len++] = (miblen + 2); // MIB length
+						txmessage[len++] = (char)(miblen + 2); // MIB length
 
 						txmessage[len++] = 0x2b;
 						txmessage[len++] = 0x06;
@@ -585,7 +588,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 						txmessage[len++] = 0x05; // Null object
 						txmessage[len++] = 0x00; // length of 0
 					}
-					else if (retval == PORTUNKNOWN && (len >= (UDP_BUFFER_SIZE-24-miblen)))
+					else if (retval == PORTUNKNOWN && (len >= (int)(UDP_BUFFER_SIZE-24-miblen)))
 					{
 						IPSCAN_LOG( LOGPREFIX "check_udp_port: Insufficient room to add OID, len = %d\n", len);
 						retval = PORTINTERROR;
@@ -1637,7 +1640,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 					char mccmd[] = "version";
 
-					rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
+					rc = snprintf(&txmessage[len], (char)(UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
 					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 					{
 						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for memcache command, returned %d\n", rc);
@@ -1716,7 +1719,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				txmessage[len++] = 0x0A;
 				txmessage[len++] = 0x0D;
 				txmessage[len++] = 0x0;
-				rc = snprintf(&txmessage[len], (UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2019 Tim Chappell. This message is destined for UDP port %d\n", port);
+				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2019 Tim Chappell. This message is destined for UDP port %d\n", port);
 				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
@@ -1733,7 +1736,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	if (retval == PORTUNKNOWN)
 	{
-		rc = write(fd,&txmessage,len);
+		rc = write(fd,&txmessage,(size_t)len);
 		if (rc < 0)
 		{
 			if (0 != special)
@@ -1897,7 +1900,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist)
 {
-	int i,rc,result;
+	int rc,result;
+	unsigned int i;
 	pid_t childpid = fork();
 	if (childpid > 0)
 	{
@@ -1913,13 +1917,13 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		#endif
 		// child - actually do the work here - and then exit successfully
 		char unusedfield[8] = "unused\0";
-		for (i = 0 ; i <(int)todo ; i++)
+		for (i = 0 ; i <todo ; i++)
 		{
-			uint16_t port = udpportlist[portindex+i].port_num;
-			uint8_t special = udpportlist[portindex+i].special;
+			uint16_t port = udpportlist[(unsigned int)(portindex+i)].port_num;
+			uint8_t special = udpportlist[(unsigned int)(portindex+i)].special;
 			result = check_udp_port(hostname, port, special);
 			// Put results into database
-			rc = write_db(host_msb, host_lsb, timestamp, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
+			rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db returned %d\n", rc);

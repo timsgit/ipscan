@@ -47,6 +47,8 @@
 // 0.26 - remove memory engine resizing
 // 0.27 - updated logging for client debug (number of deleted rows)
 // 0.28 - update copyright dates
+// 0.29 - added timestamp and session to client debug options
+// 0.30 - only log number of deleted rows during tidy_up_db if >0
 
 #include "ipscan.h"
 //
@@ -144,17 +146,17 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				{
 					#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
 					// Use memory engine - ensures sensitive data does not persist if MySQL is stopped/restarted
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = (unsigned int)snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#else
 					// Use the default engine - sensitive data may persist until next tidy_up_db() call
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = (unsigned int)snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#endif
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
 						rc = mysql_real_query(connection, query, qrylen);
 						if (0 == rc)
 						{
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
+							qrylen = (unsigned int)snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
 							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 							{
 								#ifdef DBDEBUG
@@ -258,7 +260,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			{
 				// int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session )
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				qrylen = (unsigned int)snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
@@ -405,7 +407,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			else
 			{
 				// DELETE FROM t1 WHERE a = b ;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"')", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				qrylen = (unsigned int)snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"')", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
@@ -425,9 +427,9 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						{
 							#ifdef CLIENTDEBUG
 							IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld rows for %04x:%04x:%04x:: from %s database.\n",\
-									(long)affected_rows, (unsigned int)((host_msb>>48) & 0xFFFF),\
-									(unsigned int)((host_msb>>32) & 0xFFFF),\
-								        (unsigned int)((host_msb>>16) & 0xFFFF), MYSQL_TBLNAME );
+								(long)affected_rows, (unsigned int)((host_msb>>48)&0xFFFF),\
+								(unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF), MYSQL_TBLNAME);
+							IPSCAN_LOG( LOGPREFIX "delete_from_db: Timestamp %"PRIu64", session %"PRIu64"\n", timestamp, session);
 							#endif
 						}
 					}
@@ -506,7 +508,7 @@ int summarise_db(void)
 			else
 			{
 
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT hostmsb, hostlsb, createdate FROM `%s` GROUP BY createdate ORDER BY createdate", MYSQL_TBLNAME);
+				qrylen = (unsigned int)snprintf(query, MAXDBQUERYSIZE, "SELECT hostmsb, hostlsb, createdate FROM `%s` GROUP BY createdate ORDER BY createdate", MYSQL_TBLNAME);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					#ifdef DBDEBUG
@@ -643,7 +645,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				// int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session )
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
+				qrylen = (unsigned int)snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, qrylen);
@@ -767,7 +769,7 @@ int tidy_up_db(uint64_t time_now)
 			else
 			{
 				// DELETE FROM t1 WHERE a = b ;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= '%"PRIu64"' )", MYSQL_TBLNAME, delete_before_time);
+				qrylen = (unsigned int)snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= '%"PRIu64"' )", MYSQL_TBLNAME, delete_before_time);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
@@ -785,9 +787,10 @@ int tidy_up_db(uint64_t time_now)
 						}
 						else
 						{
-							#if (IPSCAN_LOGVERBOSITY == 1)
-							if (affected_rows > 0 ) IPSCAN_LOG( LOGPREFIX "tidy_up_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
-							#endif
+							if (0 < affected_rows)
+							{
+								IPSCAN_LOG( LOGPREFIX "tidy_up_db: Deleted %ld entries from %s database.\n", (long)affected_rows, MYSQL_TBLNAME);
+							}
 						}
 					}
 					else

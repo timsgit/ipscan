@@ -252,7 +252,8 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist)
 {
-	int i,rc,result;
+	int rc,result;
+	unsigned int i;
 	pid_t childpid = fork();
 	if (childpid > 0)
 	{
@@ -268,13 +269,13 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		#endif
 		// child - actually do the work here - and then exit successfully
 		char unusedfield[8] = "unused\0";
-		for (i = 0 ; i <(int)todo ; i++)
+		for (i = 0 ; i < todo ; i++)
 		{
 			uint16_t port = portlist[portindex+i].port_num;
 			uint8_t special = portlist[portindex+i].special;
 			result = check_tcp_port(hostname, port, special);
 			// Put results into database
-			rc = write_db(host_msb, host_lsb, timestamp, session, (port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
+			rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: check_tcp_port_parll() write_db returned %d\n", rc);
