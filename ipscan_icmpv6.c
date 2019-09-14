@@ -28,6 +28,7 @@
 // 0.8			update copyright year
 // 0.9			update copyright year
 // 0.10			update copyright year
+// 0.11			extern no longer defined here
 
 #include "ipscan.h"
 //
@@ -54,7 +55,7 @@
 #endif
 
 // Include externals : resultsstruct
-extern struct rslt_struc resultsstruct[];
+// todo extern struct rslt_struc resultsstruct[];
 
 // Others that FreeBSD highlighted
 #include <netinet/in.h>

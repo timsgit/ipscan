@@ -36,6 +36,7 @@
 # 0.16 - force warnings to be errors
 # 0.17 - update copyright year
 # 0.18 - update copyright year
+# 0.19 - remove dashes from binary names
 
 # Support servers where SETUID is not available
 # Set this variable to 0 if you don't have permissions to call SETUID

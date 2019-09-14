@@ -43,6 +43,8 @@
 // 0.23			Update dates
 // 0.24			Update dates
 // 0.25			Update dates
+// 0.26			extern updated
+// 0.27			fix snprintf size parameter type
 
 #include "ipscan.h"
 //
@@ -75,7 +77,7 @@
 #include <ifaddrs.h>
 
 // Include externals : resultsstruct
-extern struct rslt_struc resultsstruct[];
+// todo extern struct rslt_struc resultsstruct[];
 
 // Link layer
 #include <linux/if_packet.h>
@@ -1640,7 +1642,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 					char mccmd[] = "version";
 
-					rc = snprintf(&txmessage[len], (char)(UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
+					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
 					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 					{
 						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for memcache command, returned %d\n", rc);

@@ -65,6 +65,8 @@
 // 0.44 - limited IPv6 address logging and further client debug
 // 0.45 - further client debug improvements
 // 0.46 - yet more client debug improvements
+// 0.47 - yet more client debug improvements
+// 0.48 - fix compilation on platforms which don't support UDP or SUID
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -186,6 +188,7 @@ int main(void)
 // last is only used in text-only mode
 int last = 0;
 #else
+// fetchnum is only used in javascript-only mode
 int fetchnum = 0;
 #endif
 
@@ -232,7 +235,9 @@ unsigned int porti;
 
 // Ports to be tested
 uint16_t numports = 0;
+#if (IPSCAN_INCLUDE_UDP == 1)
 uint16_t numudpports = NUMUDPPORTS;
+#endif
 
 // "general purpose" variables, used as required
 int rc = 0;
@@ -593,6 +598,12 @@ else
 
 if (numqueries == 0)
 {
+	#ifdef CLIENTDEBUG
+	IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: 0 queries\n",\
+                  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+	#endif
+
 	#ifdef IPSCAN_HTML5_ENABLED
 	// Create the HTML5 header
 	create_html5_common_header();
@@ -614,6 +625,11 @@ if (numqueries == 0)
 
 else
 {
+	#ifdef CLIENTDEBUG
+	IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: %d queries\n",\
+                  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                  (unsigned int)((remotehost_msb>>16) & 0xFFFF), numqueries );
+	#endif
 
 	// includeexisting should only be passed the values -1 or 1, set to 0 if not present
 	// or an unsuitable value is passed.
@@ -905,17 +921,25 @@ else
 	//
 	//
 
-
-	//
-	// NON-Javascript mode of operation (text browser compatible)
-	//
 	#if (TEXTMODE == 1)
+
+	// ----------------------------------------------------------------------
+	//
+	// Start of text-mode only cases
+	//
+	// ----------------------------------------------------------------------
+
 	// *IF* we have everything we need to initiate the scan/results page then we
 	// should have been passed (2+NUMUSERDEFPORTS) queries
 	// i.e. includeexisting (either +1 or -1), termsaccepted and customports 0 thru n params
 
 	if ( numqueries >= (NUMUSERDEFPORTS + 2) && (numcustomports == NUMUSERDEFPORTS) && includeexisting != 0 && termsaccepted == 1 )
 	{
+		#ifdef CLIENTDEBUG
+		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: text-mode, initiate scan\n",\
+                  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+		#endif
 
 		#if (IPSCAN_LOGVERBOSITY == 1)
 		time_t scanstart = starttime;
@@ -1265,11 +1289,19 @@ else
 			}
 		}
 
-	// 
-	// These handle the calls by the javascript version of the tester
-	//
+		// ----------------------------------------------------------------------
+		//
+		// End of text-mode only cases
+		//
+		// ----------------------------------------------------------------------
 
 		#else
+
+		// ----------------------------------------------------------------------
+		//
+		// Start of javascript-mode only cases
+		//
+		// ----------------------------------------------------------------------
 
 		// *IF* we have everything we need to query the database ...
 		// querysession, querystarttime, fetch and includeexisting. Could also have one or more customports
@@ -1278,6 +1310,12 @@ else
 		if ( numqueries >= 5 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 \
 			&& termsaccepted == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum)
 		{
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: javascript-mode, fetch signalling end-of-test\n",\
+                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#endif
+
 			// Put out a dummy page to keep the webserver happy
 			create_html_common_header();
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
@@ -1384,6 +1422,12 @@ else
 		else if ( numqueries >= 5 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 \
 			&& termsaccepted == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
 		{
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: javascript-mode, query database fetch\n",\
+                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#endif
+
 			// Simplified header in which to wrap array of results
 			create_json_header();
 			// Dump the current port results for this client, starttime and session
@@ -1401,6 +1445,12 @@ else
 		else if ( numqueries >= 5 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 \
 			&& termsaccepted == 1 && includeexisting != 0 && fetch == 0)
 		{
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: javascript-mode, initiate scan\n",\
+                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#endif
+
 			time_t scanstart = time(0);
 			if (scanstart < 0)
 			{
@@ -1797,15 +1847,33 @@ else
 		else if (numqueries >= (NUMUSERDEFPORTS + 1) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 \
 			&& termsaccepted == 1 && fetch == 0)
 		{
-			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "ipscan: Creating the standard web results page start point\n");
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: javascript-mode, create start page\n",\
+                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
-			// Create the header
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "ipscan: Creating the standard web results page start point\n");
+
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: for client : %04x:%04x:%04x::\n",\
+                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                         (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: at starttime %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
+			#endif
+
+			#endif
+
+			// Create the header and body
+			#if (IPSCAN_INCLUDE_UDP == 1)
 			create_html_header(session, starttime, numports, numudpports, reconquery);
-			// Create the main html body
 			create_html_body(remoteaddrstring, starttime, numports, numudpports, portlist, udpportlist);
-			// Finish the html
+			#else
+			create_html_header(session, starttime, numports, 0, reconquery);
+			create_html_body(remoteaddrstring, starttime, numports, 0, portlist, udpportlist);
+			#endif
+			// Create the main html body
 			create_html_body_end();
 			
 			// Tidy up the database - really only required for orphaned results
@@ -1813,21 +1881,41 @@ else
 			//
 			if (starttime > 0)
 			{
+				#ifdef CLIENTDEBUG
+				IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db() called by client : %04x:%04x:%04x::\n",\
+                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
+				#endif
 				rc = tidy_up_db( (uint64_t)starttime );
 				if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() returned %d\n", rc);
 			}
 		}
 
+		// ----------------------------------------------------------------------
+		//
+		// End of java-script only cases
+		//
+		// ----------------------------------------------------------------------
+
 		#endif
 
+		// ----------------------------------------------------------------------
 		//
 		// Cases common to both modes of operation
 		//
+		// ----------------------------------------------------------------------
 
 		#if (SUMMARYENABLE == 1)
 		// Generate a summary of scans - limited to IPv6 addresses and time/date
 		else if (numqueries == 1 && magic == MAGICSUMMARY )
 		{
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: common-mode, summary of scans\n",\
+                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#endif
+
 			create_html_common_header();
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
@@ -1844,6 +1932,12 @@ else
 
 		else if (termsaccepted == 0)
 		{
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: common-mode, terms not accepted\n",\
+                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#endif
+
 			// Tell the user that they haven't accepted the terms and conditions
 			create_html_common_header();
 			printf("<title>IPv6 Port Scanner - Terms and Conditions MUST be accepted</title>\n");
@@ -1871,6 +1965,12 @@ else
 
 		else
 		{
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: common-mode, final else - hack?\n",\
+                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#endif
+
 			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
 			create_html_common_header();
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);

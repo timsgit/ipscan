@@ -52,6 +52,7 @@
 // 0.32 - update copyright year
 // 0.33 - slight tweak to error reporting (myReadyState and myStatus)
 // 0.34 - update copyright year
+// 0.35 - extern udpated
 
 #include "ipscan.h"
 
@@ -67,7 +68,7 @@
 #include <inttypes.h>
 
 // Include resultsstruct in order to generate some of the html content
-extern struct rslt_struc resultsstruct[];
+// todo extern struct rslt_struc resultsstruct[];
 
 void create_html_common_header(void)
 {

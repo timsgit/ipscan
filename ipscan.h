@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.65"
+	#define IPSCAN_VERNUM "1.70"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -172,6 +172,11 @@
 	// 1.63 Further client debug logging improvements
 	// 1.64 Yet more client debug logging improvements
 	// 1.65 signed/unsigned conflicts corrected
+	// 1.66 extern redefined
+	// 1.67 Debug-only build for client debug improvements
+	// 1.68 Debug-only build for client debug improvements
+	// 1.69 URL corrections
+	// 1.70 Fixes for servers without UDP or SUID support
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -179,16 +184,16 @@
 	// Determine whether to include terms of use link (0 = don't include; 1 = include)
 	#define INCLUDETERMSOFUSE 1
 	// Link for terms of use - please update to reference a page from your website
-	#define TERMSOFUSEURL "https://ipv6.chappell-family.com/timswiki/index.php5?title=Timswiki:About"
+	#define TERMSOFUSEURL "https://wiki.chappell-family.com/wiki/index.php?title=Timswiki:About"
 
 	// Determine whether to offer help for bad/incomplete/unrecognised URLs
 	// 0=offer no help, 1=offer help - need to define URL
 	#define IPSCAN_BAD_URL_HELP 1
 	// The link that might provide some help ...
-	#define IPSCAN_BAD_URL_LINK "https://ipv6.chappell-family.com/timswiki/index.php5?title=ScanAutomation"
+	#define IPSCAN_BAD_URL_LINK "https://wiki.chappell-family.com/wiki/index.php?title=ScanAutomation"
 
 	// URL providing description special protocol tests
-	#define IPSCAN_SPECIALTESTS_URL "https://ipv6.chappell-family.com/timswiki/index.php5?title=IPv6_SpecialTests"
+	#define IPSCAN_SPECIALTESTS_URL "https://wiki.chappell-family.com/wiki/index.php?title=IPv6_SpecialTests"
 
 	// Interface name on which the test server listens
 	// Note this is only used to determine the IPv6 address inserted in MPLS LSP Ping packets
@@ -613,6 +618,9 @@
 		char colour[32];
 		char description[256];
 	};
+
+	// Single definition of external : resultsstruct
+	extern struct rslt_struc resultsstruct[];
 
 	// Default ports structure
 	//

@@ -49,6 +49,7 @@
 // 0.28 - update copyright dates
 // 0.29 - added timestamp and session to client debug options
 // 0.30 - only log number of deleted rows during tidy_up_db if >0
+// 0.31 - changes for mariadb compatibility
 
 #include "ipscan.h"
 //
@@ -67,7 +68,6 @@
 #include <netinet/in.h>
 
 // MySQL Database includes
-#include <my_global.h>
 #include <mysql.h>
 
 // Logging with syslog requires additional include
