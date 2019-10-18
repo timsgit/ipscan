@@ -361,7 +361,7 @@ else
 	#endif
 
 	// Force Uppercase to ease comparison
-	for (i = 0; i < strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
+	for (i = 0; i < (unsigned int)strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
 	{
 		thischar=requestmethod[i];
 		requestmethod[i]=(char)(toupper(thischar) &0xFF);
@@ -402,7 +402,7 @@ else
 
 
 			// Force lowercase to ease later comparison
-			for (i = 0; i < strnlen(querystring,(MAXQUERYSTRLEN)); i++)
+			for (i = 0; i < (unsigned int)strnlen(querystring,(MAXQUERYSTRLEN)); i++)
 			{
 				thischar=querystring[i];
 				querystring[i]=(char)(tolower(thischar) & 0xFF);
