@@ -49,7 +49,7 @@
 // 0.28 - update copyright dates
 // 0.29 - added timestamp and session to client debug options
 // 0.30 - only log number of deleted rows during tidy_up_db if >0
-// 0.31 - changes for mariadb compatibility
+// 0.31 - semmle re-entrant time functions added
 
 #include "ipscan.h"
 //
@@ -480,6 +480,9 @@ int summarise_db(void)
 
 	uint64_t value, hostmsb, hostlsb ;
 	time_t createdate;
+	char createdateresult[32]; // 26 chars for ctime_r()
+	char * cdptr = NULL;
+
 	unsigned char remotehost[sizeof(struct in6_addr)];
 	char hostname[INET6_ADDRSTRLEN];
 
@@ -548,9 +551,11 @@ int summarise_db(void)
 
 								if (inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN) != NULL)
 								{
+									cdptr = ctime_r(&createdate, createdateresult);
+									if (NULL == cdptr) createdateresult[0]=0;
 									printf("<tr style=\"text-align:center\">\n");
 									printf("<td width=\"50%%\">%s</td>", hostname);
-									printf("<td width=\"50%%\">%s</td>\n", asctime(localtime(&createdate)));
+									printf("<td width=\"50%%\">%s</td>\n", createdateresult);
 									printf("</tr>\n");
 								}
 							}

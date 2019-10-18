@@ -36,7 +36,6 @@
 # 0.16 - force warnings to be errors
 # 0.17 - update copyright year
 # 0.18 - update copyright year
-# 0.19 - remove dashes from binary names
 
 # Support servers where SETUID is not available
 # Set this variable to 0 if you don't have permissions to call SETUID
@@ -53,9 +52,8 @@ INCLUDES=-I/usr/include
 LIBS=
 CC=gcc
 CFLAGS=-Wall -Wextra -Werror -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O1 -D_FORTIFY_SOURCE=2
-CFLAGS+= -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4 
+CFLAGS+= -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4
 CFLAGS+= -ftrapv -fPIE -pie -Wl,-z,relro,-z,now 
-# CFLAGS+= -ftrapv -fPIE -pie -Wl,-z,relro,-z,now -Wconversion -Wsign-conversion
 
 # Install location for the CGI files
 TARGETDIR=/var/www/cgi-bin6

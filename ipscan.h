@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.70"
+	#define IPSCAN_VERNUM "1.72"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -177,6 +177,9 @@
 	// 1.68 Debug-only build for client debug improvements
 	// 1.69 URL corrections
 	// 1.70 Fixes for servers without UDP or SUID support
+	// 1.71 Fixes for warnings raised by Semmle (re-entrant time functions)
+	// 1.72 Minor HTML fixes - robots and optional icon support
+	//      plus javascript changes to remove eval()
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -323,6 +326,27 @@
 	#define IPSCAN_HTML5_ENABLED 1
 	// Maximum HTML5 body div width (pixels)
 	#define IPSCAN_BODYDIV_WIDTH 800
+
+	// Ensure IPSCAN_HTML5_ENABLED is defined
+	#ifndef IPSCAN_HTML5_ENABLED
+                #define IPSCAN_HTML5_ENABLED 0
+        #endif
+
+	// Call different HTML headers
+	#if (IPSCAN_HTML5_ENABLED == 0)
+		// Default to HTML 4.01
+		#define HTML_HEADER() create_html_common_header()
+	#else
+		// Use HTML 5 everywhere
+		#define HTML_HEADER() create_html5_common_header()
+	#endif
+
+	// Enable(1) or disable(0)  favicon support
+	#define IPSCAN_ICON_ENABLED 1
+	// Icon type - common values include image/x-icon (.ico) and image/png (.png)
+	#define IPSCAN_ICON_TYPE "image/x-icon"
+	// Where to find your site icon
+	#define IPSCAN_ICON_HREF "/favicon.ico"
 
 	// Number of columns for HTML output:
 	#define MAXCOLS 6

@@ -67,6 +67,7 @@
 // 0.46 - yet more client debug improvements
 // 0.47 - yet more client debug improvements
 // 0.48 - fix compilation on platforms which don't support UDP or SUID
+// 0.49 - semmle re-entrant time function changes
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -339,7 +340,7 @@ else if ( strnlen(reqmethodvar, (MAXREQMETHODLEN+1)) > MAXREQMETHODLEN )
 {
 	IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: REQUEST_METHOD variable string is longer than allocated buffer (%d > %d)\n", (int)strnlen(reqmethodvar, (MAXREQMETHODLEN+1)), MAXREQMETHODLEN);
 	// Create the header
-	create_html_common_header();
+	HTML_HEADER();
 	// Now finish the header
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("</head>\n");
@@ -360,7 +361,7 @@ else
 	#endif
 
 	// Force Uppercase to ease comparison
-	for (i = 0; i < strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
+	for (i = 0; i < (unsigned int)strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
 	{
 		thischar=requestmethod[i];
 		requestmethod[i]=(char)(toupper(thischar) &0xFF);
@@ -376,7 +377,7 @@ else
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: QUERY_STRING environment string is longer than allocated buffer (%d > %d)\n", (int)strnlen(querystringvar, MAXQUERYSTRLEN+1), MAXQUERYSTRLEN);
 			// Create the header
-			create_html_common_header();
+			HTML_HEADER();
 			// Now finish the header
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
@@ -401,7 +402,7 @@ else
 
 
 			// Force lowercase to ease later comparison
-			for (i = 0; i < strnlen(querystring,(MAXQUERYSTRLEN)); i++)
+			for (i = 0; i < (unsigned int)strnlen(querystring,(MAXQUERYSTRLEN)); i++)
 			{
 				thischar=querystring[i];
 				querystring[i]=(char)(tolower(thischar) & 0xFF);
@@ -492,7 +493,7 @@ else
 	else if (strncmp("HEAD", requestmethod, 4) == 0)
 	{
 		// Create the header
-		create_html_common_header();
+		HTML_HEADER();
 		// Now finish the header
 		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 		printf("</head>\n");
@@ -504,7 +505,7 @@ else
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: called with an unsupported request method: %s.\n", requestmethod);
 		// Create the header
-		create_html_common_header();
+		HTML_HEADER();
 		// Now finish the header
 		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 		printf("</head>\n");
@@ -526,7 +527,7 @@ else if (strnlen(remoteaddrvar,(INET6_ADDRSTRLEN+1)) > INET6_ADDRSTRLEN)
 {
 	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable length exceeds allocated buffer size (%d > %d)\n", (int)strnlen(remoteaddrvar, (INET6_ADDRSTRLEN+1)), INET6_ADDRSTRLEN);
 	// Create the header
-	create_html_common_header();
+	HTML_HEADER();
 	// Now finish the header
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("</head>\n");
@@ -548,7 +549,7 @@ else
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: Unparseable IPv6 host address : %s\n", remoteaddrstring);
 		// Create the header
-		create_html_common_header();
+		HTML_HEADER();
 		// Now finish the header
 		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 		printf("</head>\n");
@@ -604,18 +605,17 @@ if (numqueries == 0)
                   (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 	#endif
 
+	// Create the HTML header
+	HTML_HEADER();
+
 	#ifdef IPSCAN_HTML5_ENABLED
-	// Create the HTML5 header
-	create_html5_common_header();
 	// Create the main HTML5 body
 	create_html5_form(DEFNUMPORTS, NUMUDPPORTS, portlist, udpportlist);
 	#else
-	// Create the header
-	create_html_common_header();
 	// Create the main html body
 	create_html_form(DEFNUMPORTS, NUMUDPPORTS, portlist, udpportlist);
-
 	#endif
+
 	// Finish the html
 	create_html_body_end();
 }
@@ -682,7 +682,7 @@ else
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 			// Create the header
-			create_html_common_header();
+			HTML_HEADER();
 			// Now finish the header
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
@@ -697,7 +697,7 @@ else
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
 		// Create the header
-		create_html_common_header();
+		HTML_HEADER();
 		// Now finish the header
 		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 		printf("</head>\n");
@@ -718,7 +718,7 @@ else
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to continue reconstituting query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 			// Create the header
-			create_html_common_header();
+			HTML_HEADER();
 			// Now finish the header
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
@@ -733,7 +733,7 @@ else
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 16)\n", rc);
 		// Create the header
-		create_html_common_header();
+		HTML_HEADER();
 		// Now finish the header
 		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 		printf("</head>\n");
@@ -812,7 +812,7 @@ else
 						{
 							IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
 							// Create the header
-							create_html_common_header();
+							HTML_HEADER();
 							// Now finish the header
 							printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 							printf("</head>\n");
@@ -827,7 +827,7 @@ else
 					{
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: customport%d reconstitution failed, due to unexpected size.\n", customport);
 						// Create the header
-						create_html_common_header();
+						HTML_HEADER();
 						// Now finish the header
 						printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 						printf("</head>\n");
@@ -923,6 +923,9 @@ else
 
 	#if (TEXTMODE == 1)
 
+	char stimeresult[32]; // function calls for at least 26 characters
+	char * stptr = NULL;
+
 	// ----------------------------------------------------------------------
 	//
 	// Start of text-mode only cases
@@ -946,15 +949,23 @@ else
 		#endif
 
 		// Create the header
-		create_html_common_header();
+		HTML_HEADER();
 		// Create main output
 		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 		printf("</head>\n");
 		printf("<body>\n");
 		printf("<h3 style=\"color:red\">IPv6 Port Scan Results for host %s</h3>\n", remoteaddrstring);
+		stptr = ctime_r(&starttime,stimeresult);
+		if (NULL == stptr)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR - text-mode ctime_r() failed\n");
+		}
+		else
+		{
+			printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", \
+				stimeresult, (int)ESTIMATEDTIMETORUN );
+		}
 
-		printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", \
-					asctime(localtime(&starttime)), (int)ESTIMATEDTIMETORUN );
 		// Log termsaccepted
 		IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
 		 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -1224,12 +1235,26 @@ else
 			}
 			printf("</table>\n");
 
+			char fintimeresult[32]; // ctime requires 26 bytes
+			char * ftptr = NULL;
 			time_t nowtime = time(0);
+			ftptr = ctime_r(&nowtime, fintimeresult);
+
 			if (nowtime < 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for nowtime %d (%s)\n", errno, strerror(errno));
 			}
-			printf("<p>Scan of %d ports complete at: %s.</p>\n", numports, asctime(localtime(&nowtime)));
+			else
+			{
+				if (NULL == ftptr)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: finish time ctime_r() returned NULL\n");
+				}
+				else
+				{
+					printf("<p>Scan of %d ports complete at: %s.</p>\n", numports, fintimeresult);
+				}
+			}
 
 			// Create results key table
 			create_results_key_table(remoteaddrstring, starttime);
@@ -1317,7 +1342,7 @@ else
 			#endif
 
 			// Put out a dummy page to keep the webserver happy
-			create_html_common_header();
+			HTML_HEADER();
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
@@ -1459,10 +1484,15 @@ else
 
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
-			create_html_common_header();
+			HTML_HEADER();
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
+			// TJC new
+			printf("<p>Initiate scan.</p>\n");
+			// Finish the output
+			create_html_body_end();
+
 
 			// Generate database entry for test state - indicate test running
 			#ifdef CLIENTDEBUG
@@ -1664,9 +1694,6 @@ else
 			#endif
 
 
-			// Finish the output
-			create_html_body_end();
-
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			time_t scancomplete = time(0);
 			if (scancomplete < 0)
@@ -1819,6 +1846,13 @@ else
 			}
 
 			#ifdef CLIENTDEBUG
+			char cdstartres[32]; // ctime_r requires 26 chars
+			char cdtimeoutres[32]; // ctime_r requires 26 chars
+			char * cds_ptr = NULL;
+			char * cdt_ptr = NULL;
+			cds_ptr = ctime_r(&scanstart, cdstartres);
+			cdt_ptr = ctime_r(&timeouttime, cdtimeoutres);
+
 			if (client_finished == 1)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop because client signalled.\n");
@@ -1826,8 +1860,8 @@ else
 			else
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: Exited test-complete loop with no client response.\n");
-				IPSCAN_LOG( LOGPREFIX "ipscan: starttime   was : %d (%s)\n", (int)scanstart, asctime(localtime(&scanstart)));
-				IPSCAN_LOG( LOGPREFIX "ipscan: timeouttime was : %d (%s)\n", (int)timeouttime, asctime(localtime(&timeouttime)));
+				if (NULL != cds_ptr) IPSCAN_LOG( LOGPREFIX "ipscan: starttime   was : %d (%s)\n", (int)scanstart, cdstartres );
+				if (NULL != cdt_ptr) IPSCAN_LOG( LOGPREFIX "ipscan: timeouttime was : %d (%s)\n", (int)timeouttime, cdtimeoutres);
 			}
 			#endif
 
@@ -1916,7 +1950,7 @@ else
                		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
-			create_html_common_header();
+			HTML_HEADER();
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
@@ -1939,7 +1973,7 @@ else
 			#endif
 
 			// Tell the user that they haven't accepted the terms and conditions
-			create_html_common_header();
+			HTML_HEADER();
 			printf("<title>IPv6 Port Scanner - Terms and Conditions MUST be accepted</title>\n");
 			printf("</head>\n");
 			printf("<body>\n");
@@ -1972,7 +2006,7 @@ else
 			#endif
 
 			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
-			create_html_common_header();
+			HTML_HEADER();
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
