@@ -116,9 +116,9 @@ versions 0.90 and later. See step 4 below for details.
        Also disable client caching, having enabled the loading of mod_headers:
        
        <IfModule mod_headers.c>
-        Header set Cache-Control "private, no-cache, no-store, must-revalidate"
-        Header set Pragma "no-cache"
-        Header set Expires "0"
+          Header set Cache-Control "private, no-cache, no-store, must-revalidate"
+          Header set Pragma "no-cache"
+          Header set Expires "0"
        </IfModule>
        
        Don't forget to restart your web server after making the appropriate modifications.
@@ -126,18 +126,18 @@ versions 0.90 and later. See step 4 below for details.
     7. If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary to perform additional 
        steps similar to those outlined below:
        a. Ensure that your Apache server is enabled to support cgi, as root type:
-         # setsebool -P httpd_enable_cgi on
+          # setsebool -P httpd_enable_cgi on
        b. Enable the correct execution permissions to the cgi scripts, as root type:
-         # cd /srv/www/cgi-bin6/ (use your selected installation path)
-         # chcon -t httpd_unconfined_script_exec_t *.cgi
+          # cd /srv/www/cgi-bin6/ (use your selected installation path)
+          # chcon -t httpd_unconfined_script_exec_t *.cgi
           
        IMPORTANT NOTE: the steps listed in step 7 above are only indicative of what may be required, and 
        depend upon your existing installation. Please consult the SELinux documentation for further details. 
           
     8. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
-      w3m https://www64.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
+       w3m https://www64.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
        or: 
-      lynx https://[2001:470:971f:6::4]/cgi-bin6/ipscan-txt.cgi
+       lynx https://[2001:470:971f:6::4]/cgi-bin6/ipscan-txt.cgi
 
     9. Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
        web server error log or syslog if enabled to do so (this is NOT the default option - change 
@@ -145,10 +145,10 @@ versions 0.90 and later. See step 4 below for details.
        uncommenting the debug #define statements in ipscan.h.
     
     10. If you're providing public access to IPscan then please ensure that you disable verbose reporting,
-	the summary option and ALL debug facilities.
+        the summary option and ALL debug facilities.
 
         Note: versions v1.42 and later of IPscan automatically delete the scan results, for both javascript
-	and text-only clients, after reporting them to the user. Earlier versions relied on a cron job
+        and text-only clients, after reporting them to the user. Earlier versions relied on a cron job
         to achieve the same end, but this is no longer required for current versions.
 
     11. For those considering providing IPscan access on the public internet then consider adding a 
