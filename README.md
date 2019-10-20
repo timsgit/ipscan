@@ -38,111 +38,111 @@ IMPORTANT: when UPGRADING from versions before 0.90: a database change has occur
 it is necessary that you remove your existing database prior to building and installing 
 versions 0.90 and later. See step 4 below for details.
 
-    1. edit the Makefile and adjust the following entries as required:
-        a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. `/srv/www/cgi-bin6`)
-                   Ensure that the selected target directory exists, with appropriate permissions, before 
-                   attempting to install the final executables.
-        b. URIPATH - this is the request URI by which the cgi files will be accessed from your webserver
-                   e.g. https://www64.chappell-family.co.uk/cgi-bin6/ipscan-js.cgi then set URIPATH=/cgi-bin6
-        c. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
-        d. SETUID_AVAILABLE and UDP_AVAILABLE - if you're running the service on a machine where you, or
-                   the web server, don't have permissions to call setuid() or create UDP sockets then these features
-                   need to be disabled.
+    1.  edit the Makefile and adjust the following entries as required:
+         a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. `/srv/www/cgi-bin6`)
+                    Ensure that the selected target directory exists, with appropriate permissions, before 
+                    attempting to install the final executables.
+         b. URIPATH - this is the request URI by which the cgi files will be accessed from your webserver
+                    e.g. https://www64.chappell-family.co.uk/cgi-bin6/ipscan-js.cgi then set URIPATH=/cgi-bin6
+         c. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
+         d. SETUID_AVAILABLE and UDP_AVAILABLE - if you're running the service on a machine where you, or
+                    the web server, don't have permissions to call setuid() or create UDP sockets then these features
+                    need to be disabled.
 
-    2. edit ipscan.h and adjust *at least* the following entries:
-        a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will be world-accessible
-        b. INCLUDETERMSOFUSE and TERMSOFUSEURL if you wish to reference a terms of use page on your website.
-        c. IPSCAN_INTERFACE_NAME - modify this to match the server's interface to which clients will browse.  
-        d. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
-                          MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
-                          MYSQL_USER - the username used to access the IPscan database.
-                          MYSQL_PASSWD - the password used to identify the MySQL user.
-                          MYSQL_DBNAME - the name of the IPscan database.
-                          MYSQL_TBLNAME - the name of the table in which IPscan results will reside.
+    2.  edit ipscan.h and adjust *at least* the following entries:
+         a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will be world-accessible
+         b. INCLUDETERMSOFUSE and TERMSOFUSEURL if you wish to reference a terms of use page on your website.
+         c. IPSCAN_INTERFACE_NAME - modify this to match the server's interface to which clients will browse.  
+         d. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
+                           MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
+                           MYSQL_USER - the username used to access the IPscan database.
+                           MYSQL_PASSWD - the password used to identify the MySQL user.
+                           MYSQL_DBNAME - the name of the IPscan database.
+                           MYSQL_TBLNAME - the name of the table in which IPscan results will reside.
 
-    3. edit ipscan_portlist.h and change the list of ports to be tested, if required. Note that if you add 
-       new UDP ports then you must also add a matching packet generator function to ipscan_udp.c
+    3.  edit ipscan_portlist.h and change the list of ports to be tested, if required. Note that if you add 
+        new UDP ports then you must also add a matching packet generator function to ipscan_udp.c
     
-    4. Create the database and user and allocate appropriate user privileges, using the following commands within the mysql shell:
+    4.  Create the database and user and allocate appropriate user privileges, using the following commands within the mysql shell:
 
-       NB: adjust the host, user name, password and database name to match the globals you've edited in step 2 above:
+        NB: adjust the host, user name, password and database name to match the globals you've edited in step 2 above:
         
-       mysql> create database ipscan;
-       Query OK, 1 row affected (0.00 sec)
+        mysql> create database ipscan;
+        Query OK, 1 row affected (0.00 sec)
 
-       Note: it is unnecessary to re-create the user if upgrading from a previous version.
+        Note: it is unnecessary to re-create the user if upgrading from a previous version.
        
-       mysql> create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
-       Query OK, 0 rows affected (0.01 sec)
+        mysql> create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
+        Query OK, 0 rows affected (0.01 sec)
 
-       mysql> grant all privileges on ipscan.* to 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
-       Query OK, 0 rows affected (0.01 sec)
+        mysql> grant all privileges on ipscan.* to 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
+        Query OK, 0 rows affected (0.01 sec)
 
-       mysql> exit
-       Bye
+        mysql> exit
+        Bye
        
-       If performing an upgrade from an earlier version of IPscan then either drop the table within a mysql shell, e.g. :
+        If performing an upgrade from an earlier version of IPscan then either drop the table within a mysql shell, e.g. :
         
-       mysql> use ipscan;
-       mysql> drop table if exists results;
+        mysql> use ipscan;
+        mysql> drop table if exists results;
        
-       or use the BASH upgrade script within the IPscan source directory:
+        or use the BASH upgrade script within the IPscan source directory:
        
-       $ ./upgrade.bsh
+        $ ./upgrade.bsh
         
        
-    5. make && make install
+    5.  make && make install
        
-       Given that the suid bit is set on the installed executables, in order to support raw sockets for ICMPv6 testing, 
-       it is necessary to perform the 'make install' stage as root user. 
+        Given that the suid bit is set on the installed executables, in order to support raw sockets for ICMPv6 testing, 
+        it is necessary to perform the 'make install' stage as root user. 
        
-       Note: when updating an existing installation to version 1.10 and beyond it may be necessary to manually 
-       remove the ipscan_checks.c file, if it remains in your install directory, prior to building. 
-       The functionality within ipscan_checks.c has been redistributed to separate files which 
-       handle tcp, udp and icmpv6 testing.
+        Note: when updating an existing installation to version 1.10 and beyond it may be necessary to manually 
+        remove the ipscan_checks.c file, if it remains in your install directory, prior to building. 
+        The functionality within ipscan_checks.c has been redistributed to separate files which 
+        handle tcp, udp and icmpv6 testing.
        
-       Note: please use gmake under FreeBSD.
+        Note: please use gmake under FreeBSD.
     
-    6. make sure that the URI path directory (which may well be accessed via an Apache alias) is enabled to execute cgi:
+    6.  Make sure that the URI path directory (which may well be accessed via an Apache alias) is enabled to execute cgi:
         
-       ScriptAlias /cgi-bin6/ "/srv/www/cgi-bin6/"
-       <Directory "/srv/www/cgi-bin6">
-          AllowOverride None
-          Options +ExecCGI -Includes
-          Order allow,deny
-          Allow from 2000::/3
-       </Directory>
+        ScriptAlias /cgi-bin6/ "/srv/www/cgi-bin6/"
+        <Directory "/srv/www/cgi-bin6">
+           AllowOverride None
+           Options +ExecCGI -Includes
+           Order allow,deny
+           Allow from 2000::/3
+        </Directory>
         
-       Also disable client caching, having enabled the loading of mod_headers:
+        Also disable client caching, having enabled the loading of mod_headers:
        
-       <IfModule mod_headers.c>
-          Header set Cache-Control "private, no-cache, no-store, must-revalidate"
-          Header set Pragma "no-cache"
-          Header set Expires "0"
-       </IfModule>
+        <IfModule mod_headers.c>
+           Header set Cache-Control "private, no-cache, no-store, must-revalidate"
+           Header set Pragma "no-cache"
+           Header set Expires "0"
+        </IfModule>
        
-       Don't forget to restart your web server after making the appropriate modifications.
+        Don't forget to restart your web server after making the appropriate modifications.
     
-    7. If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary to perform additional 
-       steps similar to those outlined below:
-       a. Ensure that your Apache server is enabled to support cgi, as root type:
-          # setsebool -P httpd_enable_cgi on
-       b. Enable the correct execution permissions to the cgi scripts, as root type:
-          # cd /srv/www/cgi-bin6/ (use your selected installation path)
-          # chcon -t httpd_unconfined_script_exec_t *.cgi
+    7.  If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary to perform additional 
+        steps similar to those outlined below:
+        a. Ensure that your Apache server is enabled to support cgi, as root type:
+           # setsebool -P httpd_enable_cgi on
+        b. Enable the correct execution permissions to the cgi scripts, as root type:
+           # cd /srv/www/cgi-bin6/ (use your selected installation path)
+           # chcon -t httpd_unconfined_script_exec_t *.cgi
           
-       IMPORTANT NOTE: the steps listed in step 7 above are only indicative of what may be required, and 
-       depend upon your existing installation. Please consult the SELinux documentation for further details. 
+        IMPORTANT NOTE: the steps listed in step 7 above are only indicative of what may be required, and 
+        depend upon your existing installation. Please consult the SELinux documentation for further details. 
           
-    8. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
-       w3m https://www64.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
-       or: 
-       lynx https://[2001:470:971f:6::4]/cgi-bin6/ipscan-txt.cgi
+    8.  Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
+        w3m https://www64.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
+        or: 
+        lynx https://[2001:470:971f:6::4]/cgi-bin6/ipscan-txt.cgi
 
-    9. Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
-       web server error log or syslog if enabled to do so (this is NOT the default option - change 
-       IPSCAN_LOGVERBOSITY to 1 to enable this). It is possible to enable copious amounts of debug by 
-       uncommenting the debug #define statements in ipscan.h.
+    9.  Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
+        web server error log or syslog if enabled to do so (this is NOT the default option - change 
+        IPSCAN_LOGVERBOSITY to 1 to enable this). It is possible to enable copious amounts of debug by 
+        uncommenting the debug #define statements in ipscan.h.
     
     10. If you're providing public access to IPscan then please ensure that you disable verbose reporting,
         the summary option and ALL debug facilities.
