@@ -39,7 +39,7 @@ it is necessary that you remove your existing database prior to building and ins
 versions 0.90 and later. See step 4 below for details.
 
     1.  edit the Makefile and adjust the following entries as required:
-         a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. `/srv/www/cgi-bin6`)
+         a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
                     Ensure that the selected target directory exists, with appropriate permissions, before 
                     attempting to install the final executables.
          b. URIPATH - this is the request URI by which the cgi files will be accessed from your webserver
