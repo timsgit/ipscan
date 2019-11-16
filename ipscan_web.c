@@ -55,6 +55,7 @@
 // 0.35 - extern udpated
 // 0.36 - semmle re-entrant time functions added
 // 0.37 - javascript updates (removal of eval) and tidy
+// 0.38 - add log for time_r failures
 
 #include "ipscan.h"
 
@@ -69,8 +70,10 @@
 #include <time.h>
 #include <inttypes.h>
 
-// Include resultsstruct in order to generate some of the html content
-// todo extern struct rslt_struc resultsstruct[];
+// Logging with syslog requires additional include
+#if (LOGMODE == 1)
+#include <syslog.h>
+#endif
 
 void create_html_common_header(void)
 {
@@ -457,6 +460,11 @@ void create_results_key_table(char * hostname, time_t timestamp)
   	 EMAILADDRESS, hostname, tstring );
  	}
  }
+ else
+ {
+	IPSCAN_LOG( LOGPREFIX "ipscan_web: ERROR: localtime_r() in create_results_key_table() returned NULL\n");
+ }
+
  printf("The source code for this scanner is freely available at <a href=\"https://github.com/timsgit/ipscan\">github.</a></p>\n");
 
  printf("<table border=\"1\">\n");
@@ -507,7 +515,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 
  if (NULL == stptr)
  {
-	// LOG
+	IPSCAN_LOG( LOGPREFIX "ipscan_web: ERROR: ctime_r() in create_html_body() returned NULL\n");
  }
  
  printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", starttime, (int)ESTIMATEDTIMETORUN );

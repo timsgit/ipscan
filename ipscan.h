@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.73"
+	#define IPSCAN_VERNUM "1.74"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -181,6 +181,7 @@
 	// 1.72 Minor HTML fixes - robots and optional icon support
 	//      plus javascript changes to remove eval()
 	// 1.73 improved tidy_up_db() logging
+	// 1.74 add missing logs for failed time_r conversions
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
