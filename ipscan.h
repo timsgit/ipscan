@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.72"
+	#define IPSCAN_VERNUM "1.73"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -180,6 +180,7 @@
 	// 1.71 Fixes for warnings raised by Semmle (re-entrant time functions)
 	// 1.72 Minor HTML fixes - robots and optional icon support
 	//      plus javascript changes to remove eval()
+	// 1.73 improved tidy_up_db() logging
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -554,7 +555,7 @@
 	// Offset from now in seconds. All results older than (now-this) are deleted
 	// Should hardly ever be used, but ensures tests which were in progress when
 	// the server was shutdown/rebooted, etc. are deleted
-	#define IPSCAN_DELETE_TIME_OFFSET (3600)
+	#define IPSCAN_DELETE_TIME_OFFSET (300)
 
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router

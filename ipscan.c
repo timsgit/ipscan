@@ -1305,12 +1305,25 @@ else
 				i++ ;
 			}
 
-			// Delete the results now that we're done
+			// Delete our results now that we're done
 			rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
 				return(EXIT_SUCCESS);
+			}
+
+			// Call tidy_up_db() to purge any expired results 
+			if (starttime > 0)
+			{
+				#ifdef CLIENTDEBUG
+				IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db() called by client : %04x:%04x:%04x::\n",\
+                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: at starttime %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
+				#endif
+				rc = tidy_up_db( (uint64_t)starttime );
+				if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() returned %d\n", rc);
 			}
 		}
 
@@ -1871,7 +1884,6 @@ else
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
 			}
-
 		}
 
 		// *IF* we have everything we need to create the standard HTML page
