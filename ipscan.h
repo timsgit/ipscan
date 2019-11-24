@@ -278,7 +278,7 @@
 	//
 	// Client (remote) debug - signalling, etc.
 	// Primarily for troublesome Javascript clients.
-	#define CLIENTDEBUG 1
+	// #define CLIENTDEBUG 1
 
 	// Decide whether to include ping support (requires setuid which some servers don't allow)
 	// Do not modify this statement - adjust SETUID_AVAILABLE in the Makefile instead
@@ -304,7 +304,7 @@
 	// Do NOT change this value as your server's syslog may then contain personal information
 	// which you need to obtain permission to capture in order to satisfy your GDPR obligations
 	//
-	#define IPSCAN_LOGVERBOSITY 1
+	// #define IPSCAN_LOGVERBOSITY 1
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a definite security risk, so use cautiously, NEVER on an internet
