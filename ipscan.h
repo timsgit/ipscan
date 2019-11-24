@@ -50,7 +50,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.74"
+	#define IPSCAN_VERNUM "1.75"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -182,6 +182,7 @@
 	//      plus javascript changes to remove eval()
 	// 1.73 improved tidy_up_db() logging
 	// 1.74 add missing logs for failed time_r conversions
+	// 1.75 change text for initiations missing termsaccepted query
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -196,6 +197,11 @@
 	#define IPSCAN_BAD_URL_HELP 1
 	// The link that might provide some help ...
 	#define IPSCAN_BAD_URL_LINK "https://wiki.chappell-family.com/wiki/index.php?title=ScanAutomation"
+	
+	// Determine whether to offer link for restart page if terms and conditions not accepted
+	// 0=no offer, 1=offer - need to define URL too
+	#define IPSCAN_TC_MISSING_LINK 1
+	#define IPSCAN_TC_MISSING_LINK_URL "https://ipv6.chappell-family.com/ipv6tcptest/"
 
 	// URL providing description special protocol tests
 	#define IPSCAN_SPECIALTESTS_URL "https://wiki.chappell-family.com/wiki/index.php?title=IPv6_SpecialTests"
@@ -272,7 +278,7 @@
 	//
 	// Client (remote) debug - signalling, etc.
 	// Primarily for troublesome Javascript clients.
-	// #define CLIENTDEBUG 1
+	#define CLIENTDEBUG 1
 
 	// Decide whether to include ping support (requires setuid which some servers don't allow)
 	// Do not modify this statement - adjust SETUID_AVAILABLE in the Makefile instead
@@ -298,7 +304,7 @@
 	// Do NOT change this value as your server's syslog may then contain personal information
 	// which you need to obtain permission to capture in order to satisfy your GDPR obligations
 	//
-	#define IPSCAN_LOGVERBOSITY 0
+	#define IPSCAN_LOGVERBOSITY 1
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a definite security risk, so use cautiously, NEVER on an internet

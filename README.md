@@ -43,7 +43,7 @@ versions 0.90 and later. See step 4 below for details.
                     Ensure that the selected target directory exists, with appropriate permissions, before 
                     attempting to install the final executables.
          b. URIPATH - this is the request URI by which the cgi files will be accessed from your webserver
-                    e.g. https://www64.chappell-family.co.uk/cgi-bin6/ipscan-js.cgi then set URIPATH=/cgi-bin6
+                    e.g. https://www64.chappell-family.co.uk/cgi-bin6/ipscanjs.cgi then set URIPATH=/cgi-bin6
          c. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
          d. SETUID_AVAILABLE and UDP_AVAILABLE - if you're running the service on a machine where you, or
                     the web server, don't have permissions to call setuid() or create UDP sockets then these features
@@ -135,9 +135,9 @@ versions 0.90 and later. See step 4 below for details.
         depend upon your existing installation. Please consult the SELinux documentation for further details. 
           
     8.  Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
-        w3m https://www64.chappell-family.co.uk/cgi-bin6/ipscan-fast-txt.cgi 
+        w3m https://www64.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
         or: 
-        lynx https://[2001:470:971f:6::4]/cgi-bin6/ipscan-txt.cgi
+        lynx https://[2001:470:971f:6::4]/cgi-bin6/ipscantxt.cgi
 
     9.  Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
         web server error log or syslog if enabled to do so (this is NOT the default option - change 

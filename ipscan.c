@@ -68,6 +68,7 @@
 // 0.47 - yet more client debug improvements
 // 0.48 - fix compilation on platforms which don't support UDP or SUID
 // 0.49 - semmle re-entrant time function changes
+// 0.50 - add page reload for case where terms and conditions not accepted
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -664,7 +665,7 @@ else
 		}
 		else
 		{
-			termsaccepted = 0 ;
+			termsaccepted = 0;
 		}
 	}
 	else
@@ -1986,17 +1987,22 @@ else
 
 			// Tell the user that they haven't accepted the terms and conditions
 			HTML_HEADER();
-			printf("<title>IPv6 Port Scanner - Terms and Conditions MUST be accepted</title>\n");
+
+			printf("<title>IPv6 Port Scanner - Terms and Conditions MUST be accepted BEFORE use</title>\n");
 			printf("</head>\n");
+
 			printf("<body>\n");
-			printf("<h3 style=\"color:red\">IPv6 Port Scanner Terms and Conditions MUST be accepted</h3>\n");
-			printf("<p style=\"font-weight:bold\">IPscan testing cannot continue until the terms and conditions of use have been accepted.</p>\n");
-			printf("<p>You seem to have presented an incomplete or unexpected query string to IPscan.</p>\n");
+			printf("<h3 style=\"color:red\">IPv6 Port Scanner Terms and Conditions MUST be accepted BEFORE use</h3>\n");
+			printf("<p>IPscan testing cannot continue until the terms and conditions of use have been accepted. ");
+			printf("You seem to have presented an incomplete or unexpected query string to IPscan.</p>\n");
 			#if (IPSCAN_BAD_URL_HELP != 0)
 			printf("<p>If you are trying to automate IPscan operation then please see the following ");
 			printf("<a href=\"%s\">Scan Automation link</a> for commonly used examples. ", IPSCAN_BAD_URL_LINK);
 			printf("Assuming that you accept the terms and conditions of use, then you might just be missing an \
 			 \"&amp;termsaccepted=1\" term from the provided query-string.</p>\n");
+			#endif
+			#if (IPSCAN_TC_MISSING_LINK != 0)
+			printf("<p style=\"font-weight:bold\">Please <a href=\"%s\">click here</a> to start again.</p>\n", IPSCAN_TC_MISSING_LINK_URL);
 			#endif
 			// Finish the output
 			create_html_body_end();
