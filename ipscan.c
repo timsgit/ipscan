@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2019 Tim Chappell.
+//    Copyright (C) 2011-2020 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -69,6 +69,7 @@
 // 0.48 - fix compilation on platforms which don't support UDP or SUID
 // 0.49 - semmle re-entrant time function changes
 // 0.50 - add page reload for case where terms and conditions not accepted
+// 0.51 - further client debug improvements and copyright update
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -134,6 +135,9 @@ void create_html_body_end(void);
 
 // from ipscan_general
 uint64_t get_session(void);
+void proto_to_string(int proto, char * retstring);
+void fetch_to_string(int fetchnum, char * retstring);
+char * state_to_string(int statenum, char * retstringptr, int retstringfree);
 
 // create_results_key_table is only referenced if creating the text-only version of the scanner
 #if (TEXTMODE == 1)
@@ -585,13 +589,6 @@ else
 			}
 			remotehost_lsb |= value;
 		}
-
-		#ifdef DEBUG
-		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x::\n",\
-                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                         (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-		#endif
-
 	}
 }
 
@@ -1313,19 +1310,6 @@ else
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
 				return(EXIT_SUCCESS);
 			}
-
-			// Call tidy_up_db() to purge any expired results 
-			if (starttime > 0)
-			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db() called by client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at starttime %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
-				#endif
-				rc = tidy_up_db( (uint64_t)starttime );
-				if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() returned %d\n", rc);
-			}
 		}
 
 		// ----------------------------------------------------------------------
@@ -1366,77 +1350,45 @@ else
 			// Fetch running state result from database so it can be updated
 			result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
 			if ( PORTUNKNOWN == result ) IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: fetching running state\n" );
+
+			#ifdef CLIENTDEBUG
+			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
+			fetch_to_string(fetchnum, &fetchstring[0]);
+			IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated %s completion for client : %04x:%04x:%04x::\n", fetchstring,\
+                       	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                       	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
+			#endif
+
 			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
 			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated SUCCESSFUL completion for client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
-				#endif
 				// Overwrite any other bits in this ONE case
 				result = IPSCAN_TESTSTATE_COMPLETE_BIT;
 			}
 			else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
 			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated HTTP TIMEOUT completion for client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
-				#endif
 				result |= IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
 			}
 			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
 			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated UNSUCCESSFUL completion for client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
-				#endif
 				// Set COMPLETE to cause end of test, but also capture that is was a bad completion
 				result = (IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_BADCOMPLETE_BIT);
 			}
 			else if (IPSCAN_EVAL_ERROR == fetchnum)
 			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated EVAL ERROR for client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
-				#endif
         			result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
 			else if (IPSCAN_OTHER_ERROR == fetchnum)
 			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated OTHER ERROR for client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
-				#endif
 				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 			}
 			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated user NAVIGATED AWAY for client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
-				#endif
 				// Set COMPLETE to cause end of test, but also capture that the user navigated away
 				result = (IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT); 
 			}
 			else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch indicated UNEXPECTED CHANGE for client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
-				#endif
 				result |= IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
 			}
 			else
@@ -1502,7 +1454,6 @@ else
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
-			// TJC new
 			printf("<p>Initiate scan.</p>\n");
 			// Finish the output
 			create_html_body_end();
@@ -1755,8 +1706,7 @@ else
 			// Wait until the javascript client has flagged the test as complete or we've run out of time ...
 			#ifdef CLIENTDEBUG
 			char flags[IPSCAN_FLAGSBUFFER_SIZE+1];
-			char * flagsptr = flags;
-			unsigned int flagsfree = IPSCAN_FLAGSBUFFER_SIZE;
+			char * flagsrc = NULL;
 			memset(flags, 0, sizeof(flags));
 			#endif
 
@@ -1775,73 +1725,19 @@ else
 				if ( PORTUNKNOWN == result ) IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: waiting for test end\n" );
 
 				#ifdef CLIENTDEBUG
-				flagsptr = &flags[0];
-				flagsfree = IPSCAN_FLAGSBUFFER_SIZE;
-				rc = snprintf(flagsptr, flagsfree, "%s", "flags: ");
-				flagsptr += rc;
-				flagsfree -= (unsigned int)rc;
-				if (0 != (result & PORTUNKNOWN))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "UNKNOWN, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				if (0 != (result & IPSCAN_TESTSTATE_RUNNING_BIT))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "RUNNING, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				if (0 != (result & IPSCAN_TESTSTATE_COMPLETE_BIT))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "COMPLETE, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				if (0 != (result & IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "TIMEOUT, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				if (0 != (result & IPSCAN_TESTSTATE_EVALERROR_BIT))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "EVALERROR, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				if (0 != (result & IPSCAN_TESTSTATE_OTHERERROR_BIT))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "OTHERERROR, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				if (0 != (result & IPSCAN_TESTSTATE_NAVAWAY_BIT))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "NAVAWAY, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				if (0 != (result & IPSCAN_TESTSTATE_UNEXPCHANGE_BIT))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "UNEXPECTED, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				if (0 != (result & IPSCAN_TESTSTATE_BADCOMPLETE_BIT))
-				{
-					rc = snprintf(flagsptr, flagsfree, "%s", "BADCOMPLETE, ");
-					flagsptr += rc;
-					flagsfree -= (unsigned int)rc;
-				}
-				rc = snprintf(flagsptr, flagsfree, "%s", "<EOL>\n\0");
+				flagsrc = state_to_string(result, &flags[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
+
 				#if (IPSCAN_LOGVERBOSITY == 1)
 				IPSCAN_LOG( LOGPREFIX "ipscan: waiting for IPSCAN_TESTSTATE_COMPLETE, IPSCAN_TESTSTATE value is currently: %d\n", result);
 				#endif
-				IPSCAN_LOG( LOGPREFIX "ipscan: IPSCAN_TESTSTATE for client : %04x:%04x:%04x:: %s\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF), flags );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querytime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
+
+				if (NULL != flagsrc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: IPSCAN_TESTSTATE for client : %04x:%04x:%04x:: %s\n",\
+                        	 	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                        	 	 (unsigned int)((remotehost_msb>>16) & 0xFFFF), flagsrc );
+					IPSCAN_LOG( LOGPREFIX "ipscan: at querytime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
+				}
 				#endif
 
 				if (IPSCAN_TESTSTATE_COMPLETE_BIT == (result & IPSCAN_TESTSTATE_COMPLETE_BIT) \
@@ -1922,21 +1818,6 @@ else
 			#endif
 			// Create the main html body
 			create_html_body_end();
-			
-			// Tidy up the database - really only required for orphaned results
-			// e.g. caused by server shutdown whilst a scan is in progress
-			//
-			if (starttime > 0)
-			{
-				#ifdef CLIENTDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db() called by client : %04x:%04x:%04x::\n",\
-                        	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
-				#endif
-				rc = tidy_up_db( (uint64_t)starttime );
-				if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() returned %d\n", rc);
-			}
 		}
 
 		// ----------------------------------------------------------------------
@@ -2045,6 +1926,12 @@ else
 			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 			 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
 		}
+	}
+	// Call tidy_up_db() to purge any expired results 
+	if (starttime > 0)
+	{
+		rc = tidy_up_db( (uint64_t)starttime );
+		if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() returned %d\n", rc);
 	}
 	return(EXIT_SUCCESS);
 }

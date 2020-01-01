@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2019 Tim Chappell.
+//    Copyright (C) 2011-2020 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -51,6 +51,8 @@
 // 0.30 - only log number of deleted rows during tidy_up_db if >0
 // 0.31 - semmle re-entrant time functions added
 // 0.32 - add debug dump of rows about to be tidied
+// 0.33 - fix typo in summarise_db()
+// 0.34 - improved tidy_up_db debug logging, copyright update
 
 #include "ipscan.h"
 //
@@ -85,27 +87,35 @@
 
 // ----------------------------------------------------------------------------------------
 //
+// Functions from ipscan_general.c
+//
+void proto_to_string(int proto, char * retstring);
+char * state_to_string(int statenum, char * retstringptr, int retstringfree);
+void result_to_string(int result, char * retstring);
+// ----------------------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------------------
+//
 // Functions to write to the database, creating it first, if required
 //
 // ----------------------------------------------------------------------------------------
 
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost )
 {
-	// ID HOSTADDRESS DATE TIME SESSIONID PORT RESULT
 
 	// ID                 BIGINT UNSIGNED
 	//
 	// HOSTADDRESS MSB    BIGINT UNSIGNED
-	//	           LSB    BIGINT UNSIGNED
+	//	       LSB    BIGINT UNSIGNED
 	//
 	// DATE-TIME          BIGINT UNSIGNED
 	//
 	// SESSIONID          BIGINT UNSIGNED
 	//
 	// PORT               BIGINT UNSIGNED
-	//				      Multiple fields are mapped to this single entry by the calling routines.
-	//					  This includes the port, a special case indicator and the protocol.
-	//					  See ipscan.h for the field masks and shifts
+	//				  Multiple fields are mapped to this single entry by the calling routines.
+	//				  This includes the port, a special case indicator and the protocol.
+	//				  See ipscan.h for the field masks and shifts
 	//
 	// RESULT             BIGINT UNSIGNED
 	//
@@ -469,7 +479,6 @@ return (retval);
 int summarise_db(void)
 {
 
-
 	int i,rc;
 	int qrylen;
 	int retval = 0;
@@ -530,11 +539,12 @@ int summarise_db(void)
 
 							while ((row = mysql_fetch_row(result)))
 							{
-								rc=sscanf(row[0],"%"SCNu64, &value);
-								if (rc == 1) hostmsb = value; else hostmsb = 0;
+								// row[0] - id
 								rc=sscanf(row[1],"%"SCNu64, &value);
-								if (rc == 1) hostlsb = value; else hostlsb = 0;
+								if (rc == 1) hostmsb = value; else hostmsb = 0;
 								rc=sscanf(row[2],"%"SCNu64, &value);
+								if (rc == 1) hostlsb = value; else hostlsb = 0;
+								rc=sscanf(row[3],"%"SCNu64, &value);
 								if (rc == 1) createdate = (time_t)value; else createdate = 0;
 
 								value = hostmsb;
@@ -750,7 +760,7 @@ int tidy_up_db(uint64_t time_now)
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 	unsigned int num_fields;
-	int rcport, rcres, rchost;
+	int rcport, rcres, rchost, rcindhost;
 	int port, res;
 	char hostind[INET6_ADDRSTRLEN+1];
 	#endif
@@ -808,28 +818,81 @@ int tidy_up_db(uint64_t time_now)
                                                         num_fields = mysql_num_fields(result);
 							IPSCAN_LOG( LOGPREFIX "tidy_up_db: about to dump rows WHERE ( createdate <= '%"PRIu64"' )", delete_before_time);
 
+							int i, rcmsb, rclsb, rcdate, rcsess;
+							const char * rchostname;
+							uint64_t value, hostmsb, hostlsb, session ;
+							time_t createdate;
+							char createdateresult[32]; // 26 chars for ctime_r()
+							memset(&createdateresult[0],0,32);
+							char * cdptr = NULL;
+							unsigned char remotehost[sizeof(struct in6_addr)];
+							char hostname[INET6_ADDRSTRLEN+1];
+
                                                         while ((row = mysql_fetch_row(result)))
                                                         {
                                                                 if (num_fields == 8) // database includes indirect host field
                                                                 {
+									// row[0] - id
+									rcmsb=sscanf(row[1],"%"SCNu64, &value);
+	                                                                if (1 == rcmsb) hostmsb = value; else hostmsb = 0;
+	                                                                rclsb=sscanf(row[2],"%"SCNu64, &value);
+	                                                                if (1 == rclsb) hostlsb = value; else hostlsb = 0;
+	                                                                rcdate=sscanf(row[3],"%"SCNu64, &value);
+	                                                                if (1 == rcdate) createdate = (time_t)value; else createdate = 0;
+									cdptr = ctime_r(&createdate, createdateresult);
+                                                                        if (NULL == cdptr) createdateresult[0]=0;
+	                                                                rcsess=sscanf(row[4],"%"SCNu64, &value);
+	                                                                if (1 == rcsess) session = value; else session = 0;
+
+	                                                                value = hostmsb;
+	                                                                for (i=0 ; i<8 ; i++)
+	                                                                {
+       		                                                        	remotehost[7-i] = value & 0xFF;
+       		                                                        	value = (value >> 8);
+                                                                	}
+                                                                	value = hostlsb;
+                                                                	for (i=0 ; i<8 ; i++)
+                                                                	{
+                                                                        	remotehost[15-i] = value & 0xFF;
+                                                                        	value = (value >> 8);
+                                                                	}
+
+                                                                	rchostname = inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN);
                                                                         rcport = sscanf(row[5], "%d", &port);
                                                                         rcres = sscanf(row[6], "%d", &res);
-                                                                        rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
-                                                                        if ( rcres == 1 && rchost == 1 && rcport == 1 )
+                                                                        rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
+
+                                                                        if ( rcres == 1 && rcindhost == 1 && rcport == 1 && rcsess == 1 && NULL != rchostname)
                                                                         {
+										int portnum = (port >> IPSCAN_PORT_SHIFT) & IPSCAN_PORT_MASK;
                                                                                 int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
+										int special = (port >> IPSCAN_SPECIAL_SHIFT) & IPSCAN_SPECIAL_MASK;
+										char protostring[IPSCAN_PROTO_STRING_MAX+1]; 
+										char resstring[IPSCAN_RESULT_STRING_MAX+1];
+										proto_to_string(proto, &protostring[0]);
+										result_to_string(res,&resstring[0]);
                                                                                 if (IPSCAN_PROTO_TESTSTATE != proto)
                                                                                 {
-                                                                                        IPSCAN_LOG( LOGPREFIX "tidy_up_db: raw results: proto %d, port %d, result %d, host \"%s\"\n", proto, port, res, hostind);
+                                                                                        IPSCAN_LOG( LOGPREFIX "tidy_up_db: raw results: host %s, date %"PRIu64" (%s), session %"PRIu64", proto %d (%s), special %d, port %d, result %d (%s), indhost %s\n", hostname, (uint64_t)createdate, createdateresult, session, proto, protostring, special, portnum, res, resstring, hostind);
                                                                                 }
                                                                                 else
                                                                                 {
-                                                                                        IPSCAN_LOG( LOGPREFIX "tidy_up_db: TESTSTATE, port %d, result %d\n", port, res);
+											char statestring[IPSCAN_FLAGSBUFFER_SIZE+1];
+											char * staterc;
+											staterc = state_to_string(res, &statestring[0], (int)IPSCAN_FLAGSBUFFER_SIZE );
+											if (NULL != staterc)
+											{
+                                                                                        	IPSCAN_LOG( LOGPREFIX "tidy_up_db: host \"%s\", date \"%s\", TESTSTATE (%s), port %d, result %d\n", hostname, createdateresult, staterc, port, res);
+											}
+											else
+											{
+                                                                                        	IPSCAN_LOG( LOGPREFIX "tidy_up_db: host \"%s\", date \"%s\", TESTSTATE, port %d, result %d\n", hostname, createdateresult, port, res);
+											}
                                                                                 }
                                                                         }
 									else
                                                                         {
-                                                                                IPSCAN_LOG( LOGPREFIX "tidy_up_db: Unexpected row scan results - rcport = %d, rcres = %d, rchost = %d, port = %d\n", rcport, rcres, rchost, port);
+                                                                                IPSCAN_LOG( LOGPREFIX "tidy_up_db: Unexpected row scan results - rchost = %d, rcport = %d, rcres = %d, rchost = %d, port = %d\n", rchost, rcport, rcres, rchost, port);
                                                                         }
                                                                 }
                                                                 else // original database approach

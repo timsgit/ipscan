@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2019 Tim Chappell.
+//    Copyright (C) 2011-2020 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -56,6 +56,7 @@
 // 0.36 - semmle re-entrant time functions added
 // 0.37 - javascript updates (removal of eval) and tidy
 // 0.38 - add log for time_r failures
+// 0.39 - update copyright year
 
 #include "ipscan.h"
 
@@ -91,7 +92,7 @@ void create_html_common_header(void)
   printf("<link rel=\"icon\" type=\"%s\" href=\"%s\">\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
   #endif
   printf("<meta name=\"robots\" content=\"noindex, nofollow\">\n");
-  printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2019 tim chappell.\">\n");
+  printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2020 tim chappell.\">\n");
 }
 
 #ifdef IPSCAN_HTML5_ENABLED
@@ -109,7 +110,7 @@ void create_html5_common_header(void)
   printf("<link rel=\"icon\" type=\"%s\" href=\"%s\"/>\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
   #endif
   printf("<meta name=\"robots\" content=\"noindex, nofollow\"/>\n");
-  printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2019 tim chappell.\">\n");
+  printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2020 tim chappell.\">\n");
   printf("<style>\n");
   printf("body {\n");
   printf("background-color: #f0f0f2;\n");

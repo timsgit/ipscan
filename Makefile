@@ -1,6 +1,6 @@
 #    IPscan - an http-initiated IPv6 port scanner.
 #
-#    (C) Copyright 2011-2019 Tim Chappell.
+#    (C) Copyright 2011-2020 Tim Chappell.
 #
 #    This file is part of IPscan.
 #
@@ -36,6 +36,7 @@
 # 0.16 - force warnings to be errors
 # 0.17 - update copyright year
 # 0.18 - update copyright year
+# 0.19 - add debug build capability, update copyright year
 
 # Support servers where SETUID is not available
 # Set this variable to 0 if you don't have permissions to call SETUID
@@ -52,8 +53,8 @@ INCLUDES=-I/usr/include
 LIBS=
 CC=gcc
 CFLAGS=-Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O1 -D_FORTIFY_SOURCE=2
-CFLAGS+= -fstack-protector-all -Wstack-protector --param ssp-buffer-size=4 
-CFLAGS+= -ftrapv -fPIE -pie -Wl,-z,relro,-z,now 
+CFLAGS+= -fstack-protector-all -fstack-clash-protection -Wstack-protector --param ssp-buffer-size=4 
+CFLAGS+= -ftrapv -fexceptions -fPIE -fpie -Wl,-pie -Wl,-z,relro -Wl,-z,now -Werror=implicit-function-declaration 
 
 # Install location for the CGI files
 TARGETDIR=/var/www/cgi-bin6
@@ -84,11 +85,13 @@ LIBS+=$(shell mysql_config --libs)
 CFLAGS+=$(shell mysql_config --cflags)
 INCLUDES+=$(shell mysql_config --include)
 
+# No debug by default
+DEBUG=
 # Determine effective user-id - likely to work in all shells
 MYEUID=$(shell id -u)
 
 # Concatenate the necessary parameters for the two targets
-CMNPARAMS= -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\"
+CMNPARAMS= $(DEBUG) -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\"
 CMNPARAMS+= -DEXEFASTTXTNAME=\"$(FASTTXTTARGET)\" -DEXEFASTJSNAME=\"$(FASTJSTARGET)\" 
 CMNPARAMS+= -DURIPATH=\"$(URIPATH)\" -DSETUID_AVAILABLE=$(SETUID_AVAILABLE)
 CMNPARAMS+= -DUDP_AVAILABLE=$(UDP_AVAILABLE) 
@@ -111,6 +114,13 @@ FASTJSOBJS=$(patsubst %.c,%-fast-js.o,$(wildcard *.c))
 # default target builds everything
 .PHONY: all
 all : $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
+
+# debug target builds objects with debug, defined in ipscan.h, enabled
+# Not intended for production use
+.PHONY: debug
+debug : clean
+debug : DEBUG = -DDEBUG=1
+debug :	$(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 
 # Rules to build an individual text-version object and the overall text-version target
 %-txt.o: %.c $(HEADERFILES) $(DEPENDFILE)

@@ -1,6 +1,6 @@
 //    IPscan - an http-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2019 Tim Chappell.
+//    Copyright (C) 2011-2020 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -22,6 +22,11 @@
 
 #ifndef IPSCAN_H
 	#define IPSCAN_H 1
+
+	// Handle DEBUG flag
+	#ifndef DEBUG
+		#define DEBUG 0
+	#endif
 
 	// Build-mode for executable
 	// Note this is controlled by the makefile, but a default is defined here for safety
@@ -50,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.75"
+	#define IPSCAN_VERNUM "1.76"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -183,6 +188,8 @@
 	// 1.73 improved tidy_up_db() logging
 	// 1.74 add missing logs for failed time_r conversions
 	// 1.75 change text for initiations missing termsaccepted query
+	// 1.76 add a separate debug build target, 
+	//      improved client debug and copyright dates update
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -252,6 +259,12 @@
 	// DEBUG build options - uncommenting these #defines will result in copious amounts of information
 	// IMPORTANT NOTE: None of these debug options should be uncommented on internet-facing servers.
 	//
+	#if (DEBUG == 1)
+		// Common options for testing - do NOT use in production 
+		#define CLIENTDEBUG 1
+		#define IPSCAN_LOGVERBOSITY 1
+	#endif
+	//
 	// general debug:
 	// #define DEBUG 1
 	//
@@ -304,7 +317,7 @@
 	// Do NOT change this value as your server's syslog may then contain personal information
 	// which you need to obtain permission to capture in order to satisfy your GDPR obligations
 	//
-	// #define IPSCAN_LOGVERBOSITY 1
+	// #define IPSCAN_LOGVERBOSITY 0
 
 	// Enable the generation of a summary of scans page (1) or not (0)
 	// This is a definite security risk, so use cautiously, NEVER on an internet
@@ -552,6 +565,15 @@
 	#define IPSCAN_PROTO_ICMPV6 (1)
 	#define IPSCAN_PROTO_UDP (2)
 	#define IPSCAN_PROTO_TESTSTATE (3)
+
+	// Maximum length of string holding protocol name
+	#define IPSCAN_PROTO_STRING_MAX (16)
+
+	// Maximum length of string holding fetchnum result name
+	#define IPSCAN_FETCHNUM_STRING_MAX (20)
+
+	// Maximum length of string holding result name
+	#define IPSCAN_RESULT_STRING_MAX (32)
 
 	// Timeout before results are deleted ...
 	#define IPSCAN_DELETE_TIMEOUT (180)
