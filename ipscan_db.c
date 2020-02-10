@@ -53,6 +53,8 @@
 // 0.32 - add debug dump of rows about to be tidied
 // 0.33 - fix typo in summarise_db()
 // 0.34 - improved tidy_up_db debug logging, copyright update
+// 0.35 - removed summarise_db() functionality
+// 0.36 - add update_db() for use in place of write_db() for IPSCAN_TESTSTATE monitoring
 
 #include "ipscan.h"
 //
@@ -75,7 +77,7 @@
 
 // Logging with syslog requires additional include
 #if (LOGMODE == 1)
-	#include <syslog.h>
+#include <syslog.h>
 #endif
 
 // String comparison
@@ -157,10 +159,10 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				{
 					#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
 					// Use memory engine - ensures sensitive data does not persist if MySQL is stopped/restarted
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '', PRIMARY KEY (id) ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#else
 					// Use the default engine - sensitive data may persist until next tidy_up_db() call
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED , hostlsb BIGINT UNSIGNED, createdate BIGINT UNSIGNED, session BIGINT UNSIGNED, portnum BIGINT UNSIGNED, portresult BIGINT UNSIGNED, indhost VARCHAR(%d), PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '', PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#endif
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
@@ -181,7 +183,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 								else
 								{
 									IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute insert query %d (%s)\n",\
-									mysql_errno(connection), mysql_error(connection) );
+											mysql_errno(connection), mysql_error(connection) );
 									retval = 7;
 								}
 							}
@@ -337,9 +339,9 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							printf(" -9999, -9999, \"::1\" ]\n");
 							mysql_free_result(result);
 							#ifdef RESULTSDEBUG
-								#if (IPSCAN_LOGVERBOSITY == 1)
-								IPSCAN_LOG( LOGPREFIX "dump_db: reported %d actual results to the client.\n", nump);
-								#endif
+							#if (IPSCAN_LOGVERBOSITY == 1)
+							IPSCAN_LOG( LOGPREFIX "dump_db: reported %d actual results to the client.\n", nump);
+							#endif
 							#endif
 						}
 						else
@@ -377,7 +379,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			retval = 9;
 		}
 	}
-return (retval);
+	return (retval);
 }
 // ----------------------------------------------------------------------------------------
 //
@@ -437,9 +439,9 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						else
 						{
 							#ifdef CLIENTDEBUG
-							IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld rows for %04x:%04x:%04x:: from %s database.\n",\
-								(long)affected_rows, (unsigned int)((host_msb>>48)&0xFFFF),\
-								(unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF), MYSQL_TBLNAME);
+							IPSCAN_LOG( LOGPREFIX "delete_from_db: Deleted %ld rows for %x:%x:%x:: from %s database.\n",\
+									(long)affected_rows, (unsigned int)((host_msb>>48)&0xFFFF),\
+									(unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF), MYSQL_TBLNAME);
 							IPSCAN_LOG( LOGPREFIX "delete_from_db: Timestamp %"PRIu64", session %"PRIu64"\n", timestamp, session);
 							#endif
 						}
@@ -465,154 +467,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			retval = 9;
 		}
 	}
-return (retval);
-}
-
-
-// ----------------------------------------------------------------------------------------
-//
-// Functions to summarise the database
-//
-// ----------------------------------------------------------------------------------------
-
-
-int summarise_db(void)
-{
-
-	int i,rc;
-	int qrylen;
-	int retval = 0;
-	char query[MAXDBQUERYSIZE];
-	MYSQL *connection;
-	MYSQL *mysqlrc;
-	MYSQL_RES *result;
-	MYSQL_ROW row;
-
-	uint64_t value, hostmsb, hostlsb ;
-	time_t createdate;
-	char createdateresult[32]; // 26 chars for ctime_r()
-	char * cdptr = NULL;
-
-	unsigned char remotehost[sizeof(struct in6_addr)];
-	char hostname[INET6_ADDRSTRLEN];
-
-	connection = mysql_init(NULL);
-	if (NULL == connection)
-	{
-		IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to initialise MySQL\n");
-		retval = 1;
-	}
-	else
-	{
-		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
-		// in the my.cnf file which ensures that your program works, even if someone has set
-		// up MySQL in some nonstandard way.
-		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
-		if (0 == rc)
-		{
-
-			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
-			if (NULL == mysqlrc)
-			{
-				IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-				IPSCAN_LOG( LOGPREFIX "summarise_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
-				retval = 3;
-			}
-			else
-			{
-
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT hostmsb, hostlsb, createdate FROM `%s` GROUP BY createdate ORDER BY createdate", MYSQL_TBLNAME);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					#ifdef DBDEBUG
-					IPSCAN_LOG( LOGPREFIX "summarise_db: MySQL Query is : %s\n", query);
-					#endif
-					rc = mysql_real_query(connection, query, qrylen);
-					if (0 == rc)
-					{
-						result = mysql_store_result(connection);
-						if (result)
-						{
-
-							printf("<table border=\"1\">\n");
-							printf("<tr style=\"text-align:center\"><td width=\"50%%\">Host scanned:</td><td width=\"50%%\">Scan begin time:</td></tr>\n");
-
-							while ((row = mysql_fetch_row(result)))
-							{
-								// row[0] - id
-								rc=sscanf(row[1],"%"SCNu64, &value);
-								if (rc == 1) hostmsb = value; else hostmsb = 0;
-								rc=sscanf(row[2],"%"SCNu64, &value);
-								if (rc == 1) hostlsb = value; else hostlsb = 0;
-								rc=sscanf(row[3],"%"SCNu64, &value);
-								if (rc == 1) createdate = (time_t)value; else createdate = 0;
-
-								value = hostmsb;
-								for (i=0 ; i<8 ; i++)
-								{
-									remotehost[7-i] = value & 0xFF;
-									value = (value >> 8);
-								}
-								value = hostlsb;
-								for (i=0 ; i<8 ; i++)
-								{
-									remotehost[15-i] = value & 0xFF;
-									value = (value >> 8);
-								}
-
-								if (inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN) != NULL)
-								{
-									cdptr = ctime_r(&createdate, createdateresult);
-									if (NULL == cdptr) createdateresult[0]=0;
-									printf("<tr style=\"text-align:center\">\n");
-									printf("<td width=\"50%%\">%s</td>", hostname);
-									printf("<td width=\"50%%\">%s</td>\n", createdateresult);
-									printf("</tr>\n");
-								}
-							}
-
-							printf("</table>\n");
-
-							mysql_free_result(result);
-						}
-						else
-						{
-							// Didn't get any results, so check if we should have got some
-							if (mysql_field_count(connection) == 0)
-							{
-								IPSCAN_LOG( LOGPREFIX "summarise_db: surprisingly mysql_store_result() expected to return 0 fields\n");
-							}
-							else
-							{
-								IPSCAN_LOG( LOGPREFIX "summarise_db: mysql_store_result() error : %s\n", mysql_error(connection));
-								retval = 10;
-							}
-						}
-					}
-					else
-					{
-						IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to execute select query\n");
-						retval = 5;
-					}
-				}
-				else
-				{
-					IPSCAN_LOG( LOGPREFIX "summarise_db: Failed to create select query\n");
-					retval = 4;
-				}
-
-				mysql_commit(connection);
-				mysql_close(connection);
-			}
-		}
-		else
-		{
-			IPSCAN_LOG( LOGPREFIX "summarise_db: mysql_options() failed - check your my.cnf file\n");
-			retval = 9;
-		}
-	}
-
-return (retval);
+	return (retval);
 }
 
 
@@ -730,12 +585,12 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 		}
 	}
 
-if (PORTUNKNOWN == retres)
-{
-	IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: about to exit with PORTUNKNOWN return code\n");
-}
+	if (PORTUNKNOWN == retres)
+	{
+		IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: about to exit with PORTUNKNOWN return code\n");
+	}
 
-return (retres);
+	return (retres);
 }
 
 // ----------------------------------------------------------------------------------------
@@ -756,7 +611,7 @@ int tidy_up_db(uint64_t time_now)
 	// Only need these variables if we're going to report the records
 	// to be deleted during tidy_up_db()
 	//
-	#if (IPSCAN_LOGVERBOSITY == 1)
+	#if (DBDEBUG == 1)
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 	unsigned int num_fields;
@@ -798,24 +653,23 @@ int tidy_up_db(uint64_t time_now)
 			}
 			else
 			{
-				#if (IPSCAN_LOGVERBOSITY == 1)
+				#if (DBDEBUG == 1)
 				//
 				// Select and report old (expired) results - SELECT * FROM t1 WHERE ( createdate <= delete_before_time );
 				//
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( createdate <= '%"PRIu64"' )", MYSQL_TBLNAME, delete_before_time);
-                                if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-                                {
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				{
 
-                                        #ifdef DBDEBUG
-                                        IPSCAN_LOG( LOGPREFIX "tidy_up_db: MySQL SELECT query is : %s\n", query);
-                                        #endif
-                                        rc = mysql_real_query(connection, query, qrylen);
-                                        if (0 == rc)
-                                        {
-                                                result = mysql_store_result(connection);
-                                                if (result)
-                                                {
-                                                        num_fields = mysql_num_fields(result);
+					IPSCAN_LOG( LOGPREFIX "tidy_up_db: MySQL SELECT query is : %s\n", query);
+
+					rc = mysql_real_query(connection, query, qrylen);
+					if (0 == rc)
+					{
+						result = mysql_store_result(connection);
+						if (result)
+						{
+							num_fields = mysql_num_fields(result);
 							IPSCAN_LOG( LOGPREFIX "tidy_up_db: about to dump rows WHERE ( createdate <= '%"PRIu64"' )", delete_before_time);
 
 							int i, rcmsb, rclsb, rcdate, rcsess;
@@ -828,80 +682,80 @@ int tidy_up_db(uint64_t time_now)
 							unsigned char remotehost[sizeof(struct in6_addr)];
 							char hostname[INET6_ADDRSTRLEN+1];
 
-                                                        while ((row = mysql_fetch_row(result)))
-                                                        {
-                                                                if (num_fields == 8) // database includes indirect host field
-                                                                {
+							while ((row = mysql_fetch_row(result)))
+							{
+								if (num_fields == 8) // database includes indirect host field
+								{
 									// row[0] - id
 									rcmsb=sscanf(row[1],"%"SCNu64, &value);
-	                                                                if (1 == rcmsb) hostmsb = value; else hostmsb = 0;
-	                                                                rclsb=sscanf(row[2],"%"SCNu64, &value);
-	                                                                if (1 == rclsb) hostlsb = value; else hostlsb = 0;
-	                                                                rcdate=sscanf(row[3],"%"SCNu64, &value);
-	                                                                if (1 == rcdate) createdate = (time_t)value; else createdate = 0;
+									if (1 == rcmsb) hostmsb = value; else hostmsb = 0ULL;
+									rclsb=sscanf(row[2],"%"SCNu64, &value);
+									if (1 == rclsb) hostlsb = value; else hostlsb = 0ULL;
+									rcdate=sscanf(row[3],"%"SCNu64, &value);
+									if (1 == rcdate) createdate = (time_t)value; else createdate = 0;
 									cdptr = ctime_r(&createdate, createdateresult);
-                                                                        if (NULL == cdptr) createdateresult[0]=0;
-	                                                                rcsess=sscanf(row[4],"%"SCNu64, &value);
-	                                                                if (1 == rcsess) session = value; else session = 0;
+									if (NULL == cdptr) createdateresult[0]=0;
+									rcsess=sscanf(row[4],"%"SCNu64, &value);
+									if (1 == rcsess) session = value; else session = 0ULL;
 
-	                                                                value = hostmsb;
-	                                                                for (i=0 ; i<8 ; i++)
-	                                                                {
-       		                                                        	remotehost[7-i] = value & 0xFF;
-       		                                                        	value = (value >> 8);
-                                                                	}
-                                                                	value = hostlsb;
-                                                                	for (i=0 ; i<8 ; i++)
-                                                                	{
-                                                                        	remotehost[15-i] = value & 0xFF;
-                                                                        	value = (value >> 8);
-                                                                	}
+									value = hostmsb;
+									for (i=0 ; i<8 ; i++)
+									{
+										remotehost[7-i] = value & 0xFF;
+										value = (value >> 8);
+									}
+									value = hostlsb;
+									for (i=0 ; i<8 ; i++)
+									{
+										remotehost[15-i] = value & 0xFF;
+										value = (value >> 8);
+									}
 
-                                                                	rchostname = inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN);
-                                                                        rcport = sscanf(row[5], "%d", &port);
-                                                                        rcres = sscanf(row[6], "%d", &res);
-                                                                        rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
+									rchostname = inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN);
+									rcport = sscanf(row[5], "%d", &port);
+									rcres = sscanf(row[6], "%d", &res);
+									rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 
-                                                                        if ( rcres == 1 && rcindhost == 1 && rcport == 1 && rcsess == 1 && NULL != rchostname)
-                                                                        {
+									if ( rcres == 1 && rcindhost == 1 && rcport == 1 && rcsess == 1 && NULL != rchostname)
+									{
 										int portnum = (port >> IPSCAN_PORT_SHIFT) & IPSCAN_PORT_MASK;
-                                                                                int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
+										int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
 										int special = (port >> IPSCAN_SPECIAL_SHIFT) & IPSCAN_SPECIAL_MASK;
 										char protostring[IPSCAN_PROTO_STRING_MAX+1]; 
 										char resstring[IPSCAN_RESULT_STRING_MAX+1];
 										proto_to_string(proto, &protostring[0]);
 										result_to_string(res,&resstring[0]);
-                                                                                if (IPSCAN_PROTO_TESTSTATE != proto)
-                                                                                {
-                                                                                        IPSCAN_LOG( LOGPREFIX "tidy_up_db: raw results: host %s, date %"PRIu64" (%s), session %"PRIu64", proto %d (%s), special %d, port %d, result %d (%s), indhost %s\n", hostname, (uint64_t)createdate, createdateresult, session, proto, protostring, special, portnum, res, resstring, hostind);
-                                                                                }
-                                                                                else
-                                                                                {
+										if (IPSCAN_PROTO_TESTSTATE != proto)
+										{
+											IPSCAN_LOG( LOGPREFIX "tidy_up_db: raw results: host %s, date %"PRIu64" (%s), session %"PRIu64", proto %d (%s), special %d, port %d, result %d (%s), indhost %s\n", hostname, (uint64_t)createdate, createdateresult, session, proto, protostring, special, portnum, res, resstring, hostind);
+										}
+										else
+										{
 											char statestring[IPSCAN_FLAGSBUFFER_SIZE+1];
 											char * staterc;
 											staterc = state_to_string(res, &statestring[0], (int)IPSCAN_FLAGSBUFFER_SIZE );
 											if (NULL != staterc)
 											{
-                                                                                        	IPSCAN_LOG( LOGPREFIX "tidy_up_db: host \"%s\", date \"%s\", TESTSTATE (%s), port %d, result %d\n", hostname, createdateresult, staterc, port, res);
+												IPSCAN_LOG( LOGPREFIX "tidy_up_db: host \"%s\", date \"%s\", TESTSTATE (%s), port %d, result %d\n", hostname, createdateresult, staterc, port, res);
 											}
 											else
 											{
-                                                                                        	IPSCAN_LOG( LOGPREFIX "tidy_up_db: host \"%s\", date \"%s\", TESTSTATE, port %d, result %d\n", hostname, createdateresult, port, res);
+												IPSCAN_LOG( LOGPREFIX "tidy_up_db: host \"%s\", date \"%s\", TESTSTATE, port %d, result %d\n", hostname, createdateresult, port, res);
 											}
-                                                                                }
-                                                                        }
+										}
+									}
 									else
-                                                                        {
-                                                                                IPSCAN_LOG( LOGPREFIX "tidy_up_db: Unexpected row scan results - rchost = %d, rcport = %d, rcres = %d, rchost = %d, port = %d\n", rchost, rcport, rcres, rchost, port);
-                                                                        }
-                                                                }
-                                                                else // original database approach
-                                                                {
-                                                                        IPSCAN_LOG( LOGPREFIX "tidy_up_db: MySQL returned num_fields : %d\n", num_fields);
-                                                                        IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
+									{
+										IPSCAN_LOG( LOGPREFIX "tidy_up_db: Unexpected row scan results - rchost = %d, rcport = %d, rcres = %d, rchost = %d, port = %d\n", rchost, rcport, rcres, rchost, port);
+									}
+								}
+								else // original database approach
+								{
+									IPSCAN_LOG( LOGPREFIX "tidy_up_db: MySQL returned num_fields : %d\n", num_fields);
+									IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
 									retval = 5;
-                                                                }
-                                                        }
+								}
+							}
 							IPSCAN_LOG( LOGPREFIX "tidy_up_db:   end of dump rows WHERE ( createdate <= '%"PRIu64"' )", delete_before_time);
 						}
 						else
@@ -911,7 +765,7 @@ int tidy_up_db(uint64_t time_now)
 					}
 					else
 					{
-							IPSCAN_LOG( LOGPREFIX "tidy_up_db: select failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						IPSCAN_LOG( LOGPREFIX "tidy_up_db: select failed, returned %d (%s).\n", rc, mysql_error(connection) );
 					}
 				}
 				else
@@ -968,5 +822,134 @@ int tidy_up_db(uint64_t time_now)
 			retval = 9;
 		}
 	}
-return (retval);
+	return (retval);
+}
+
+
+// ----------------------------------------------------------------------------------------
+//
+// Function to update the database, creating it first, if required
+//
+// ----------------------------------------------------------------------------------------
+
+int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost )
+{
+
+	// ID                 BIGINT UNSIGNED
+	//
+	// HOSTADDRESS MSB    BIGINT UNSIGNED
+	//	       LSB    BIGINT UNSIGNED
+	//
+	// DATE-TIME          BIGINT UNSIGNED
+	//
+	// SESSIONID          BIGINT UNSIGNED
+	//
+	// PORT               BIGINT UNSIGNED
+	//				  Multiple fields are mapped to this single entry by the calling routines.
+	//				  This includes the port, a special case indicator and the protocol.
+	//				  See ipscan.h for the field masks and shifts
+	//
+	// RESULT             BIGINT UNSIGNED
+	//
+	// INDHOST            VARCHAR(INET6_ADDRSTRLEN+1)
+
+	int rc;
+	int qrylen;
+	int retval = -1; // do not change this
+	char query[MAXDBQUERYSIZE];
+	MYSQL *connection;
+	MYSQL *mysqlrc;
+
+	connection = mysql_init(NULL);
+	if (NULL == connection)
+	{
+		IPSCAN_LOG( LOGPREFIX "update_db: Failed to initialise MySQL\n");
+		retval = 1;
+	}
+	else
+	{
+		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
+		// in the my.cnf file which ensures that your program works, even if someone has set
+		// up MySQL in some nonstandard way.
+		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
+		if (0 == rc)
+		{
+
+			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			if (NULL == mysqlrc)
+			{
+				IPSCAN_LOG( LOGPREFIX "update_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
+				IPSCAN_LOG( LOGPREFIX "update_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				retval = 3;
+			}
+			else
+			{
+				// retval defaults to -1, and is set to other values if an error condition occurs
+				if (retval < 0)
+				{
+					#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
+					// Use memory engine - ensures sensitive data does not persist if MySQL is stopped/restarted
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '', PRIMARY KEY (id) ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					#else
+					// Use the default engine - sensitive data may persist until next tidy_up_db() call
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '', PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					#endif
+					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+					{
+						rc = mysql_real_query(connection, query, qrylen);
+						if (0 == rc)
+						{
+							qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` set portresult = '%d' WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%u' AND indhost = '%s' )" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port, indirecthost);
+							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+							{
+								#ifdef DBDEBUG
+								IPSCAN_LOG( LOGPREFIX "update_db: MySQL Query is : %s\n", query);
+								#endif
+								rc = mysql_real_query(connection, query, qrylen);
+								if (0 == rc)
+								{
+									retval = 0;
+								}
+								else
+								{
+									IPSCAN_LOG( LOGPREFIX "update_db: Failed to execute insert query %d (%s)\n",\
+											mysql_errno(connection), mysql_error(connection) );
+									retval = 7;
+								}
+							}
+							else
+							{
+								IPSCAN_LOG( LOGPREFIX "update_db: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+								retval = 8;
+							}
+						}
+						else
+						{
+							IPSCAN_LOG( LOGPREFIX "update_db: Failed to execute create_table query %d (%s)\n",\
+									mysql_errno(connection), mysql_error(connection) );
+							retval = 6;
+						}
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "update_db: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+						retval = 5;
+					}
+				} // matches with retval < 0
+			} // Matches with main else
+		} // MySQL options
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "update_db: mysql_options() failed - check your my.cnf file\n");
+			retval = 2;
+		}
+		// Tidy up
+		mysql_commit(connection);
+		mysql_close(connection);
+	}
+
+	#ifdef DBDEBUG
+	if (0 != retval) IPSCAN_LOG( LOGPREFIX "update_db: returning with retval = %d\n",retval);
+	#endif
+	return (retval);
 }

@@ -54,11 +54,8 @@
 
 // Logging with syslog requires additional include
 #if (LOGMODE == 1)
-	#include <syslog.h>
+#include <syslog.h>
 #endif
-
-// Include externals : resultsstruct
-// todo extern struct rslt_struc resultsstruct[];
 
 // Others that FreeBSD highlighted
 #include <netinet/in.h>
@@ -211,12 +208,12 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 					if (0 != special)
 					{
 						IPSCAN_LOG( LOGPREFIX "check_tcp_port: connect unexpected response, errno is : %d (%s) for host %s port %d:%d\n", \
-							errsv, strerror(errsv), hostname, port, special);
+								errsv, strerror(errsv), hostname, port, special);
 					}
 					else
 					{
 						IPSCAN_LOG( LOGPREFIX "check_tcp_port: connect unexpected response, errno is : %d (%s) for host %s port %d\n", \
-							errsv, strerror(errsv), hostname, port);
+								errsv, strerror(errsv), hostname, port);
 					}
 					retval = PORTUNEXPECTED;
 				}

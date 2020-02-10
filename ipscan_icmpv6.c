@@ -53,11 +53,8 @@
 
 // Logging with syslog requires additional include
 #if (LOGMODE == 1)
-	#include <syslog.h>
+#include <syslog.h>
 #endif
-
-// Include externals : resultsstruct
-// todo extern struct rslt_struc resultsstruct[];
 
 // Others that FreeBSD highlighted
 #include <netinet/in.h>
@@ -189,60 +186,60 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	// run with ROOT privileges, keep section to a minimum
 	if (retval == PORTUNKNOWN)
 	{
-			sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+		sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+		errsv = errno;
+		if (sock < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: socket: Error : %s (%d) for host %s\n", strerror(errsv), errsv, hostname);
+			retval = PORTINTERROR;
+		}
+		else
+		{
+			memset(&timeout, 0, sizeof(timeout));
+			timeout.tv_sec = TIMEOUTSECS;
+			timeout.tv_usec = TIMEOUTMICROSECS;
+
+			rc = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 			errsv = errno;
-			if (sock < 0)
+			if (rc < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: socket: Error : %s (%d) for host %s\n", strerror(errsv), errsv, hostname);
+				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
 				retval = PORTINTERROR;
 			}
-			else
+
+			memset(&timeout, 0, sizeof(timeout));
+			timeout.tv_sec = TIMEOUTSECS;
+			timeout.tv_usec = TIMEOUTMICROSECS;
+
+			rc = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+			errsv = errno;
+			if (rc < 0)
 			{
-				memset(&timeout, 0, sizeof(timeout));
-				timeout.tv_sec = TIMEOUTSECS;
-				timeout.tv_usec = TIMEOUTMICROSECS;
+				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
+				retval = PORTINTERROR;
+			}
 
-				rc = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-				errsv = errno;
-				if (rc < 0)
-				{
-					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
-					retval = PORTINTERROR;
-				}
+			// Filter out everything except the responses we're looking for
+			// taken from RFC3542
+			ICMP6_FILTER_SETBLOCKALL(&myfilter);
+			ICMP6_FILTER_SETPASS(ICMP6_ECHO_REPLY, &myfilter);
+			ICMP6_FILTER_SETPASS(ICMP6_DST_UNREACH, &myfilter);
+			ICMP6_FILTER_SETPASS(ICMP6_PARAM_PROB, &myfilter);
+			ICMP6_FILTER_SETPASS(ICMP6_TIME_EXCEEDED, &myfilter);
+			ICMP6_FILTER_SETPASS(ICMP6_PACKET_TOO_BIG, &myfilter);
+			rc = setsockopt(sock, IPPROTO_ICMPV6, ICMP6_FILTER, &myfilter, sizeof(myfilter));
+			errsv = errno;
+			if (rc < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: setsockopt: Error setting ICMPv6 filter: %s (%d)\n", strerror(errsv), errsv);
+				retval = PORTINTERROR;
+			}
 
-				memset(&timeout, 0, sizeof(timeout));
-				timeout.tv_sec = TIMEOUTSECS;
-				timeout.tv_usec = TIMEOUTMICROSECS;
+			#ifdef PINGDEBUG
+			IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Exiting privileged user code section\n");
+			#endif
 
-				rc = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-				errsv = errno;
-				if (rc < 0)
-				{
-					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
-					retval = PORTINTERROR;
-				}
-
-				// Filter out everything except the responses we're looking for
-				// taken from RFC3542
-				ICMP6_FILTER_SETBLOCKALL(&myfilter);
-				ICMP6_FILTER_SETPASS(ICMP6_ECHO_REPLY, &myfilter);
-				ICMP6_FILTER_SETPASS(ICMP6_DST_UNREACH, &myfilter);
-				ICMP6_FILTER_SETPASS(ICMP6_PARAM_PROB, &myfilter);
-				ICMP6_FILTER_SETPASS(ICMP6_TIME_EXCEEDED, &myfilter);
-				ICMP6_FILTER_SETPASS(ICMP6_PACKET_TOO_BIG, &myfilter);
-				rc = setsockopt(sock, IPPROTO_ICMPV6, ICMP6_FILTER, &myfilter, sizeof(myfilter));
-				errsv = errno;
-				if (rc < 0)
-				{
-					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: setsockopt: Error setting ICMPv6 filter: %s (%d)\n", strerror(errsv), errsv);
-					retval = PORTINTERROR;
-				}
-
-				#ifdef PINGDEBUG
-				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Exiting privileged user code section\n");
-				#endif
-
-			} // end if (socket created successfully)
+		} // end if (socket created successfully)
 	}
 
 	// END OF ROOT PRIVILEGES - Revert to previous privilege level
@@ -683,7 +680,6 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				{
 					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: DISCARD: OUTER address mismatch with INNER unexpected size : %d\n", rxpacketsize);
-
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: OUTER packet details: src %s; type %d; code %d; id %d; seqno %d\n", router, rxicmp6_type, rxicmp6_code, rxid, rxseqno);
 					#endif
 					continue;
@@ -691,7 +687,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 			}
 
-            		//
+			//
 			// Check what type of ICMPv6 packet we received and set return value appropriately ...
 			//
 			if (rxicmp6_type == ICMP6_ECHO_REPLY)

@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.76"
+	#define IPSCAN_VERNUM "1.78"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -190,6 +190,8 @@
 	// 1.75 change text for initiations missing termsaccepted query
 	// 1.76 add a separate debug build target, 
 	//      improved client debug and copyright dates update
+	// 1.77 Removed summarise_db() functionality - no longer used or desirable
+	// 1.78 Add update_db to correctly handle test state logging
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -265,9 +267,6 @@
 		#define IPSCAN_LOGVERBOSITY 1
 	#endif
 	//
-	// general debug:
-	// #define DEBUG 1
-	//
 	// database related debug:
 	// #define DBDEBUG 1
 	//
@@ -318,17 +317,6 @@
 	// which you need to obtain permission to capture in order to satisfy your GDPR obligations
 	//
 	// #define IPSCAN_LOGVERBOSITY 0
-
-	// Enable the generation of a summary of scans page (1) or not (0)
-	// This is a definite security risk, so use cautiously, NEVER on an internet
-	// facing host and definitely choose a new value for MAGICSUMMARY before
-	// enabling it! if enabled then access is available using an URL similar to:
-	// http://ipv6.example.com/cgi-bin6/ipscan-txt.cgi?magic=<MAGICSUMMARY value>
-	#define SUMMARYENABLE 0
-
-	// *** PLEASE CHANGE THIS MAGICSUMMARY VALUE BEFORE ENABLING ***
-	// Magic number requesting a scan summary
-	#define MAGICSUMMARY -999123
 
 	// Magic number requesting the start of a scan
 	#define MAGICBEGIN 123456

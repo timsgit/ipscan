@@ -41,14 +41,14 @@
 #include "ipscan.h"
 
 #ifndef IPSCAN_PORTLIST_H
-	#define IPSCAN_PORTLIST_H 1
+#define IPSCAN_PORTLIST_H 1
 
-	// Determine the default list of ports to be tested
-	// Note: each entry includes its port number followed by
-	// a text description (up to PORTDESCSIZE-1 characters long)
-	//
-	struct portlist_struc defportlist[] =
-	{
+// Determine the default list of ports to be tested
+// Note: each entry includes its port number followed by
+// a text description (up to PORTDESCSIZE-1 characters long)
+//
+struct portlist_struc defportlist[] =
+{
 		{    7, 0, "Echo"},\
 		{   21, 0, "FTP" },\
 		{   22, 0, "SSH" },\
@@ -106,40 +106,40 @@
 		{ 9090, 0, "WebSM" },\
 		{10243, 0, "Microsoft WMP HTTP"},\
 		{11211, 0, "memcache" },\
-                {16992, 0, "Intel AMT SOAP/HTTP"},\
-                {16993, 0, "Intel AMT SOAP/HTTPS"},\
-                {16994, 0, "Intel AMT Redir/TCP"},\
-                {16995, 0, "Intel AMT Redir/TLS"},\
+		{16992, 0, "Intel AMT SOAP/HTTP"},\
+		{16993, 0, "Intel AMT SOAP/HTTPS"},\
+		{16994, 0, "Intel AMT Redir/TCP"},\
+		{16995, 0, "Intel AMT Redir/TLS"},\
 		{32764, 0, "Router Backdoor"}\
-	};
+};
 
 
-	// Calculate and record the number of default ports to be tested
-	#define DEFNUMPORTS ( sizeof(defportlist) / sizeof(struct portlist_struc) )
+// Calculate and record the number of default ports to be tested
+#define DEFNUMPORTS ( sizeof(defportlist) / sizeof(struct portlist_struc) )
 
-	struct portlist_struc udpportlist[] =
-		{
-			{   53, 0, "DNS" },\
-			{   69, 0, "TFTP" },\
-			{  123, 0, "NTP" },\
-			{  123, 1, "NTP MONLIST" },\
-			{  161, 0, "SNMPv1" },\
-			{  161, 1, "SNMPv2c" },\
-			{  161, 2, "SNMPv3" },\
-			{  500, 0, "IKEv2 SA_INIT" },\
-			{  521, 0, "RIPng" },\
-			{  547, 0, "DHCPv6" },\
-			{ 1900, 0, "UPnP SSDP" },\
-			{ 3503, 0, "MPLS LSP Ping" },\
-			{ 4500, 0, "IKEv2 NAT-T SA_INIT" },\
-			{11211, 0, "memcache ASCII" },\
-			{11211, 1, "memcache binary" },\
-		};
+struct portlist_struc udpportlist[] =
+{
+		{   53, 0, "DNS" },\
+		{   69, 0, "TFTP" },\
+		{  123, 0, "NTP" },\
+		{  123, 1, "NTP MONLIST" },\
+		{  161, 0, "SNMPv1" },\
+		{  161, 1, "SNMPv2c" },\
+		{  161, 2, "SNMPv3" },\
+		{  500, 0, "IKEv2 SA_INIT" },\
+		{  521, 0, "RIPng" },\
+		{  547, 0, "DHCPv6" },\
+		{ 1900, 0, "UPnP SSDP" },\
+		{ 3503, 0, "MPLS LSP Ping" },\
+		{ 4500, 0, "IKEv2 NAT-T SA_INIT" },\
+		{11211, 0, "memcache ASCII" },\
+		{11211, 1, "memcache binary" },\
+};
 
 #if (IPSCAN_INCLUDE_UDP == 1)
-	#define NUMUDPPORTS ( sizeof(udpportlist) / sizeof(struct portlist_struc) )
+#define NUMUDPPORTS ( sizeof(udpportlist) / sizeof(struct portlist_struc) )
 #else
-	#define NUMUDPPORTS 0
+#define NUMUDPPORTS 0
 #endif
 
 #endif /* IPSCAN_PORTLIST_H */

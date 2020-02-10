@@ -68,7 +68,7 @@
 
 // Logging with syslog requires additional include
 #if (LOGMODE == 1)
-	#include <syslog.h>
+#include <syslog.h>
 #endif
 
 // gettimeofday()
@@ -76,9 +76,6 @@
 
 // getifaddrs()
 #include <ifaddrs.h>
-
-// Include externals : resultsstruct
-// todo extern struct rslt_struc resultsstruct[];
 
 // Link layer
 #include <linux/if_packet.h>
@@ -117,7 +114,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	// was int rc = 0, i;
 	int rc = 0;
-	unsigned int i;
+	unsigned int i = 0;
 	const char * rccharptr;
 	int fd = -1;
 
@@ -293,59 +290,75 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		switch (port)
 		{
 
-			// DNS query
-			case 53:
-			{
-				// Host name to query
-				char dnsquery1[] = "www6";
-				char dnsquery2[] = "chappell-family";
-				char dnsquery3[] = "co";
-				char dnsquery4[] = "uk";
+		// DNS query
+		case 53:
+		{
+			// Host name to query
+			char dnsquery1[] = "www6";
+			char dnsquery2[] = "chappell-family";
+			char dnsquery3[] = "co";
+			char dnsquery4[] = "uk";
 
-				/*
+			/*
 				Header - 12 bytes
 				Contains fields that describe the type of message and provide important information about it.
 				Also contains fields that indicate the number of entries in the other sections of the message.
-				Question carries one or more “questions”, that is, queries for information being sent to a DNS name server.
+				Question carries one or more ï¿½questionsï¿½, that is, queries for information being sent to a DNS name server.
 				Answer carries one or more resource records that answer the question(s) indicated in the Question section above.
 				Authority contains one or more resource records that point to authoritative name servers that can be used to
 				continue the resolution process.
 				Additional conveys one or more resource records that contain additional information related to the query that
 				is not strictly necessary to answer the queries (questions) in the message.
-				*/
-				len = 0;
-				// ID - identifier - 16 bit field
-				txmessage[len++]= 21;
-				txmessage[len++]= 6;
-				// QR - query/response flag - 0=query. 1 bit field
-				// OP - opcode - 0=query,2=status. 4 bit field
-				// AA - Authoritative Answer flag. 1 bit field
-				// TC - truncation flag. 1 bit field
-				// RD - recursion desired - 0=not desired, 1=desired. 1 bit field
-				// RA - recursion available. 1 bit field
-				// Z  - reserved. 3 bit field
-				// Rcode - result code - 0=no error, 4=not implemented
-				txmessage[len++]= 1; // 0=Standard Query, 1=Recursion, 16 for server status query
-				txmessage[len++]= 0;
-				// QDCOUNT - question count - 16 bit field
-				txmessage[len++]= 0;
-				txmessage[len++]= 1;
-				// ANCOUNT - answer record count - 16 bit field
-				txmessage[len++]= 0;
-				txmessage[len++]= 0;
-				// NSCOUNT - authority record count (NS=name server) - 16 bit field
-				txmessage[len++]= 0;
-				txmessage[len++]= 0;
-				// ARCOUNT - 16 bit field
-				txmessage[len++]= 0;
-				txmessage[len++]= 0;
-				// Question section
+			 */
+			len = 0;
+			// ID - identifier - 16 bit field
+			txmessage[len++]= 21;
+			txmessage[len++]= 6;
+			// QR - query/response flag - 0=query. 1 bit field
+			// OP - opcode - 0=query,2=status. 4 bit field
+			// AA - Authoritative Answer flag. 1 bit field
+			// TC - truncation flag. 1 bit field
+			// RD - recursion desired - 0=not desired, 1=desired. 1 bit field
+			// RA - recursion available. 1 bit field
+			// Z  - reserved. 3 bit field
+			// Rcode - result code - 0=no error, 4=not implemented
+			txmessage[len++]= 1; // 0=Standard Query, 1=Recursion, 16 for server status query
+			txmessage[len++]= 0;
+			// QDCOUNT - question count - 16 bit field
+			txmessage[len++]= 0;
+			txmessage[len++]= 1;
+			// ANCOUNT - answer record count - 16 bit field
+			txmessage[len++]= 0;
+			txmessage[len++]= 0;
+			// NSCOUNT - authority record count (NS=name server) - 16 bit field
+			txmessage[len++]= 0;
+			txmessage[len++]= 0;
+			// ARCOUNT - 16 bit field
+			txmessage[len++]= 0;
+			txmessage[len++]= 0;
+			// Question section
 
-				txmessage[len++] = (char)strlen(dnsquery1);
-				// Need one extra octet for trailing 0, however this will be overwritten
-				// by the length of the next part of the host name in standard DNS format
-				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery1);
-				if (rc < 0 || rc >=( UDP_BUFFER_SIZE-len ))
+			txmessage[len++] = (char)strlen(dnsquery1);
+			// Need one extra octet for trailing 0, however this will be overwritten
+			// by the length of the next part of the host name in standard DNS format
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery1);
+			if (rc < 0 || rc >=( UDP_BUFFER_SIZE-len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += rc;
+			}
+
+			// Only add new octets if no internal error has been encountered
+			//
+			if (retval == PORTUNKNOWN)
+			{
+				txmessage[len++]= (char)strlen(dnsquery2);
+				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
+				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
 					retval = PORTINTERROR;
@@ -354,78 +367,62 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				{
 					len += rc;
 				}
-
-				// Only add new octets if no internal error has been encountered
-				//
-				if (retval == PORTUNKNOWN)
-				{
-					txmessage[len++]= (char)strlen(dnsquery2);
-					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
-					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
-					{
-						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
-						retval = PORTINTERROR;
-					}
-					else
-					{
-						len += rc;
-					}
-				}
-
-				// Only add new octets if no internal error has been encountered
-				//
-				if (retval == PORTUNKNOWN)
-				{
-					txmessage[len++]= (char)strlen(dnsquery3);
-					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
-					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
-					{
-						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
-						retval = PORTINTERROR;
-					}
-					else
-					{
-						len += rc;
-					}
-				}
-
-				// Only add new octets if no internal error has been encountered
-				//
-				if (retval == PORTUNKNOWN)
-				{
-					txmessage[len++]= (char)strlen(dnsquery4);
-					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
-					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
-					{
-						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
-						retval = PORTINTERROR;
-					}
-					else
-					{
-						len += rc;
-					}
-				}
-
-				// Only add new octets if no internal error has been encountered
-				//
-				if (retval == PORTUNKNOWN)
-				{
-					// End of name
-					txmessage[len++]= 0;
-
-					// Question type - 1 = host address, 2=NS, 255 is request all
-					txmessage[len++] = 0;
-					txmessage[len++] = 255;
-					// Qclass - 1=INternet
-					txmessage[len++] = 0;
-					txmessage[len++] = 1;
-				}
-				break;
 			}
 
-			case 69:
+			// Only add new octets if no internal error has been encountered
+			//
+			if (retval == PORTUNKNOWN)
 			{
-				/* TFTP
+				txmessage[len++]= (char)strlen(dnsquery3);
+				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
+				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+					retval = PORTINTERROR;
+				}
+				else
+				{
+					len += rc;
+				}
+			}
+
+			// Only add new octets if no internal error has been encountered
+			//
+			if (retval == PORTUNKNOWN)
+			{
+				txmessage[len++]= (char)strlen(dnsquery4);
+				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
+				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
+					retval = PORTINTERROR;
+				}
+				else
+				{
+					len += rc;
+				}
+			}
+
+			// Only add new octets if no internal error has been encountered
+			//
+			if (retval == PORTUNKNOWN)
+			{
+				// End of name
+				txmessage[len++]= 0;
+
+				// Question type - 1 = host address, 2=NS, 255 is request all
+				txmessage[len++] = 0;
+				txmessage[len++] = 255;
+				// Qclass - 1=INternet
+				txmessage[len++] = 0;
+				txmessage[len++] = 1;
+			}
+			break;
+		}
+
+		case 69:
+		{
+			/* TFTP
 				TFTP supports five types of packets, all of which have been mentioned
 				   above:
 
@@ -451,21 +448,21 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				    NetAscii", etc.) in netascii indicating the three modes defined in
 				    the protocol.                                                   */
 
-				// Create a pseudo-random filename based on the current pid
-				len = snprintf(&txmessage[0], UDP_BUFFER_SIZE, "%c%c%s%d%coctet%c",0,1,"/filename_tjc_",getpid(),0,0);
-				if (len < 0)
-				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for tftp, returned %d\n", len);
-					len = 0;
-					retval = PORTINTERROR;
-				}
-				break;
-			}
-
-
-
-			case 123:
+			// Create a pseudo-random filename based on the current pid
+			len = snprintf(&txmessage[0], UDP_BUFFER_SIZE, "%c%c%s%d%coctet%c",0,1,"/filename_tjc_",getpid(),0,0);
+			if (len < 0)
 			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for tftp, returned %d\n", len);
+				len = 0;
+				retval = PORTINTERROR;
+			}
+			break;
+		}
+
+
+
+		case 123:
+		{
 			/* NTP
 			 * from RFC4330
 								1                   2                   3
@@ -496,184 +493,72 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				 |                                                                |
 				 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+  */
 
-				if (1 == special) // NTP monlist case
-				{
-					txmessage[0] = 0x17; 	// NTP version 2, NTP_MODE = 7 (Private use)
-					txmessage[1] = 0; 		// (Auth bit and sequence number)
-					txmessage[2] = 0x03;	// Implementation is XNTPD
-					txmessage[3] = 0X2a;	// MON_GETLIST_1
-					len = 256;
-				}
-				else // Standard NTP client query
-				{
-					txmessage[0] = ((NTP_LI << 5) + (NTP_VN << 3) + ( NTP_MODE ));
-					txmessage[1] = NTP_STRATUM;
-					txmessage[2] = NTP_POLL;
-					txmessage[3] = NTP_PRECISION;
-					// Pad out 11 32-bit words (Root Delay through transmit timestamp)
-					len = 48;
-				}
-				break;
-			}
-
-
-			case 161:
+			if (1 == special) // NTP monlist case
 			{
-				len = 0;
+				txmessage[0] = 0x17; 	// NTP version 2, NTP_MODE = 7 (Private use)
+				txmessage[1] = 0; 		// (Auth bit and sequence number)
+				txmessage[2] = 0x03;	// Implementation is XNTPD
+				txmessage[3] = 0X2a;	// MON_GETLIST_1
+				len = 256;
+			}
+			else // Standard NTP client query
+			{
+				txmessage[0] = ((NTP_LI << 5) + (NTP_VN << 3) + ( NTP_MODE ));
+				txmessage[1] = NTP_STRATUM;
+				txmessage[2] = NTP_POLL;
+				txmessage[3] = NTP_PRECISION;
+				// Pad out 11 32-bit words (Root Delay through transmit timestamp)
+				len = 48;
+			}
+			break;
+		}
 
-				if (0 == special || 1 == special)
+
+		case 161:
+		{
+			len = 0;
+
+			if (0 == special || 1 == special)
+			{
+				// SNMPv1 or SNMPv2c get
+				// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
+				char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
+				// was int miblen = 6;
+				unsigned int miblen = 6;
+
+				// SNMP packet start
+				txmessage[len++] = 0x30;
+				txmessage[len++] = (char)(29 + strlen(community[special]) + miblen);
+				// SNMP version 1
+				txmessage[len++] = 0x02; //int
+				txmessage[len++] = 0x01; //length of 1
+				txmessage[len++] = (special & 0xff); // 0 = SNMPv1, 1 = SNMPv2c
+				// Community name
+				txmessage[len++] = 0x04; //string
+				txmessage[len++] = (char)strlen(community[special]);
+				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", community[special]);
+				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 				{
-					// SNMPv1 or SNMPv2c get
-					// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
-					char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
-					// was int miblen = 6;
-					unsigned int miblen = 6;
-
-					// SNMP packet start
-					txmessage[len++] = 0x30;
-					txmessage[len++] = (char)(29 + strlen(community[special]) + miblen);
-					// SNMP version 1
-					txmessage[len++] = 0x02; //int
-					txmessage[len++] = 0x01; //length of 1
-					txmessage[len++] = (special & 0xff); // 0 = SNMPv1, 1 = SNMPv2c
-					// Community name
-					txmessage[len++] = 0x04; //string
-					txmessage[len++] = (char)strlen(community[special]);
-					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", community[special]);
-					if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
-					{
-						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for SNMP, returned %d\n", rc);
-						retval = PORTINTERROR;
-					}
-					else
-					{
-						len += rc;
-					}
-
-					// MIB - check there's enough room before adding
-					if (retval == PORTUNKNOWN && (len < (int)(UDP_BUFFER_SIZE-24-miblen)) )
-					{
-						txmessage[len++] = 0xA0; // SNMP GET request
-						txmessage[len++] = (char)(22 + miblen); //0x1c
-
-						txmessage[len++] = 0x02; // Request ID
-						txmessage[len++] = 0x04; // 4 octets length
-						txmessage[len++] = 0x21; // "Random" value
-						txmessage[len++] = 0x06;
-						txmessage[len++] = 0x01;
-						txmessage[len++] = 0x08;
-
-						// Error status (0=noError)
-						txmessage[len++] = 0x02; //int
-						txmessage[len++] = 0x01; //length of 1
-						txmessage[len++] = 0x00; // SNMP error status
-						// Error index (0)
-						txmessage[len++] = 0x02; //int
-						txmessage[len++] = 0x01; //length of 1
-						txmessage[len++] = 0x00; // SNMP error index
-						// Variable bindings
-						txmessage[len++] = 0x30; //var-bind sequence
-						txmessage[len++] = (char)(8 + miblen);
-
-						txmessage[len++] = 0x30; //var-bind
-						txmessage[len++] = (char)(miblen +6 );
-
-						txmessage[len++] = 0x06; // Object
-						txmessage[len++] = (char)(miblen + 2); // MIB length
-
-						txmessage[len++] = 0x2b;
-						txmessage[len++] = 0x06;
-						// Insert the OID
-						for (i = 0; i <miblen; i++)
-						{
-							txmessage[len++] = mib[i];
-						}
-						txmessage[len++] = 0x05; // Null object
-						txmessage[len++] = 0x00; // length of 0
-					}
-					else if (retval == PORTUNKNOWN && (len >= (int)(UDP_BUFFER_SIZE-24-miblen)))
-					{
-						IPSCAN_LOG( LOGPREFIX "check_udp_port: Insufficient room to add OID, len = %d\n", len);
-						retval = PORTINTERROR;
-					}
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for SNMP, returned %d\n", rc);
+					retval = PORTINTERROR;
 				}
-				else if (2 == special)
+				else
 				{
-					// SNMPv3 engine discovery
-					txmessage[len++] = 0x30;
-					txmessage[len++] = 0x38;
+					len += rc;
+				}
 
-					// SNMP version 3
-					txmessage[len++] = 0x02; // int
-					txmessage[len++] = 0x01; // length of 1
-					txmessage[len++] = 0x03; // SNMP v3
+				// MIB - check there's enough room before adding
+				if (retval == PORTUNKNOWN && (len < (int)(UDP_BUFFER_SIZE-24-miblen)) )
+				{
+					txmessage[len++] = 0xA0; // SNMP GET request
+					txmessage[len++] = (char)(22 + miblen); //0x1c
 
-					// msgGlobalData
-					txmessage[len++] = 0x30;
-					txmessage[len++] = 0x0e;
-
-					txmessage[len++] = 0x02;
+					txmessage[len++] = 0x02; // Request ID
+					txmessage[len++] = 0x04; // 4 octets length
+					txmessage[len++] = 0x21; // "Random" value
+					txmessage[len++] = 0x06;
 					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x02; // msgID
-
-					txmessage[len++] = 0x02; //
-					txmessage[len++] = 0x03; //
-					txmessage[len++] = 0x00; // Max message size (less than 64K)
-					txmessage[len++] = 0xff; //
-					txmessage[len++] = 0xe3; //
-
-					txmessage[len++] = 0x04;
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x04; // flags (reportable, not encrypted, not authenticated)
-
-					txmessage[len++] = 0x02;
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x03; // msgSecurityModel is USM (3)
-
-					// end of GlobalData
-
-					txmessage[len++] = 0x04;
-					txmessage[len++] = 0x10; //
-
-					txmessage[len++] = 0x30; //
-					txmessage[len++] = 0x0e; // length to end of this varbind
-
-					txmessage[len++] = 0x04; //
-					txmessage[len++] = 0x00; // EngineID
-
-					txmessage[len++] = 0x02;
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x00; // EngineBoots
-
-					txmessage[len++] = 0x02;
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x00; // EngineTime
-
-					txmessage[len++] = 0x04; // UserName
-					txmessage[len++] = 0x00;
-
-					txmessage[len++] = 0x04; // Authentication Parameters
-					txmessage[len++] = 0x00;
-
-					txmessage[len++] = 0x04; // Privacy Parameters
-					txmessage[len++] = 0x00;
-
-					// msgData
-					txmessage[len++] = 0x30; //
-					txmessage[len++] = 0x11; //
-
-					txmessage[len++] = 0x04; //  Context Engine ID (missing)
-					txmessage[len++] = 0x00; //
-
-					txmessage[len++] = 0x04; //  Context Name (missing)
-					txmessage[len++] = 0x00; //
-
-					txmessage[len++] = 0xa0; //  Get Request
-					txmessage[len++] = 0x0b; //
-
-					txmessage[len++] = 0x02; // Request ID (is 0x14)
-					txmessage[len++] = 0x01; //
-					txmessage[len++] = 0x14; //
+					txmessage[len++] = 0x08;
 
 					// Error status (0=noError)
 					txmessage[len++] = 0x02; //int
@@ -683,1057 +568,1169 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					txmessage[len++] = 0x02; //int
 					txmessage[len++] = 0x01; //length of 1
 					txmessage[len++] = 0x00; // SNMP error index
-					// Variable bindings (none)
+					// Variable bindings
 					txmessage[len++] = 0x30; //var-bind sequence
-					txmessage[len++] = 0x00;
+					txmessage[len++] = (char)(8 + miblen);
 
-					// End of msgData
+					txmessage[len++] = 0x30; //var-bind
+					txmessage[len++] = (char)(miblen +6 );
+
+					txmessage[len++] = 0x06; // Object
+					txmessage[len++] = (char)(miblen + 2); // MIB length
+
+					txmessage[len++] = 0x2b;
+					txmessage[len++] = 0x06;
+					// Insert the OID
+					for (i = 0; i <miblen; i++)
+					{
+						txmessage[len++] = mib[i];
+					}
+					txmessage[len++] = 0x05; // Null object
+					txmessage[len++] = 0x00; // length of 0
 				}
-
-				break;
-			}
-
-			// IKEv2
-			case 500:
-			case 4500:
-			{
-				// ISAKMP
-				len = 0;
-				// Initiator cookie (8 bytes)
-				txmessage[len++] = 0xde;
-				txmessage[len++] = 0xad;
-				txmessage[len++] = 0xfa;
-				txmessage[len++] = 0xce;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 1;
-				// Responder cookie (8 bytes)
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				// Next payload 0=None, 2=proposal, 4=key exchange, 33=SA
-				txmessage[len++] = 33;
-				// Version Major/Minor 2.0
-				txmessage[len++] = 32;
-				// Exchange type 4=aggressive, 34=IKE_SA_INIT
-				txmessage[len++] = 34;
-				// Flags 8=initiator
-				txmessage[len++] = 8;
-
-				// Message ID (4 bytes)
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				// Length (4 bytes)
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x2c; // includes key exchange payload
-
-				// SA=33
-				// Next payload 0=None, 2=proposal, 4=key exchange, 33=SA, 34=KeyEx
-				txmessage[len++] = 34;
-				txmessage[len++] = 0; // Not critical
-				txmessage[len++] = 0; // Length 44
-				txmessage[len++] = 44;
-
-				txmessage[len++] = 0x00; // No next payload
-				txmessage[len++] = 0x00; // Not critical
-				txmessage[len++] = 0x00; // Length 40
-				txmessage[len++] = 0x28;
-				txmessage[len++] = 0x01; // Proposal 1
-				txmessage[len++] = 0x01; // IKE
-				txmessage[len++] = 0x00; // SPI size 0
-				txmessage[len++] = 0x04; // Number of transforms
-				txmessage[len++] = 0x03; // Payload type is transform
-				txmessage[len++] = 0x00; // Not critical
-				txmessage[len++] = 0x00; // Length 8
-				txmessage[len++] = 0x08;
-				txmessage[len++] = 0x01; // ENCRYPTION Algorithm
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // 3=3DES
-				txmessage[len++] = 0x03;
-				txmessage[len++] = 0x03; // Payload type is transform
-				txmessage[len++] = 0x00; // Not critical
-				txmessage[len++] = 0x00; // Length 8
-				txmessage[len++] = 0x08;
-				txmessage[len++] = 0x03; // INTEGRITY Algorithm
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // 2=AUTH_HMAC_SHA1_96
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x03; // Payload type is transform
-				txmessage[len++] = 0x00; // Not critical
-				txmessage[len++] = 0x00; // Length 8
-				txmessage[len++] = 0x08;
-				txmessage[len++] = 0x02; // PRF Algorithm
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // 2=PRF_HMAC_SHA1
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x00; // Next Payload type is NONE
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // Length 8
-				txmessage[len++] = 0x08;
-				txmessage[len++] = 0x04; // 4=Diffie-Hellman Group
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // 1024-bit MODP group
-				txmessage[len++] = 0x02;
-
-				// Key Exchange payload
-				//      		   	  1                   2                   3
-				//0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//! Next Payload  !   RESERVED    !         Payload Length        !
-				//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//!                                                               !
-				//~                       Key Exchange Data                       ~
-				//!                                                               !
-				//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-
-				txmessage[len++] = 0x28; // Next Payload type is None (40)
-				txmessage[len++] = 0x00; // Not critical
-				txmessage[len++] = 0x00; // Length 136
-				txmessage[len++] = 0x88;
-				txmessage[len++] = 0x00; // DH group 1024-bit MODP (2)
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x2d; // Key Exchange data (128 octets)
-				txmessage[len++] = 0x54;
-				txmessage[len++] = 0x91;
-				txmessage[len++] = 0xfa;
-				txmessage[len++] = 0x0c;
-				txmessage[len++] = 0xd4;
-				txmessage[len++] = 0xd4;
-				txmessage[len++] = 0xcc;
-				txmessage[len++] = 0x77;
-				txmessage[len++] = 0xf8;
-				txmessage[len++] = 0xce;
-				txmessage[len++] = 0x08;
-				txmessage[len++] = 0x98;
-				txmessage[len++] = 0x45;
-				txmessage[len++] = 0x40;
-				txmessage[len++] = 0xb7;
-				txmessage[len++] = 0xc6;
-				txmessage[len++] = 0x8c;
-				txmessage[len++] = 0x08;
-				txmessage[len++] = 0x93;
-				txmessage[len++] = 0x2c;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0xf7;
-				txmessage[len++] = 0xc1;
-				txmessage[len++] = 0x5b;
-				txmessage[len++] = 0xf1;
-				txmessage[len++] = 0x04;
-				txmessage[len++] = 0xb0;
-				txmessage[len++] = 0x94;
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x1a;
-				txmessage[len++] = 0xf9;
-				txmessage[len++] = 0x95;
-				txmessage[len++] = 0x29;
-				txmessage[len++] = 0x6c;
-				txmessage[len++] = 0x4a;
-				txmessage[len++] = 0x26;
-				txmessage[len++] = 0x12;
-				txmessage[len++] = 0x18;
-				txmessage[len++] = 0x75;
-				txmessage[len++] = 0x21;
-				txmessage[len++] = 0x0e;
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x06;
-				txmessage[len++] = 0x11;
-				txmessage[len++] = 0x49;
-				txmessage[len++] = 0xc1;
-				txmessage[len++] = 0xa0;
-				txmessage[len++] = 0xc5;
-				txmessage[len++] = 0x82;
-				txmessage[len++] = 0xe1;
-				txmessage[len++] = 0x11;
-				txmessage[len++] = 0x30;
-				txmessage[len++] = 0xab;
-				txmessage[len++] = 0xc4;
-				txmessage[len++] = 0x31;
-				txmessage[len++] = 0xde;
-				txmessage[len++] = 0x49;
-				txmessage[len++] = 0x7d;
-				txmessage[len++] = 0xd3;
-				txmessage[len++] = 0xe6;
-				txmessage[len++] = 0xfb;
-				txmessage[len++] = 0x42;
-				txmessage[len++] = 0x08;
-				txmessage[len++] = 0xfd;
-				txmessage[len++] = 0x72;
-				txmessage[len++] = 0x74;
-				txmessage[len++] = 0xbf;
-				txmessage[len++] = 0x34;
-				txmessage[len++] = 0x60;
-				txmessage[len++] = 0xdc;
-				txmessage[len++] = 0x98;
-				txmessage[len++] = 0x97;
-				txmessage[len++] = 0xd3;
-				txmessage[len++] = 0xb5;
-				txmessage[len++] = 0x5b;
-				txmessage[len++] = 0x82;
-				txmessage[len++] = 0xec;
-				txmessage[len++] = 0x77;
-				txmessage[len++] = 0x0d;
-				txmessage[len++] = 0xae;
-				txmessage[len++] = 0xca;
-				txmessage[len++] = 0x39;
-				txmessage[len++] = 0xfd;
-				txmessage[len++] = 0x9a;
-				txmessage[len++] = 0x08;
-				txmessage[len++] = 0x8f;
-				txmessage[len++] = 0x5a;
-				txmessage[len++] = 0x73;
-				txmessage[len++] = 0xa1;
-				txmessage[len++] = 0xfd;
-				txmessage[len++] = 0x60;
-				txmessage[len++] = 0x98;
-				txmessage[len++] = 0xa8;
-				txmessage[len++] = 0xc8;
-				txmessage[len++] = 0xdf;
-				txmessage[len++] = 0x16;
-				txmessage[len++] = 0x3d;
-				txmessage[len++] = 0x55;
-				txmessage[len++] = 0xff;
-				txmessage[len++] = 0x6d;
-				txmessage[len++] = 0xe0;
-				txmessage[len++] = 0x94;
-				txmessage[len++] = 0xd7;
-				txmessage[len++] = 0x93;
-				txmessage[len++] = 0xa6;
-				txmessage[len++] = 0x82;
-				txmessage[len++] = 0x1f;
-				txmessage[len++] = 0xce;
-				txmessage[len++] = 0x07;
-				txmessage[len++] = 0x0a;
-				txmessage[len++] = 0x17;
-				txmessage[len++] = 0xf4;
-				txmessage[len++] = 0x87;
-				txmessage[len++] = 0x0b;
-				txmessage[len++] = 0xc7;
-				txmessage[len++] = 0x90;
-				txmessage[len++] = 0xa2;
-				txmessage[len++] = 0x47;
-				txmessage[len++] = 0x51;
-				txmessage[len++] = 0xca;
-				txmessage[len++] = 0x2c;
-				txmessage[len++] = 0xe8;
-				txmessage[len++] = 0x33;
-				txmessage[len++] = 0x3a;
-				txmessage[len++] = 0x4d;
-				txmessage[len++] = 0x5f;
-				txmessage[len++] = 0xae;
-
-				// Payload is Nonce
-				txmessage[len++] = 0x29; // Next payload is Notify (41)
-				txmessage[len++] = 0x00; // Not critical
-				txmessage[len++] = 0x00; // Length 36
-				txmessage[len++] = 0x24; // Nonce data
-				txmessage[len++] = 0xfb;
-				txmessage[len++] = 0xe5;
-				txmessage[len++] = 0x90;
-				txmessage[len++] = 0x3f;
-				txmessage[len++] = 0xc9;
-				txmessage[len++] = 0xdf;
-				txmessage[len++] = 0x47;
-				txmessage[len++] = 0x09;
-				txmessage[len++] = 0xe5;
-				txmessage[len++] = 0xd4;
-				txmessage[len++] = 0xab;
-				txmessage[len++] = 0x0a;
-				txmessage[len++] = 0xa6;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0xb3;
-				txmessage[len++] = 0xbe;
-				txmessage[len++] = 0x36;
-				txmessage[len++] = 0xeb;
-				txmessage[len++] = 0x35;
-				txmessage[len++] = 0xa6;
-				txmessage[len++] = 0xf5;
-				txmessage[len++] = 0x54;
-				txmessage[len++] = 0x47;
-				txmessage[len++] = 0xfe;
-				txmessage[len++] = 0xda;
-				txmessage[len++] = 0xb9;
-				txmessage[len++] = 0x0d;
-				txmessage[len++] = 0x67;
-				txmessage[len++] = 0x66;
-				txmessage[len++] = 0x9f;
-				txmessage[len++] = 0xab;
-				txmessage[len++] = 0x96;
-
-				// Payload is Notify
-				txmessage[len++] = 0x29; // Next payload is also notify
-				txmessage[len++] = 0x00; // Not critical
-				txmessage[len++] = 0x00; // Length 28
-				txmessage[len++] = 0x1c;
-				txmessage[len++] = 0x00; // Protocol ID is RESERVED (0)
-				txmessage[len++] = 0x00; // SPI size is 0
-				txmessage[len++] = 0x40; // NAT_DETECTION_SOURCE_IP (16388)
-				txmessage[len++] = 0x04;
-				// data is SHA1(SPIs, source IP address, source port)
-				// however, we're just looking for a response, not a valid
-				// packet
-				txmessage[len++] = 0xc6; // Notification data
-				txmessage[len++] = 0x93;
-				txmessage[len++] = 0x14;
-				txmessage[len++] = 0x61;
-				txmessage[len++] = 0x31;
-				txmessage[len++] = 0xa7;
-				txmessage[len++] = 0x7f;
-				txmessage[len++] = 0xe9;
-				txmessage[len++] = 0x93;
-				txmessage[len++] = 0x47;
-				txmessage[len++] = 0x26;
-				txmessage[len++] = 0xe5;
-				txmessage[len++] = 0x23;
-				txmessage[len++] = 0x17;
-				txmessage[len++] = 0xd4;
-				txmessage[len++] = 0xec;
-				txmessage[len++] = 0x5f;
-				txmessage[len++] = 0x64;
-				txmessage[len++] = 0x45;
-				txmessage[len++] = 0xf1;
-
-				// Payload is Notify
-				txmessage[len++] = 0x00; // Next payload is NONE
-				txmessage[len++] = 0x00; // Not critical
-				txmessage[len++] = 0x00; // :ength 28
-				txmessage[len++] = 0x1c;
-				txmessage[len++] = 0x00; // Protocol ID is RESERVED(0)
-				txmessage[len++] = 0x00; // SPI size = 0
-				txmessage[len++] = 0x40; // NAT_DETECTION_DESTIANTION_IP (16389)
-				txmessage[len++] = 0x05;
-				// data is SHA1(SPIs, source IP address, source port)
-				// however, we're just looking for a response, not a valid
-				// packet
-				txmessage[len++] = 0xf9; // Notification data
-				txmessage[len++] = 0x33;
-				txmessage[len++] = 0xa1;
-				txmessage[len++] = 0x9a;
-				txmessage[len++] = 0x65;
-				txmessage[len++] = 0x1a;
-				txmessage[len++] = 0xc3;
-				txmessage[len++] = 0x73;
-				txmessage[len++] = 0x8b;
-				txmessage[len++] = 0xb7;
-				txmessage[len++] = 0xf6;
-				txmessage[len++] = 0x04;
-				txmessage[len++] = 0x43;
-				txmessage[len++] = 0x6f;
-				txmessage[len++] = 0x80;
-				txmessage[len++] = 0x12;
-				txmessage[len++] = 0x69;
-				txmessage[len++] = 0x3e;
-				txmessage[len++] = 0x6a;
-				txmessage[len++] = 0x2a;
-
-				break;
-			}
-
-			// RIPng
-			case 521:
-			{
-				len = 0;
-				txmessage[len++] = 0x01; // Command is REQUEST
-				txmessage[len++] = 0x01; // Version 1
-				txmessage[len++] = 0x00; // Reserved
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // ::
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // Route Tag
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // Prefix length
-				txmessage[len++] = 0x10; // Metric
-				break;
-			}
-
-			case 547:
-			{
-				// DHCPv6 defined in https://tools.ietf.org/html/rfc3315
-				//       0                   1                   2                   3
-				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |    msg-type   |               transaction-id                  |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |                                                               |
-				//      .                            options                            .
-				//      .                           (variable)                          .
-				//      |                                                               |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				len = 0;
-				txmessage[len++] = 0x01; // msg-type = 0x01 (Solicit)
-				txmessage[len++] = 0xde; // transaction-id
-				txmessage[len++] = 0xad;
-				txmessage[len++] = 0xfa;
-
-				//       0                   1                   2                   3
-				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |        OPTION_CLIENTID        |          option-len           |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      .                                                               .
-				//      .                              DUID                             .
-				//      .                        (variable length)                      .
-				//      .                                                               .
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
-				txmessage[len++] = 0x00; // Option 1 is Client Identifier
-				txmessage[len++] = 0x01;
-
-				txmessage[len++] = 0x00; // Length field
-				txmessage[len++] = 0x0e;
-
-
-				// The following diagram illustrates the format of a DUID-LLT:
-				//
-				//     0                   1                   2                   3
-				//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |               1               |    hardware type (16 bits)    |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |                        time (32 bits)                         |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    .                                                               .
-				//    .             link-layer address (variable length)              .
-				//    .                                                               .
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-
-				txmessage[len++] = 0x00; // DUID-LLT
-				txmessage[len++] = 0x01;
-
-				txmessage[len++] = 0x00; // Hardware type: Ethernet
-				txmessage[len++] = 0x01;
-
-				txmessage[len++] = 0x00; // Time
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x01;
-
-				// Copy in the local MAC address as the Link-layer address
-				for (i = 0; i < 6 ; i++) txmessage[len++] = localmacaddr[i];
-
-				//  0                   1                   2                   3
-				//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |     OPTION_RECONF_ACCEPT      |               0               |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				//      option-code   OPTION_RECONF_ACCEPT (20).
-				//
-				//      option-len    0.
-				//
-
-				txmessage[len++] = 0x00; // Reconfigure Accept option
-				txmessage[len++] = 0x14;
-
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-
-				// The format of the IA_NA option is:
-				//
-				//       0                   1                   2                   3
-				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |          OPTION_IA_NA         |          option-len           |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |                        IAID (4 octets)                        |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |                              T1                               |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |                              T2                               |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |                                                               |
-				//      .                         IA_NA-options                         .
-				//      .                                                               .
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				//      option-code          OPTION_IA_NA (3).
-				//
-				//      option-len           12 + length of IA_NA-options field.
-				//
-				//      IAID                 The unique identifier for this IA_NA; the
-				//                           IAID must be unique among the identifiers for
-				//                           all of this client's IA_NAs.  The number
-				//                           space for IA_NA IAIDs is separate from the
-				//                           number space for IA_TA IAIDs.
-				//
-				//      T1                   The time at which the client contacts the
-				//                           server from which the addresses in the IA_NA
-				//                           were obtained to extend the lifetimes of the
-				//                           addresses assigned to the IA_NA; T1 is a
-				//                           time duration relative to the current time
-				//                           expressed in units of seconds.
-				//
-				//      T2                   The time at which the client contacts any
-				//                           available server to extend the lifetimes of
-				//                           the addresses assigned to the IA_NA; T2 is a
-				//                           time duration relative to the current time
-				//                           expressed in units of seconds.
-				//
-				//      IA_NA-options        Options associated with this IA_NA.
-
-				txmessage[len++] = 0x00; // Identity Association for Non-temporary Address (IA_NA) option
-				txmessage[len++] = 0x03;
-
-				txmessage[len++] = 0x00; // Length (options length = 0)
-				txmessage[len++] = 0x0c;
-
-				txmessage[len++] = 0x00; // IAID
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-
-				txmessage[len++] = 0x00; // T1
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-
-				txmessage[len++] = 0x00; // T2
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-
-				//       0                   1                   2                   3
-				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |      OPTION_ELAPSED_TIME      |           option-len          |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |          elapsed-time         |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				//      option-code   OPTION_ELAPSED_TIME (8).
-				//
-				//      option-len    2.
-				//
-				//      elapsed-time  The amount of time since the client began its
-				//                    current DHCP transaction.  This time is expressed in
-				//                    hundredths of a second (10^-2 seconds).
-
-
-				txmessage[len++] = 0x00; // Elapsed Time Option
-				txmessage[len++] = 0x08;
-
-				txmessage[len++] = 0x00; // Length
-				txmessage[len++] = 0x02;
-
-				txmessage[len++] = 0x00; // We just started ..
-				txmessage[len++] = 0x00;
-
-				//   The Option Request option is used to identify a list of options in a
-				//   message between a client and a server.  The format of the Option
-				//   Request option is:
-				//
-				//       0                   1                   2                   3
-				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |           OPTION_ORO          |           option-len          |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |    requested-option-code-1    |    requested-option-code-2    |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |                              ...                              |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				//      option-code   OPTION_ORO (6).
-				//
-				//      option-len    2 * number of requested options.
-				//
-				//      requested-option-code-n The option code for an option requested by
-				//      the client.
-
-				txmessage[len++] = 0x00; // Option Request Option Option
-				txmessage[len++] = 0x06;
-
-				txmessage[len++] = 0x00; // Option length
-				txmessage[len++] = 0x04;
-
-				txmessage[len++] = 0x00; // Recursive DNS server
-				txmessage[len++] = 0x17;
-
-				txmessage[len++] = 0x00; // Domain Search List
-				txmessage[len++] = 0x18;
-
-				// From RFC 3633
-				// The IA_PD option is used to carry a prefix delegation identity
-				//   association, the parameters associated with the IA_PD and the
-				//   prefixes associated with it.
-				//
-				//   The format of the IA_PD option is:
-				//
-				//     0                   1                   2                   3
-				//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |         OPTION_IA_PD          |         option-length         |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |                         IAID (4 octets)                       |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |                              T1                               |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |                              T2                               |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    .                                                               .
-				//    .                          IA_PD-options                        .
-				//    .                                                               .
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				//   option-code:      OPTION_IA_PD (25)
-				//
-				//   option-length:    12 + length of IA_PD-options field.
-				//
-				//   IAID:             The unique identifier for this IA_PD; the IAID must
-				//                     be unique among the identifiers for all of this
-				//                     requesting router's IA_PDs.
-				//
-				//   T1:               The time at which the requesting router should
-				//                     contact the delegating router from which the
-				//                     prefixes in the IA_PD were obtained to extend the
-				//                     lifetimes of the prefixes delegated to the IA_PD;
-				//                     T1 is a time duration relative to the current time
-				//                     expressed in units of seconds.
-				//
-				//   T2:               The time at which the requesting router should
-				//                     contact any available delegating router to extend
-				//                     the lifetimes of the prefixes assigned to the
-				//                     IA_PD; T2 is a time duration relative to the
-				//                     current time expressed in units of seconds.
-				//
-				//   IA_PD-options:    Options associated with this IA_PD.
-
-				txmessage[len++] = 0x00; // IA_PD Option
-				txmessage[len++] = 0x19;
-
-				txmessage[len++] = 0x00; // Length
-				txmessage[len++] = 0x29;
-
-				txmessage[len++] = 0x00; // IAID
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-
-				txmessage[len++] = 0x00; // T1
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-
-				txmessage[len++] = 0x00; // T2
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-
-				//   The IA_PD Prefix option is used to specify IPv6 address prefixes
-				//   associated with an IA_PD.  The IA_PD Prefix option must be
-				//   encapsulated in the IA_PD-options field of an IA_PD option.
-				//
-				//   The format of the IA_PD Prefix option is:
-				//
-				//     0                   1                   2                   3
-				//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |        OPTION_IAPREFIX        |         option-length         |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |                      preferred-lifetime                       |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |                        valid-lifetime                         |
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    | prefix-length |                                               |
-				//    +-+-+-+-+-+-+-+-+          IPv6 prefix                          |
-				//    |                           (16 octets)                         |
-				//    |                                                               |
-				//    |                                                               |
-				//    |                                                               |
-				//    |               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//    |               |                                               .
-				//    +-+-+-+-+-+-+-+-+                                               .
-				//    .                       IAprefix-options                        .
-				//    .                                                               .
-				//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				//   option-code:      OPTION_IAPREFIX (26)
-				//
-				//   option-length:    25 + length of IAprefix-options field
-				//
-				//   preferred-lifetime: The recommended preferred lifetime for the IPv6
-				//                     prefix in the option, expressed in units of
-				//                     seconds.  A value of 0xFFFFFFFF represents
-				//                     infinity.
-				//
-				//   valid-lifetime:   The valid lifetime for the IPv6 prefix in the
-				//                     option, expressed in units of seconds.  A value of
-				//                     0xFFFFFFFF represents infinity.
-				//
-				//   prefix-length:    Length for this prefix in bits
-				//
-				//   IPv6-prefix:      An IPv6 prefix
-				//
-				//   IAprefix-options: Options associated with this prefix
-
-				txmessage[len++] = 0x00; // IA Prefix option
-				txmessage[len++] = 0x1a;
-
-				txmessage[len++] = 0x00; // Length (no additional options)
-				txmessage[len++] = 0x19;
-
-				txmessage[len++] = 0x00; // Preferred lifetime - 21600 seconds (6 hours)
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x54;
-				txmessage[len++] = 0x60;
-
-				txmessage[len++] = 0x00; // Valid lifetime - 86400 seconds (24 hours)
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x51;
-				txmessage[len++] = 0x80;
-
-				txmessage[len++] = 0x40; // 64-bit prefix length
-
-				txmessage[len++] = 0x00; // Prefix ::
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00;
-				break;
-			}
-
-
-			case 1900:
-			{
-				// UPnP
-				// taken from http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf
-				//
-				len = snprintf(&txmessage[0], UDP_BUFFER_SIZE, \
-				"M-SEARCH * HTTP/1.1\r\nHost:[%s]:1900\r\nMan: \"ssdp:discover\"\r\nMX:1\r\nST: \"ssdp:all\"\r\nUSER-AGENT: linux/2.6 UPnP/1.1 TimsTester/1.0\r\n\r\n", hostname);
-				if (len < 0 || len >= UDP_BUFFER_SIZE)
+				else if (retval == PORTUNKNOWN && (len >= (int)(UDP_BUFFER_SIZE-24-miblen)))
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for UPnP, returned %d\n", len);
-					len = 0;
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Insufficient room to add OID, len = %d\n", len);
 					retval = PORTINTERROR;
 				}
+			}
+			else if (2 == special)
+			{
+				// SNMPv3 engine discovery
+				txmessage[len++] = 0x30;
+				txmessage[len++] = 0x38;
 
-				break;
+				// SNMP version 3
+				txmessage[len++] = 0x02; // int
+				txmessage[len++] = 0x01; // length of 1
+				txmessage[len++] = 0x03; // SNMP v3
+
+				// msgGlobalData
+				txmessage[len++] = 0x30;
+				txmessage[len++] = 0x0e;
+
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x02; // msgID
+
+				txmessage[len++] = 0x02; //
+				txmessage[len++] = 0x03; //
+				txmessage[len++] = 0x00; // Max message size (less than 64K)
+				txmessage[len++] = 0xff; //
+				txmessage[len++] = 0xe3; //
+
+				txmessage[len++] = 0x04;
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x04; // flags (reportable, not encrypted, not authenticated)
+
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x03; // msgSecurityModel is USM (3)
+
+				// end of GlobalData
+
+				txmessage[len++] = 0x04;
+				txmessage[len++] = 0x10; //
+
+				txmessage[len++] = 0x30; //
+				txmessage[len++] = 0x0e; // length to end of this varbind
+
+				txmessage[len++] = 0x04; //
+				txmessage[len++] = 0x00; // EngineID
+
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x00; // EngineBoots
+
+				txmessage[len++] = 0x02;
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x00; // EngineTime
+
+				txmessage[len++] = 0x04; // UserName
+				txmessage[len++] = 0x00;
+
+				txmessage[len++] = 0x04; // Authentication Parameters
+				txmessage[len++] = 0x00;
+
+				txmessage[len++] = 0x04; // Privacy Parameters
+				txmessage[len++] = 0x00;
+
+				// msgData
+				txmessage[len++] = 0x30; //
+				txmessage[len++] = 0x11; //
+
+				txmessage[len++] = 0x04; //  Context Engine ID (missing)
+				txmessage[len++] = 0x00; //
+
+				txmessage[len++] = 0x04; //  Context Name (missing)
+				txmessage[len++] = 0x00; //
+
+				txmessage[len++] = 0xa0; //  Get Request
+				txmessage[len++] = 0x0b; //
+
+				txmessage[len++] = 0x02; // Request ID (is 0x14)
+				txmessage[len++] = 0x01; //
+				txmessage[len++] = 0x14; //
+
+				// Error status (0=noError)
+				txmessage[len++] = 0x02; //int
+				txmessage[len++] = 0x01; //length of 1
+				txmessage[len++] = 0x00; // SNMP error status
+				// Error index (0)
+				txmessage[len++] = 0x02; //int
+				txmessage[len++] = 0x01; //length of 1
+				txmessage[len++] = 0x00; // SNMP error index
+				// Variable bindings (none)
+				txmessage[len++] = 0x30; //var-bind sequence
+				txmessage[len++] = 0x00;
+
+				// End of msgData
 			}
 
-			// LSP Ping
-			case 3503:
+			break;
+		}
+
+		// IKEv2
+		case 500:
+		case 4500:
+		{
+			// ISAKMP
+			len = 0;
+			// Initiator cookie (8 bytes)
+			txmessage[len++] = 0xde;
+			txmessage[len++] = 0xad;
+			txmessage[len++] = 0xfa;
+			txmessage[len++] = 0xce;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 1;
+			// Responder cookie (8 bytes)
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			// Next payload 0=None, 2=proposal, 4=key exchange, 33=SA
+			txmessage[len++] = 33;
+			// Version Major/Minor 2.0
+			txmessage[len++] = 32;
+			// Exchange type 4=aggressive, 34=IKE_SA_INIT
+			txmessage[len++] = 34;
+			// Flags 8=initiator
+			txmessage[len++] = 8;
+
+			// Message ID (4 bytes)
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			// Length (4 bytes)
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0x01;
+			txmessage[len++] = 0x2c; // includes key exchange payload
+
+			// SA=33
+			// Next payload 0=None, 2=proposal, 4=key exchange, 33=SA, 34=KeyEx
+			txmessage[len++] = 34;
+			txmessage[len++] = 0; // Not critical
+			txmessage[len++] = 0; // Length 44
+			txmessage[len++] = 44;
+
+			txmessage[len++] = 0x00; // No next payload
+			txmessage[len++] = 0x00; // Not critical
+			txmessage[len++] = 0x00; // Length 40
+			txmessage[len++] = 0x28;
+			txmessage[len++] = 0x01; // Proposal 1
+			txmessage[len++] = 0x01; // IKE
+			txmessage[len++] = 0x00; // SPI size 0
+			txmessage[len++] = 0x04; // Number of transforms
+			txmessage[len++] = 0x03; // Payload type is transform
+			txmessage[len++] = 0x00; // Not critical
+			txmessage[len++] = 0x00; // Length 8
+			txmessage[len++] = 0x08;
+			txmessage[len++] = 0x01; // ENCRYPTION Algorithm
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // 3=3DES
+			txmessage[len++] = 0x03;
+			txmessage[len++] = 0x03; // Payload type is transform
+			txmessage[len++] = 0x00; // Not critical
+			txmessage[len++] = 0x00; // Length 8
+			txmessage[len++] = 0x08;
+			txmessage[len++] = 0x03; // INTEGRITY Algorithm
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // 2=AUTH_HMAC_SHA1_96
+			txmessage[len++] = 0x02;
+			txmessage[len++] = 0x03; // Payload type is transform
+			txmessage[len++] = 0x00; // Not critical
+			txmessage[len++] = 0x00; // Length 8
+			txmessage[len++] = 0x08;
+			txmessage[len++] = 0x02; // PRF Algorithm
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // 2=PRF_HMAC_SHA1
+			txmessage[len++] = 0x02;
+			txmessage[len++] = 0x00; // Next Payload type is NONE
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // Length 8
+			txmessage[len++] = 0x08;
+			txmessage[len++] = 0x04; // 4=Diffie-Hellman Group
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // 1024-bit MODP group
+			txmessage[len++] = 0x02;
+
+			// Key Exchange payload
+			//      		   	  1                   2                   3
+			//0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//! Next Payload  !   RESERVED    !         Payload Length        !
+			//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//!                                                               !
+			//~                       Key Exchange Data                       ~
+			//!                                                               !
+			//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+
+			txmessage[len++] = 0x28; // Next Payload type is None (40)
+			txmessage[len++] = 0x00; // Not critical
+			txmessage[len++] = 0x00; // Length 136
+			txmessage[len++] = 0x88;
+			txmessage[len++] = 0x00; // DH group 1024-bit MODP (2)
+			txmessage[len++] = 0x02;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x2d; // Key Exchange data (128 octets)
+			txmessage[len++] = 0x54;
+			txmessage[len++] = 0x91;
+			txmessage[len++] = 0xfa;
+			txmessage[len++] = 0x0c;
+			txmessage[len++] = 0xd4;
+			txmessage[len++] = 0xd4;
+			txmessage[len++] = 0xcc;
+			txmessage[len++] = 0x77;
+			txmessage[len++] = 0xf8;
+			txmessage[len++] = 0xce;
+			txmessage[len++] = 0x08;
+			txmessage[len++] = 0x98;
+			txmessage[len++] = 0x45;
+			txmessage[len++] = 0x40;
+			txmessage[len++] = 0xb7;
+			txmessage[len++] = 0xc6;
+			txmessage[len++] = 0x8c;
+			txmessage[len++] = 0x08;
+			txmessage[len++] = 0x93;
+			txmessage[len++] = 0x2c;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0xf7;
+			txmessage[len++] = 0xc1;
+			txmessage[len++] = 0x5b;
+			txmessage[len++] = 0xf1;
+			txmessage[len++] = 0x04;
+			txmessage[len++] = 0xb0;
+			txmessage[len++] = 0x94;
+			txmessage[len++] = 0x02;
+			txmessage[len++] = 0x1a;
+			txmessage[len++] = 0xf9;
+			txmessage[len++] = 0x95;
+			txmessage[len++] = 0x29;
+			txmessage[len++] = 0x6c;
+			txmessage[len++] = 0x4a;
+			txmessage[len++] = 0x26;
+			txmessage[len++] = 0x12;
+			txmessage[len++] = 0x18;
+			txmessage[len++] = 0x75;
+			txmessage[len++] = 0x21;
+			txmessage[len++] = 0x0e;
+			txmessage[len++] = 0x02;
+			txmessage[len++] = 0x06;
+			txmessage[len++] = 0x11;
+			txmessage[len++] = 0x49;
+			txmessage[len++] = 0xc1;
+			txmessage[len++] = 0xa0;
+			txmessage[len++] = 0xc5;
+			txmessage[len++] = 0x82;
+			txmessage[len++] = 0xe1;
+			txmessage[len++] = 0x11;
+			txmessage[len++] = 0x30;
+			txmessage[len++] = 0xab;
+			txmessage[len++] = 0xc4;
+			txmessage[len++] = 0x31;
+			txmessage[len++] = 0xde;
+			txmessage[len++] = 0x49;
+			txmessage[len++] = 0x7d;
+			txmessage[len++] = 0xd3;
+			txmessage[len++] = 0xe6;
+			txmessage[len++] = 0xfb;
+			txmessage[len++] = 0x42;
+			txmessage[len++] = 0x08;
+			txmessage[len++] = 0xfd;
+			txmessage[len++] = 0x72;
+			txmessage[len++] = 0x74;
+			txmessage[len++] = 0xbf;
+			txmessage[len++] = 0x34;
+			txmessage[len++] = 0x60;
+			txmessage[len++] = 0xdc;
+			txmessage[len++] = 0x98;
+			txmessage[len++] = 0x97;
+			txmessage[len++] = 0xd3;
+			txmessage[len++] = 0xb5;
+			txmessage[len++] = 0x5b;
+			txmessage[len++] = 0x82;
+			txmessage[len++] = 0xec;
+			txmessage[len++] = 0x77;
+			txmessage[len++] = 0x0d;
+			txmessage[len++] = 0xae;
+			txmessage[len++] = 0xca;
+			txmessage[len++] = 0x39;
+			txmessage[len++] = 0xfd;
+			txmessage[len++] = 0x9a;
+			txmessage[len++] = 0x08;
+			txmessage[len++] = 0x8f;
+			txmessage[len++] = 0x5a;
+			txmessage[len++] = 0x73;
+			txmessage[len++] = 0xa1;
+			txmessage[len++] = 0xfd;
+			txmessage[len++] = 0x60;
+			txmessage[len++] = 0x98;
+			txmessage[len++] = 0xa8;
+			txmessage[len++] = 0xc8;
+			txmessage[len++] = 0xdf;
+			txmessage[len++] = 0x16;
+			txmessage[len++] = 0x3d;
+			txmessage[len++] = 0x55;
+			txmessage[len++] = 0xff;
+			txmessage[len++] = 0x6d;
+			txmessage[len++] = 0xe0;
+			txmessage[len++] = 0x94;
+			txmessage[len++] = 0xd7;
+			txmessage[len++] = 0x93;
+			txmessage[len++] = 0xa6;
+			txmessage[len++] = 0x82;
+			txmessage[len++] = 0x1f;
+			txmessage[len++] = 0xce;
+			txmessage[len++] = 0x07;
+			txmessage[len++] = 0x0a;
+			txmessage[len++] = 0x17;
+			txmessage[len++] = 0xf4;
+			txmessage[len++] = 0x87;
+			txmessage[len++] = 0x0b;
+			txmessage[len++] = 0xc7;
+			txmessage[len++] = 0x90;
+			txmessage[len++] = 0xa2;
+			txmessage[len++] = 0x47;
+			txmessage[len++] = 0x51;
+			txmessage[len++] = 0xca;
+			txmessage[len++] = 0x2c;
+			txmessage[len++] = 0xe8;
+			txmessage[len++] = 0x33;
+			txmessage[len++] = 0x3a;
+			txmessage[len++] = 0x4d;
+			txmessage[len++] = 0x5f;
+			txmessage[len++] = 0xae;
+
+			// Payload is Nonce
+			txmessage[len++] = 0x29; // Next payload is Notify (41)
+			txmessage[len++] = 0x00; // Not critical
+			txmessage[len++] = 0x00; // Length 36
+			txmessage[len++] = 0x24; // Nonce data
+			txmessage[len++] = 0xfb;
+			txmessage[len++] = 0xe5;
+			txmessage[len++] = 0x90;
+			txmessage[len++] = 0x3f;
+			txmessage[len++] = 0xc9;
+			txmessage[len++] = 0xdf;
+			txmessage[len++] = 0x47;
+			txmessage[len++] = 0x09;
+			txmessage[len++] = 0xe5;
+			txmessage[len++] = 0xd4;
+			txmessage[len++] = 0xab;
+			txmessage[len++] = 0x0a;
+			txmessage[len++] = 0xa6;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0xb3;
+			txmessage[len++] = 0xbe;
+			txmessage[len++] = 0x36;
+			txmessage[len++] = 0xeb;
+			txmessage[len++] = 0x35;
+			txmessage[len++] = 0xa6;
+			txmessage[len++] = 0xf5;
+			txmessage[len++] = 0x54;
+			txmessage[len++] = 0x47;
+			txmessage[len++] = 0xfe;
+			txmessage[len++] = 0xda;
+			txmessage[len++] = 0xb9;
+			txmessage[len++] = 0x0d;
+			txmessage[len++] = 0x67;
+			txmessage[len++] = 0x66;
+			txmessage[len++] = 0x9f;
+			txmessage[len++] = 0xab;
+			txmessage[len++] = 0x96;
+
+			// Payload is Notify
+			txmessage[len++] = 0x29; // Next payload is also notify
+			txmessage[len++] = 0x00; // Not critical
+			txmessage[len++] = 0x00; // Length 28
+			txmessage[len++] = 0x1c;
+			txmessage[len++] = 0x00; // Protocol ID is RESERVED (0)
+			txmessage[len++] = 0x00; // SPI size is 0
+			txmessage[len++] = 0x40; // NAT_DETECTION_SOURCE_IP (16388)
+			txmessage[len++] = 0x04;
+			// data is SHA1(SPIs, source IP address, source port)
+			// however, we're just looking for a response, not a valid
+			// packet
+			txmessage[len++] = 0xc6; // Notification data
+			txmessage[len++] = 0x93;
+			txmessage[len++] = 0x14;
+			txmessage[len++] = 0x61;
+			txmessage[len++] = 0x31;
+			txmessage[len++] = 0xa7;
+			txmessage[len++] = 0x7f;
+			txmessage[len++] = 0xe9;
+			txmessage[len++] = 0x93;
+			txmessage[len++] = 0x47;
+			txmessage[len++] = 0x26;
+			txmessage[len++] = 0xe5;
+			txmessage[len++] = 0x23;
+			txmessage[len++] = 0x17;
+			txmessage[len++] = 0xd4;
+			txmessage[len++] = 0xec;
+			txmessage[len++] = 0x5f;
+			txmessage[len++] = 0x64;
+			txmessage[len++] = 0x45;
+			txmessage[len++] = 0xf1;
+
+			// Payload is Notify
+			txmessage[len++] = 0x00; // Next payload is NONE
+			txmessage[len++] = 0x00; // Not critical
+			txmessage[len++] = 0x00; // :ength 28
+			txmessage[len++] = 0x1c;
+			txmessage[len++] = 0x00; // Protocol ID is RESERVED(0)
+			txmessage[len++] = 0x00; // SPI size = 0
+			txmessage[len++] = 0x40; // NAT_DETECTION_DESTIANTION_IP (16389)
+			txmessage[len++] = 0x05;
+			// data is SHA1(SPIs, source IP address, source port)
+			// however, we're just looking for a response, not a valid
+			// packet
+			txmessage[len++] = 0xf9; // Notification data
+			txmessage[len++] = 0x33;
+			txmessage[len++] = 0xa1;
+			txmessage[len++] = 0x9a;
+			txmessage[len++] = 0x65;
+			txmessage[len++] = 0x1a;
+			txmessage[len++] = 0xc3;
+			txmessage[len++] = 0x73;
+			txmessage[len++] = 0x8b;
+			txmessage[len++] = 0xb7;
+			txmessage[len++] = 0xf6;
+			txmessage[len++] = 0x04;
+			txmessage[len++] = 0x43;
+			txmessage[len++] = 0x6f;
+			txmessage[len++] = 0x80;
+			txmessage[len++] = 0x12;
+			txmessage[len++] = 0x69;
+			txmessage[len++] = 0x3e;
+			txmessage[len++] = 0x6a;
+			txmessage[len++] = 0x2a;
+
+			break;
+		}
+
+		// RIPng
+		case 521:
+		{
+			len = 0;
+			txmessage[len++] = 0x01; // Command is REQUEST
+			txmessage[len++] = 0x01; // Version 1
+			txmessage[len++] = 0x00; // Reserved
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // ::
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // Route Tag
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // Prefix length
+			txmessage[len++] = 0x10; // Metric
+			break;
+		}
+
+		case 547:
+		{
+			// DHCPv6 defined in https://tools.ietf.org/html/rfc3315
+			//       0                   1                   2                   3
+			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |    msg-type   |               transaction-id                  |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |                                                               |
+			//      .                            options                            .
+			//      .                           (variable)                          .
+			//      |                                                               |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			len = 0;
+			txmessage[len++] = 0x01; // msg-type = 0x01 (Solicit)
+			txmessage[len++] = 0xde; // transaction-id
+			txmessage[len++] = 0xad;
+			txmessage[len++] = 0xfa;
+
+			//       0                   1                   2                   3
+			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |        OPTION_CLIENTID        |          option-len           |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      .                                                               .
+			//      .                              DUID                             .
+			//      .                        (variable length)                      .
+			//      .                                                               .
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+			txmessage[len++] = 0x00; // Option 1 is Client Identifier
+			txmessage[len++] = 0x01;
+
+			txmessage[len++] = 0x00; // Length field
+			txmessage[len++] = 0x0e;
+
+
+			// The following diagram illustrates the format of a DUID-LLT:
+			//
+			//     0                   1                   2                   3
+			//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |               1               |    hardware type (16 bits)    |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |                        time (32 bits)                         |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    .                                                               .
+			//    .             link-layer address (variable length)              .
+			//    .                                                               .
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+
+			txmessage[len++] = 0x00; // DUID-LLT
+			txmessage[len++] = 0x01;
+
+			txmessage[len++] = 0x00; // Hardware type: Ethernet
+			txmessage[len++] = 0x01;
+
+			txmessage[len++] = 0x00; // Time
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x01;
+
+			// Copy in the local MAC address as the Link-layer address
+			for (i = 0; i < 6 ; i++) txmessage[len++] = localmacaddr[i];
+
+			//  0                   1                   2                   3
+			//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |     OPTION_RECONF_ACCEPT      |               0               |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			//      option-code   OPTION_RECONF_ACCEPT (20).
+			//
+			//      option-len    0.
+			//
+
+			txmessage[len++] = 0x00; // Reconfigure Accept option
+			txmessage[len++] = 0x14;
+
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+
+			// The format of the IA_NA option is:
+			//
+			//       0                   1                   2                   3
+			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |          OPTION_IA_NA         |          option-len           |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |                        IAID (4 octets)                        |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |                              T1                               |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |                              T2                               |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |                                                               |
+			//      .                         IA_NA-options                         .
+			//      .                                                               .
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			//      option-code          OPTION_IA_NA (3).
+			//
+			//      option-len           12 + length of IA_NA-options field.
+			//
+			//      IAID                 The unique identifier for this IA_NA; the
+			//                           IAID must be unique among the identifiers for
+			//                           all of this client's IA_NAs.  The number
+			//                           space for IA_NA IAIDs is separate from the
+			//                           number space for IA_TA IAIDs.
+			//
+			//      T1                   The time at which the client contacts the
+			//                           server from which the addresses in the IA_NA
+			//                           were obtained to extend the lifetimes of the
+			//                           addresses assigned to the IA_NA; T1 is a
+			//                           time duration relative to the current time
+			//                           expressed in units of seconds.
+			//
+			//      T2                   The time at which the client contacts any
+			//                           available server to extend the lifetimes of
+			//                           the addresses assigned to the IA_NA; T2 is a
+			//                           time duration relative to the current time
+			//                           expressed in units of seconds.
+			//
+			//      IA_NA-options        Options associated with this IA_NA.
+
+			txmessage[len++] = 0x00; // Identity Association for Non-temporary Address (IA_NA) option
+			txmessage[len++] = 0x03;
+
+			txmessage[len++] = 0x00; // Length (options length = 0)
+			txmessage[len++] = 0x0c;
+
+			txmessage[len++] = 0x00; // IAID
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+
+			txmessage[len++] = 0x00; // T1
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+
+			txmessage[len++] = 0x00; // T2
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+
+			//       0                   1                   2                   3
+			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |      OPTION_ELAPSED_TIME      |           option-len          |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |          elapsed-time         |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			//      option-code   OPTION_ELAPSED_TIME (8).
+			//
+			//      option-len    2.
+			//
+			//      elapsed-time  The amount of time since the client began its
+			//                    current DHCP transaction.  This time is expressed in
+			//                    hundredths of a second (10^-2 seconds).
+
+
+			txmessage[len++] = 0x00; // Elapsed Time Option
+			txmessage[len++] = 0x08;
+
+			txmessage[len++] = 0x00; // Length
+			txmessage[len++] = 0x02;
+
+			txmessage[len++] = 0x00; // We just started ..
+			txmessage[len++] = 0x00;
+
+			//   The Option Request option is used to identify a list of options in a
+			//   message between a client and a server.  The format of the Option
+			//   Request option is:
+			//
+			//       0                   1                   2                   3
+			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |           OPTION_ORO          |           option-len          |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |    requested-option-code-1    |    requested-option-code-2    |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |                              ...                              |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			//      option-code   OPTION_ORO (6).
+			//
+			//      option-len    2 * number of requested options.
+			//
+			//      requested-option-code-n The option code for an option requested by
+			//      the client.
+
+			txmessage[len++] = 0x00; // Option Request Option Option
+			txmessage[len++] = 0x06;
+
+			txmessage[len++] = 0x00; // Option length
+			txmessage[len++] = 0x04;
+
+			txmessage[len++] = 0x00; // Recursive DNS server
+			txmessage[len++] = 0x17;
+
+			txmessage[len++] = 0x00; // Domain Search List
+			txmessage[len++] = 0x18;
+
+			// From RFC 3633
+			// The IA_PD option is used to carry a prefix delegation identity
+			//   association, the parameters associated with the IA_PD and the
+			//   prefixes associated with it.
+			//
+			//   The format of the IA_PD option is:
+			//
+			//     0                   1                   2                   3
+			//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |         OPTION_IA_PD          |         option-length         |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |                         IAID (4 octets)                       |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |                              T1                               |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |                              T2                               |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    .                                                               .
+			//    .                          IA_PD-options                        .
+			//    .                                                               .
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			//   option-code:      OPTION_IA_PD (25)
+			//
+			//   option-length:    12 + length of IA_PD-options field.
+			//
+			//   IAID:             The unique identifier for this IA_PD; the IAID must
+			//                     be unique among the identifiers for all of this
+			//                     requesting router's IA_PDs.
+			//
+			//   T1:               The time at which the requesting router should
+			//                     contact the delegating router from which the
+			//                     prefixes in the IA_PD were obtained to extend the
+			//                     lifetimes of the prefixes delegated to the IA_PD;
+			//                     T1 is a time duration relative to the current time
+			//                     expressed in units of seconds.
+			//
+			//   T2:               The time at which the requesting router should
+			//                     contact any available delegating router to extend
+			//                     the lifetimes of the prefixes assigned to the
+			//                     IA_PD; T2 is a time duration relative to the
+			//                     current time expressed in units of seconds.
+			//
+			//   IA_PD-options:    Options associated with this IA_PD.
+
+			txmessage[len++] = 0x00; // IA_PD Option
+			txmessage[len++] = 0x19;
+
+			txmessage[len++] = 0x00; // Length
+			txmessage[len++] = 0x29;
+
+			txmessage[len++] = 0x00; // IAID
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+
+			txmessage[len++] = 0x00; // T1
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+
+			txmessage[len++] = 0x00; // T2
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+
+			//   The IA_PD Prefix option is used to specify IPv6 address prefixes
+			//   associated with an IA_PD.  The IA_PD Prefix option must be
+			//   encapsulated in the IA_PD-options field of an IA_PD option.
+			//
+			//   The format of the IA_PD Prefix option is:
+			//
+			//     0                   1                   2                   3
+			//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |        OPTION_IAPREFIX        |         option-length         |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |                      preferred-lifetime                       |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |                        valid-lifetime                         |
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    | prefix-length |                                               |
+			//    +-+-+-+-+-+-+-+-+          IPv6 prefix                          |
+			//    |                           (16 octets)                         |
+			//    |                                                               |
+			//    |                                                               |
+			//    |                                                               |
+			//    |               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//    |               |                                               .
+			//    +-+-+-+-+-+-+-+-+                                               .
+			//    .                       IAprefix-options                        .
+			//    .                                                               .
+			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			//   option-code:      OPTION_IAPREFIX (26)
+			//
+			//   option-length:    25 + length of IAprefix-options field
+			//
+			//   preferred-lifetime: The recommended preferred lifetime for the IPv6
+			//                     prefix in the option, expressed in units of
+			//                     seconds.  A value of 0xFFFFFFFF represents
+			//                     infinity.
+			//
+			//   valid-lifetime:   The valid lifetime for the IPv6 prefix in the
+			//                     option, expressed in units of seconds.  A value of
+			//                     0xFFFFFFFF represents infinity.
+			//
+			//   prefix-length:    Length for this prefix in bits
+			//
+			//   IPv6-prefix:      An IPv6 prefix
+			//
+			//   IAprefix-options: Options associated with this prefix
+
+			txmessage[len++] = 0x00; // IA Prefix option
+			txmessage[len++] = 0x1a;
+
+			txmessage[len++] = 0x00; // Length (no additional options)
+			txmessage[len++] = 0x19;
+
+			txmessage[len++] = 0x00; // Preferred lifetime - 21600 seconds (6 hours)
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x54;
+			txmessage[len++] = 0x60;
+
+			txmessage[len++] = 0x00; // Valid lifetime - 86400 seconds (24 hours)
+			txmessage[len++] = 0x01;
+			txmessage[len++] = 0x51;
+			txmessage[len++] = 0x80;
+
+			txmessage[len++] = 0x40; // 64-bit prefix length
+
+			txmessage[len++] = 0x00; // Prefix ::
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			break;
+		}
+
+
+		case 1900:
+		{
+			// UPnP
+			// taken from http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf
+			//
+			len = snprintf(&txmessage[0], UDP_BUFFER_SIZE, \
+					"M-SEARCH * HTTP/1.1\r\nHost:[%s]:1900\r\nMan: \"ssdp:discover\"\r\nMX:1\r\nST: \"ssdp:all\"\r\nUSER-AGENT: linux/2.6 UPnP/1.1 TimsTester/1.0\r\n\r\n", hostname);
+			if (len < 0 || len >= UDP_BUFFER_SIZE)
 			{
-				// Taken from RFC4379
-				//
-				//             0                   1                   2                   3
-				//		       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |         Version Number        |         Global Flags          |
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |  Message Type |   Reply mode  |  Return Code  | Return Subcode|
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |                        Sender's Handle                        |
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |                        Sequence Number                        |
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |                    TimeStamp Sent (seconds)                   |
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |                  TimeStamp Sent (microseconds)                |
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |                  TimeStamp Received (seconds)                 |
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |                TimeStamp Received (microseconds)              |
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//		      |                            TLVs ...                           |
-				//		      .                                                               .
-				//		      .                                                               .
-				//		      .                                                               .
-				//		      |                                                               |
-				//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				// Version
-				txmessage[len++] = 0;
-				txmessage[len++] = 1; // Version 1
-				// Global flags
-				txmessage[len++] = 0;
-				txmessage[len++] = 1; // Global Flags 1=Validate FEC Stack
-				// Message type
-				txmessage[len++] = 1; // Message type 1=echo request
-				// Reply mode
-				txmessage[len++] = 2; // Reply Mode (1=don't;2=ip udp;3=ip udp + router alert; 4 = app level control channel)
-				// Return code
-				txmessage[len++] = 0; // Filled in by responder
-				// Return subcode
-				txmessage[len++] = 0; // Filled in by responder
-				// Sender's Handle
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				// Sequence Number
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 1;
-				// Timestamp sent (seconds)
-				txmessage[len++] = (tv_secs >> 24) & 0xff;
-				txmessage[len++] = (tv_secs >> 16) & 0xff;
-				txmessage[len++] = (tv_secs >>  8) & 0xff;
-				txmessage[len++] = tv_secs         & 0xff;
-				// Timestamp sent (microseconds)
-				txmessage[len++] = (tv_usecs >> 24) & 0xff;
-				txmessage[len++] = (tv_usecs >> 16) & 0xff;
-				txmessage[len++] = (tv_usecs >>  8) & 0xff;
-				txmessage[len++] = tv_usecs         & 0xff;
-				// Timestamp received (seconds)
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				// Timestamp received (microseconds)
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-				//
-				// TLVs
-				//
-				//			TLVs (Type-Length-Value tuples) have the following format:
-				//
-				//			       0                   1                   2                   3
-				//			       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//			      |             Type              |            Length             |
-				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//			      |                             Value                             |
-				//			      .                                                               .
-				//			      .                                                               .
-				//			      .                                                               .
-				//			      |                                                               |
-				//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				//			   Types are defined below; Length is the length of the Value field in
-				//			   octets.  The Value field depends on the Type; it is zero padded to
-				//			   align to a 4-octet boundary.  TLVs may be nested within other TLVs,
-				//			   in which case the nested TLVs are called sub-TLVs.  Sub-TLVs have
-				//			   independent types and MUST also be 4-octet aligned.
-				//
-				//			   A description of the Types and Values of the top-level TLVs for LSP
-				//			   ping are given below:
-				//
-				//			          Type #                  Value Field
-				//			          ------                  -----------
-				//			               1                  Target FEC Stack
-				//			               2                  Downstream Mapping
-				//			               3                  Pad
-				//			               4                  Not Assigned
-				//			               5                  Vendor Enterprise Number
-				//			               6                  Not Assigned
-				//			               7                  Interface and Label Stack
-				//			               8                  Not Assigned
-				//			               9                  Errored TLVs
-				//			              10                  Reply TOS Byte
-				//
-				// Always include a FEC TLV
-				txmessage[len++] = 0;
-				txmessage[len++] = 1; // Target FEC Stack (from types listed above)
-				txmessage[len++] = 0;
-				txmessage[len++] = 24; // length of LDP IPv6 prefix that follows
-				//
-				// A Target FEC Stack is a list of sub-TLVs.  The number of elements is
-				//   determined by looking at the sub-TLV length fields.
-				//
-				//    Sub-Type       Length            Value Field
-				//    --------       ------            -----------
-				//           1            5            LDP IPv4 prefix
-				//           2           17            LDP IPv6 prefix
-				//           3           20            RSVP IPv4 LSP
-				//           4           56            RSVP IPv6 LSP
-				//           5                         Not Assigned
-				//           6           13            VPN IPv4 prefix
-				//           7           25            VPN IPv6 prefix
-				//           8           14            L2 VPN endpoint
-				//           9           10            "FEC 128" Pseudowire (deprecated)
-				//          10           14            "FEC 128" Pseudowire
-				//          11          16+            "FEC 129" Pseudowire
-				//          12            5            BGP labeled IPv4 prefix
-				//
-				txmessage[len++] = 0;
-				txmessage[len++] = 2; // Sub-type LDP IPv6 prefix
-				txmessage[len++] = 0;
-				txmessage[len++] = 17; // LDP IPv6 prefix TLV length as listed above
-				//
-				//			The Label Distribution Protocol (LDP) IPv6 FEC
-				//			sub-TLV has the following format:
-				//
-				//       0                   1                   2                   3
-				//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      |                          IPv6 prefix                          |
-				//      |                          (16 octets)                          |
-				//      |                                                               |
-				//      |                                                               |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//      | Prefix Length |         Must Be Zero                          |
-				//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-				//
-				//
-				// copy the server's local address into the FEC entry
-				for (i = 0; i < 16; i++)
-				{
-					txmessage[len++] = localaddr.sin6_addr.s6_addr[i] & 0xff;
-				}
-				txmessage[len++] = 128; // single host is /128
-				txmessage[len++] = 0;   // 0-padding
-				txmessage[len++] = 0;
-				txmessage[len++] = 0;
-
-				break;
-			}
-
-			case 11211: // memcache
-			{
-				if (0 == special)
-				{
-					// ASCII mode
-					// The frame header is 8 bytes long, as follows (all values are 16-bit integers
-					// in network byte order, high byte first):
-					//	
-					// 0-1 Request ID
-					// 2-3 Sequence number
-					// 4-5 Total number of datagrams in this message
-					// 6-7 Reserved for future use; must be 0
-					// <cmd>\r\n
-
-					txmessage[len++] = 0x00; // Request ID
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x00; // Sequence ID
-					txmessage[len++] = 0x00;
-					txmessage[len++] = 0x00; // Number of datagrams
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x00; // Reserved for future use
-					txmessage[len++] = 0x00;
-
-					char mccmd[] = "version";
-
-					rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
-					if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
-					{
-						IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for memcache command, returned %d\n", rc);
-						retval = PORTINTERROR;
-					}
-					else
-					{
-						len += rc;
-					}
-				}
-				else
-				{
-					txmessage[len++] = 0x00; // Request ID
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x00; // Sequence ID
-					txmessage[len++] = 0x00;
-					txmessage[len++] = 0x00; // Number of datagrams
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x00; // Reserved for future use
-					txmessage[len++] = 0x00;
-					// Binary mode
-					// https://github.com/couchbase/memcached/blob/master/docs/BinaryProtocol.md#0x0b-version
-					//
-					//  Byte/     0       |       1       |       2       |       3       |
-					//     /              |               |               |               |
-					//    |0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|
-					//    +---------------+---------------+---------------+---------------+
-					//   0| 0x80          | 0x0b          | 0x00          | 0x00          |
-					//    +---------------+---------------+---------------+---------------+
-					//   4| 0x00          | 0x00          | 0x00          | 0x00          |
-					//    +---------------+---------------+---------------+---------------+
-					//   8| 0x00          | 0x00          | 0x00          | 0x00          |
-					//    +---------------+---------------+---------------+---------------+
-					//  12| 0x00          | 0x00          | 0x00          | 0x00          |
-					//    +---------------+---------------+---------------+---------------+
-					//  16| 0x00          | 0x00          | 0x00          | 0x00          |
-					//    +---------------+---------------+---------------+---------------+
-					//  20| 0x00          | 0x00          | 0x00          | 0x00          |
-					//    +---------------+---------------+---------------+---------------+
-					//
-					txmessage[len++] = 0x80; //	request
-					txmessage[len++] = 0x0b; //	opcode - Version
-					txmessage[len++] = 0; //	keylength
-					txmessage[len++] = 0; //	keylength
-					txmessage[len++] = 0; //	extras length -must be 0, else "multipart not supported"
-					txmessage[len++] = 1; //	data type    - must be 1, else "multipart not supported"
-					txmessage[len++] = 0; //	reserved
-					txmessage[len++] = 0; //	reserved
-					txmessage[len++] = 0; //	total body length
-					txmessage[len++] = 0; //	total body length
-					txmessage[len++] = 0; //	total body length
-					txmessage[len++] = 0; //	total body length
-					txmessage[len++] = 0x21; //	opaque
-					txmessage[len++] = 0x03; //	opaque
-					txmessage[len++] = 0x14; //	opaque
-					txmessage[len++] = 0x08; //	opaque
-					txmessage[len++] = 0; //	cas
-					txmessage[len++] = 0; //	cas
-					txmessage[len++] = 0; //	cas
-					txmessage[len++] = 0; //	cas
-					txmessage[len++] = 0; //	cas
-					txmessage[len++] = 0; //	cas
-					txmessage[len++] = 0; //	cas
-					txmessage[len++] = 0; //	cas
-				}	
-				break;
-			}
-
-			default:
-			{
-				// Unhandled port
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: generating an unspecified message for UDP port %d\n", port);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for UPnP, returned %d\n", len);
 				len = 0;
-				// Generate an unspecified message
-				txmessage[len++] = 0x0A;
-				txmessage[len++] = 0x0A;
-				txmessage[len++] = 0x0D;
-				txmessage[len++] = 0x0;
-				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2020 Tim Chappell. This message is destined for UDP port %d\n", port);
-				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
+				retval = PORTINTERROR;
+			}
+
+			break;
+		}
+
+		// LSP Ping
+		case 3503:
+		{
+			// Taken from RFC4379
+			//
+			//             0                   1                   2                   3
+			//		       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |         Version Number        |         Global Flags          |
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |  Message Type |   Reply mode  |  Return Code  | Return Subcode|
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |                        Sender's Handle                        |
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |                        Sequence Number                        |
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |                    TimeStamp Sent (seconds)                   |
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |                  TimeStamp Sent (microseconds)                |
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |                  TimeStamp Received (seconds)                 |
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |                TimeStamp Received (microseconds)              |
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//		      |                            TLVs ...                           |
+			//		      .                                                               .
+			//		      .                                                               .
+			//		      .                                                               .
+			//		      |                                                               |
+			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			// Version
+			txmessage[len++] = 0;
+			txmessage[len++] = 1; // Version 1
+			// Global flags
+			txmessage[len++] = 0;
+			txmessage[len++] = 1; // Global Flags 1=Validate FEC Stack
+			// Message type
+			txmessage[len++] = 1; // Message type 1=echo request
+			// Reply mode
+			txmessage[len++] = 2; // Reply Mode (1=don't;2=ip udp;3=ip udp + router alert; 4 = app level control channel)
+			// Return code
+			txmessage[len++] = 0; // Filled in by responder
+			// Return subcode
+			txmessage[len++] = 0; // Filled in by responder
+			// Sender's Handle
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			// Sequence Number
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 1;
+			// Timestamp sent (seconds)
+			txmessage[len++] = (tv_secs >> 24) & 0xff;
+			txmessage[len++] = (tv_secs >> 16) & 0xff;
+			txmessage[len++] = (tv_secs >>  8) & 0xff;
+			txmessage[len++] = tv_secs         & 0xff;
+			// Timestamp sent (microseconds)
+			txmessage[len++] = (tv_usecs >> 24) & 0xff;
+			txmessage[len++] = (tv_usecs >> 16) & 0xff;
+			txmessage[len++] = (tv_usecs >>  8) & 0xff;
+			txmessage[len++] = tv_usecs         & 0xff;
+			// Timestamp received (seconds)
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			// Timestamp received (microseconds)
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+			//
+			// TLVs
+			//
+			//			TLVs (Type-Length-Value tuples) have the following format:
+			//
+			//			       0                   1                   2                   3
+			//			       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//			      |             Type              |            Length             |
+			//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//			      |                             Value                             |
+			//			      .                                                               .
+			//			      .                                                               .
+			//			      .                                                               .
+			//			      |                                                               |
+			//			      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			//			   Types are defined below; Length is the length of the Value field in
+			//			   octets.  The Value field depends on the Type; it is zero padded to
+			//			   align to a 4-octet boundary.  TLVs may be nested within other TLVs,
+			//			   in which case the nested TLVs are called sub-TLVs.  Sub-TLVs have
+			//			   independent types and MUST also be 4-octet aligned.
+			//
+			//			   A description of the Types and Values of the top-level TLVs for LSP
+			//			   ping are given below:
+			//
+			//			          Type #                  Value Field
+			//			          ------                  -----------
+			//			               1                  Target FEC Stack
+			//			               2                  Downstream Mapping
+			//			               3                  Pad
+			//			               4                  Not Assigned
+			//			               5                  Vendor Enterprise Number
+			//			               6                  Not Assigned
+			//			               7                  Interface and Label Stack
+			//			               8                  Not Assigned
+			//			               9                  Errored TLVs
+			//			              10                  Reply TOS Byte
+			//
+			// Always include a FEC TLV
+			txmessage[len++] = 0;
+			txmessage[len++] = 1; // Target FEC Stack (from types listed above)
+			txmessage[len++] = 0;
+			txmessage[len++] = 24; // length of LDP IPv6 prefix that follows
+			//
+			// A Target FEC Stack is a list of sub-TLVs.  The number of elements is
+			//   determined by looking at the sub-TLV length fields.
+			//
+			//    Sub-Type       Length            Value Field
+			//    --------       ------            -----------
+			//           1            5            LDP IPv4 prefix
+			//           2           17            LDP IPv6 prefix
+			//           3           20            RSVP IPv4 LSP
+			//           4           56            RSVP IPv6 LSP
+			//           5                         Not Assigned
+			//           6           13            VPN IPv4 prefix
+			//           7           25            VPN IPv6 prefix
+			//           8           14            L2 VPN endpoint
+			//           9           10            "FEC 128" Pseudowire (deprecated)
+			//          10           14            "FEC 128" Pseudowire
+			//          11          16+            "FEC 129" Pseudowire
+			//          12            5            BGP labeled IPv4 prefix
+			//
+			txmessage[len++] = 0;
+			txmessage[len++] = 2; // Sub-type LDP IPv6 prefix
+			txmessage[len++] = 0;
+			txmessage[len++] = 17; // LDP IPv6 prefix TLV length as listed above
+			//
+			//			The Label Distribution Protocol (LDP) IPv6 FEC
+			//			sub-TLV has the following format:
+			//
+			//       0                   1                   2                   3
+			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      |                          IPv6 prefix                          |
+			//      |                          (16 octets)                          |
+			//      |                                                               |
+			//      |                                                               |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//      | Prefix Length |         Must Be Zero                          |
+			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+			//
+			//
+			// copy the server's local address into the FEC entry
+			for (i = 0; i < 16; i++)
+			{
+				txmessage[len++] = localaddr.sin6_addr.s6_addr[i] & 0xff;
+			}
+			txmessage[len++] = 128; // single host is /128
+			txmessage[len++] = 0;   // 0-padding
+			txmessage[len++] = 0;
+			txmessage[len++] = 0;
+
+			break;
+		}
+
+		case 11211: // memcache
+		{
+			if (0 == special)
+			{
+				// ASCII mode
+				// The frame header is 8 bytes long, as follows (all values are 16-bit integers
+				// in network byte order, high byte first):
+				//
+				// 0-1 Request ID
+				// 2-3 Sequence number
+				// 4-5 Total number of datagrams in this message
+				// 6-7 Reserved for future use; must be 0
+				// <cmd>\r\n
+
+				txmessage[len++] = 0x00; // Request ID
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x00; // Sequence ID
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // Number of datagrams
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x00; // Reserved for future use
+				txmessage[len++] = 0x00;
+
+				char mccmd[] = "version";
+
+				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
+				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for memcache command, returned %d\n", rc);
 					retval = PORTINTERROR;
 				}
 				else
 				{
 					len += rc;
 				}
-				break;
 			}
+			else
+			{
+				txmessage[len++] = 0x00; // Request ID
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x00; // Sequence ID
+				txmessage[len++] = 0x00;
+				txmessage[len++] = 0x00; // Number of datagrams
+				txmessage[len++] = 0x01;
+				txmessage[len++] = 0x00; // Reserved for future use
+				txmessage[len++] = 0x00;
+				// Binary mode
+				// https://github.com/couchbase/memcached/blob/master/docs/BinaryProtocol.md#0x0b-version
+				//
+				//  Byte/     0       |       1       |       2       |       3       |
+				//     /              |               |               |               |
+				//    |0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|
+				//    +---------------+---------------+---------------+---------------+
+				//   0| 0x80          | 0x0b          | 0x00          | 0x00          |
+				//    +---------------+---------------+---------------+---------------+
+				//   4| 0x00          | 0x00          | 0x00          | 0x00          |
+				//    +---------------+---------------+---------------+---------------+
+				//   8| 0x00          | 0x00          | 0x00          | 0x00          |
+				//    +---------------+---------------+---------------+---------------+
+				//  12| 0x00          | 0x00          | 0x00          | 0x00          |
+				//    +---------------+---------------+---------------+---------------+
+				//  16| 0x00          | 0x00          | 0x00          | 0x00          |
+				//    +---------------+---------------+---------------+---------------+
+				//  20| 0x00          | 0x00          | 0x00          | 0x00          |
+				//    +---------------+---------------+---------------+---------------+
+				//
+				txmessage[len++] = 0x80; //	request
+				txmessage[len++] = 0x0b; //	opcode - Version
+				txmessage[len++] = 0; //	keylength
+				txmessage[len++] = 0; //	keylength
+				txmessage[len++] = 0; //	extras length -must be 0, else "multipart not supported"
+				txmessage[len++] = 1; //	data type    - must be 1, else "multipart not supported"
+				txmessage[len++] = 0; //	reserved
+				txmessage[len++] = 0; //	reserved
+				txmessage[len++] = 0; //	total body length
+				txmessage[len++] = 0; //	total body length
+				txmessage[len++] = 0; //	total body length
+				txmessage[len++] = 0; //	total body length
+				txmessage[len++] = 0x21; //	opaque
+				txmessage[len++] = 0x03; //	opaque
+				txmessage[len++] = 0x14; //	opaque
+				txmessage[len++] = 0x08; //	opaque
+				txmessage[len++] = 0; //	cas
+				txmessage[len++] = 0; //	cas
+				txmessage[len++] = 0; //	cas
+				txmessage[len++] = 0; //	cas
+				txmessage[len++] = 0; //	cas
+				txmessage[len++] = 0; //	cas
+				txmessage[len++] = 0; //	cas
+				txmessage[len++] = 0; //	cas
+			}
+			break;
+		}
+
+		default:
+		{
+			// Unhandled port
+			IPSCAN_LOG( LOGPREFIX "check_udp_port: generating an unspecified message for UDP port %d\n", port);
+			len = 0;
+			// Generate an unspecified message
+			txmessage[len++] = 0x0A;
+			txmessage[len++] = 0x0A;
+			txmessage[len++] = 0x0D;
+			txmessage[len++] = 0x0;
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2020 Tim Chappell. This message is destined for UDP port %d\n", port);
+			if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += rc;
+			}
+			break;
+		}
 		}
 	}
 
@@ -1815,12 +1812,12 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				if (0 != special)
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: read(port %d:%d) unexpected response, errno is : %d (%s) for host %s port %d\n", port, special,\
-						errsv, strerror(errsv), hostname, port);
+							errsv, strerror(errsv), hostname, port);
 				}
 				else
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: read(port %d) unexpected response, errno is : %d (%s) for host %s port %d\n", port, \
-						errsv, strerror(errsv), hostname, port);
+							errsv, strerror(errsv), hostname, port);
 				}
 				retval = PORTUNEXPECTED;
 			}
@@ -1840,8 +1837,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			}
 
 			// Log the summary of results internally - but only if LOGVERBOSITY is set to 1
-			int rxlength = ( rc < UDPMAXLOGOCTETS ) ? rc : UDPMAXLOGOCTETS;
-			int i = 0;
+			unsigned int rxlength = ( rc < UDPMAXLOGOCTETS ) ? rc : UDPMAXLOGOCTETS;
+			i = 0;
 			int position = 0;
 			while (i < rxlength)
 			{

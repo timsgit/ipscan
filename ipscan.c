@@ -70,6 +70,8 @@
 // 0.49 - semmle re-entrant time function changes
 // 0.50 - add page reload for case where terms and conditions not accepted
 // 0.51 - further client debug improvements and copyright update
+// 0.52 - remove summarise_db() functionality
+// 0.53 - incorporate update_db() for test state
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -110,11 +112,12 @@
 // Prototype declarations
 //
 
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result , char *indirecthost);
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
 int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int tidy_up_db(uint64_t time_now);
+int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost);
 
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
@@ -144,11 +147,6 @@ char * state_to_string(int statenum, char * retstringptr, int retstringfree);
 void create_results_key_table(char * hostname, time_t timestamp);
 #endif
 
-// summarise_db is only referenced if summary reporting is enabled
-#if (SUMMARYENABLE == 1)
-int summarise_db(void);
-#endif
-
 // Only include reference to ping-test function if compiled in
 #if (IPSCAN_INCLUDE_PING ==1)
 int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
@@ -163,652 +161,664 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 // structure holding the potential results table - entries MUST be in montonically increasing enumerated returnval order
 struct rslt_struc resultsstruct[] =
 {
-/* returnval,		connrc,	conn_errno		TEXT lbl			TEXT col	Description/User feedback	*/
-{ PORTOPEN, 		0, 		0,	 			"OPEN", 			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-{ PORTABORT, 		-1, 	ECONNABORTED, 	"ABRT", 			"yellow",	"An abort indication was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 			"yellow",	"A refused indication (TCP RST/ACK or ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ PORTCRESET, 		-1, 	ECONNRESET, 	"CRST", 			"yellow",	"A connection reset request was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ PORTNRESET, 		-1, 	ENETRESET, 		"NRST", 			"yellow",	"A network reset request was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ PORTINPROGRESS, 	-1, 	EINPROGRESS, 	"STLTH", 			"green",	"No response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
-{ PORTPROHIBITED, 	-1, 	EACCES, 		"PHBTD", 			"yellow",	"An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ PORTUNREACHABLE, 	-1, 	ENETUNREACH, 	"NUNRCH", 			"yellow",	"An unreachable response (ICMPv6 type 1 code 0) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ PORTNOROUTE, 		-1, 	EHOSTUNREACH, 	"HUNRCH", 			"yellow",	"A No route to host response (ICMPv6 type 1 code 3 or ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ PORTPKTTOOBIG, 	-1, 	EMSGSIZE, 		"TOOBIG", 			"yellow",	"A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ PORTPARAMPROB, 	-1, 	EPROTO, 		"PRMPRB", 			"yellow",	"A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
-{ ECHONOREPLY, 		-96, 	-96,	 		"ECHO NO REPLY",	"green",	"No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
-{ ECHOREPLY, 		-97, 	-97,	 		"ECHO REPLY", 		"yellow",	"An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
-{ UDPOPEN,			-95,	-95,			"UDPOPEN",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-{ UDPSTEALTH,		-1,		EAGAIN,			"UDPSTEALTH",		"green",	"No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
-/* Unexpected and unknown error response cases, do NOT change */
-{ PORTUNEXPECTED,	-98,	-98,			"UNXPCT",			"white",	"An unexpected response was received to the connect attempt."},
-{ PORTUNKNOWN, 		-99,	-99, 			"UNKWN", 			"white",	"An unknown error response was received, or the port is yet to be tested."},
-{ PORTINTERROR,		-100,	-100,			"INTERR",			"white",	"An internal error occurred."},
-/* End of list marker, do NOT change */
-{ PORTEOL,			-101,	-101,			"EOL",				"black",	"End of list marker."}
+		/* returnval,		connrc,	conn_errno		TEXT lbl			TEXT col	Description/User feedback	*/
+		{ PORTOPEN, 		0, 		0,	 			"OPEN", 			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
+		{ PORTABORT, 		-1, 	ECONNABORTED, 	"ABRT", 			"yellow",	"An abort indication was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 			"yellow",	"A refused indication (TCP RST/ACK or ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ PORTCRESET, 		-1, 	ECONNRESET, 	"CRST", 			"yellow",	"A connection reset request was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ PORTNRESET, 		-1, 	ENETRESET, 		"NRST", 			"yellow",	"A network reset request was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ PORTINPROGRESS, 	-1, 	EINPROGRESS, 	"STLTH", 			"green",	"No response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
+		{ PORTPROHIBITED, 	-1, 	EACCES, 		"PHBTD", 			"yellow",	"An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ PORTUNREACHABLE, 	-1, 	ENETUNREACH, 	"NUNRCH", 			"yellow",	"An unreachable response (ICMPv6 type 1 code 0) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ PORTNOROUTE, 		-1, 	EHOSTUNREACH, 	"HUNRCH", 			"yellow",	"A No route to host response (ICMPv6 type 1 code 3 or ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ PORTPKTTOOBIG, 	-1, 	EMSGSIZE, 		"TOOBIG", 			"yellow",	"A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ PORTPARAMPROB, 	-1, 	EPROTO, 		"PRMPRB", 			"yellow",	"A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine is responding on this IPv6 address/port combination, but cannot establish a TCP connection."},
+		{ ECHONOREPLY, 		-96, 	-96,	 		"ECHO NO REPLY",	"green",	"No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
+		{ ECHOREPLY, 		-97, 	-97,	 		"ECHO REPLY", 		"yellow",	"An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
+		{ UDPOPEN,			-95,	-95,			"UDPOPEN",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
+		{ UDPSTEALTH,		-1,		EAGAIN,			"UDPSTEALTH",		"green",	"No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
+		/* Unexpected and unknown error response cases, do NOT change */
+		{ PORTUNEXPECTED,	-98,	-98,			"UNXPCT",			"white",	"An unexpected response was received to the connect attempt."},
+		{ PORTUNKNOWN, 		-99,	-99, 			"UNKWN", 			"white",	"An unknown error response was received, or the port is yet to be tested."},
+		{ PORTINTERROR,		-100,	-100,			"INTERR",			"white",	"An internal error occurred."},
+		/* End of list marker, do NOT change */
+		{ PORTEOL,			-101,	-101,			"EOL",				"black",	"End of list marker."}
 };
 
 int main(void)
 {
 
-#if (TEXTMODE == 1)
-// last is only used in text-only mode
-int last = 0;
-#else
-// fetchnum is only used in javascript-only mode
-int fetchnum = 0;
-#endif
-
-// List of ports to be tested and their results
-struct portlist_struc portlist[MAXPORTS];
-
-int result;
-
-#if (TEXTMODE != 1)
-// Default for unused database entries
-char unusedfield[8] = "unused\0";
-#endif
-
-// Only necessary if we're including ping support
-#if (IPSCAN_INCLUDE_PING == 1)
-int pingresult;
-// Storage for indirecthost address, in case required
-char indirecthost[INET6_ADDRSTRLEN];
-#endif
-
-char remoteaddrstring[INET6_ADDRSTRLEN];
-char *remoteaddrvar;
-
-unsigned int position = 0;
-
-// Default to testing
-int beginscan = 0;
-int fetch = 0;
-
-// the session starttime, used as an unique index for the database
-time_t   starttime;
-// the query derived starttime
-int64_t  querystarttime;
-
-uint8_t special;
-uint16_t port;
-uint16_t portindex;
-
-// Parallel scanning related
-int numchildren;
-int remaining;
-int childstatus;
-unsigned int porti;
-
-// Ports to be tested
-uint16_t numports = 0;
-#if (IPSCAN_INCLUDE_UDP == 1)
-uint16_t numudpports = NUMUDPPORTS;
-#endif
-
-// "general purpose" variables, used as required
-int rc = 0;
-unsigned int i = 0;
-unsigned int shift = 0;
-unsigned int j = 0;
-
-// stats
-unsigned int portsstats[ NUMRESULTTYPES ];
-
-// Determine request method and query-string
-char requestmethod[ (MAXREQMETHODLEN + 1) ];
-char thischar;
-char *reqmethodvar;
-char *querystringvar;
-char querystring[ (MAXQUERYSTRLEN + 1) ];
-
-
-// buffer for reconstituted querystring
-// was int reconquerysize = MAXQUERYSTRLEN;
-size_t reconquerysize = MAXQUERYSTRLEN;
-char reconquery[ (MAXQUERYSTRLEN + 1) ];
-char *reconptr = &reconquery[0];
-
-// buffer for logging entries
-// was int logbuffersize = LOGENTRYLEN;
-size_t logbuffersize = LOGENTRYLEN;
-char logbuffer[ (LOGENTRYLEN + 1) ];
-char *logbufferptr = &logbuffer[0];
-
-// Structure to hold querystring variable names, their values and a validity indication
-typedef struct {
-	char varname[(MAXQUERYNAMELEN+2)];
-	int64_t varval; // Signed since some values will be negative
-	int valid;
-} queries;
-
-queries query[MAXQUERIES];
-unsigned int numqueries = 0;
-int64_t varval = 0; // temporary storage for query string parameters
-// value string - add two chars to cope with trailing \0
-char valstring[ (MAXQUERYVALLEN + 2) ];
-
-int64_t magic = 0;
-int includeexisting = 0;
-int termsaccepted = 0;
-
-// IPv6 address related
-unsigned char remotehost[sizeof(struct in6_addr)];
-
-uint64_t value;
-uint64_t remotehost_msb = 0;
-uint64_t remotehost_lsb = 0;
-
-// If syslog is in use then open the log
-#if (LOGMODE == 1)
-	openlog(EXENAME, LOG_PID, LOG_LOCAL0);
-#endif
-
-// Initialise the port list
-for (i = 0; i < DEFNUMPORTS; i++)
-{
-	portlist[i] = defportlist[i];
-}
-
-// Clear out the port result type statistics
-for (i = 0 ; i < NUMRESULTTYPES ; i++)
-{
-	portsstats[i] = 0;
-}
-
-// Process id related - this version is extracted from the querystring
-// note: this is signed, whereas original value is a suitably truncated unsigned integer
-int64_t querysession = 0;
-
-// Log the current time and "session" with which to initiate scan and fetch results
-// These should ensure that each test is globally unique when client IP address is also used.
-starttime = time(NULL);
-if (starttime < 0)
-{
-	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for starttime %d (%s)\n", errno, strerror(errno));
-}
-uint64_t session = get_session();
-
-
-// QUERY_STRING / REQUEST_METHOD
-// URL is of the form: ipv6.cgi?name1=value1&name2=value2
-// REQUEST_METHOD = GET
-// QUERY_STRING = name1=value1&name2=value2 
-reqmethodvar = getenv("REQUEST_METHOD");
-querystringvar = getenv("QUERY_STRING");
-
-// ensure length OK
-if (NULL == reqmethodvar)
-{
-	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : REQUEST_METHOD variable lookup returned NULL.");
-}
-else if ( strnlen(reqmethodvar, (MAXREQMETHODLEN+1)) > MAXREQMETHODLEN )
-{
-	IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: REQUEST_METHOD variable string is longer than allocated buffer (%d > %d)\n", (int)strnlen(reqmethodvar, (MAXREQMETHODLEN+1)), MAXREQMETHODLEN);
-	// Create the header
-	HTML_HEADER();
-	// Now finish the header
-	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-	printf("</head>\n");
-	printf("<body>\n");
-	printf("<p>I was called with REQUEST_METHOD longer than my allocated buffer. That is very disappointing.</p>\n");
-	// Finish the html
-	create_html_body_end();
-	return(EXIT_SUCCESS);
-}
-else if( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
-{
-	IPSCAN_LOG( LOGPREFIX "ipscan: Invalid request-method scan.");
-}
-else
-{
-	#ifdef QUERYDEBUG
-	IPSCAN_LOG( LOGPREFIX "ipscan: Request method is : %s\n", requestmethod);
+	#if (TEXTMODE == 1)
+	// last is only used in text-only mode
+	int last = 0;
+	#else
+	// fetchnum is only used in javascript-only mode
+	int fetchnum = 0;
 	#endif
 
-	// Force Uppercase to ease comparison
-	for (i = 0; i < (unsigned int)strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
+	// List of ports to be tested and their results
+	struct portlist_struc portlist[MAXPORTS];
+
+	int result;
+
+	#if (TEXTMODE != 1)
+	// Default for unused database entries
+	char unusedfield[8] = "unused\0";
+	#endif
+
+	// Only necessary if we're including ping support
+	#if (IPSCAN_INCLUDE_PING == 1)
+	int pingresult;
+	// Storage for indirecthost address, in case required
+	char indirecthost[INET6_ADDRSTRLEN];
+	#endif
+
+	char remoteaddrstring[INET6_ADDRSTRLEN];
+	char *remoteaddrvar;
+
+	unsigned int position = 0;
+
+	// Default to testing
+	int beginscan = 0;
+	int fetch = 0;
+
+	// the session starttime, used as an unique index for the database
+	time_t   starttime;
+	// the query derived starttime
+	int64_t  querystarttime;
+
+	uint8_t special;
+	uint16_t port;
+	uint16_t portindex;
+
+	// Parallel scanning related
+	int numchildren;
+	int remaining;
+	int childstatus;
+	unsigned int porti;
+
+	// Ports to be tested
+	uint16_t numports = 0;
+	#if (IPSCAN_INCLUDE_UDP == 1)
+	uint16_t numudpports = NUMUDPPORTS;
+	#endif
+
+	// "general purpose" variables, used as required
+	int rc = 0;
+	unsigned int i = 0;
+	unsigned int shift = 0;
+	unsigned int j = 0;
+
+	// stats
+	unsigned int portsstats[ NUMRESULTTYPES ];
+
+	// Determine request method and query-string
+	char requestmethod[ (MAXREQMETHODLEN + 1) ];
+	char thischar;
+	char *reqmethodvar;
+	char *querystringvar;
+	char querystring[ (MAXQUERYSTRLEN + 1) ];
+
+
+	// buffer for reconstituted querystring
+	size_t reconquerysize = MAXQUERYSTRLEN;
+	char reconquery[ (MAXQUERYSTRLEN + 1) ];
+	char *reconptr = &reconquery[0];
+
+	// buffer for logging entries
+	size_t logbuffersize = LOGENTRYLEN;
+	char logbuffer[ (LOGENTRYLEN + 1) ];
+	char *logbufferptr = &logbuffer[0];
+
+	// Structure to hold querystring variable names, their values and a validity indication
+	typedef struct {
+		char varname[(MAXQUERYNAMELEN+2)];
+		int64_t varval; // Signed since some values will be negative
+		int valid;
+	} queries;
+
+	queries query[MAXQUERIES];
+	unsigned int numqueries = 0;
+	int64_t varval = 0; // temporary storage for query string parameters
+	// value string - add two chars to cope with trailing \0
+	char valstring[ (MAXQUERYVALLEN + 2) ];
+
+	int64_t magic = 0;
+	int includeexisting = 0;
+	int termsaccepted = 0;
+
+	// IPv6 address related
+	unsigned char remotehost[sizeof(struct in6_addr)];
+
+	uint64_t value;
+	uint64_t remotehost_msb = 0ULL;
+	uint64_t remotehost_lsb = 0ULL;
+
+	// If syslog is in use then open the log
+	#if (LOGMODE == 1)
+	openlog(EXENAME, LOG_PID, LOG_LOCAL0);
+	#endif
+
+	// Initialise the port list
+	for (i = 0; i < DEFNUMPORTS; i++)
 	{
-		thischar=requestmethod[i];
-		requestmethod[i]=(char)(toupper(thischar) &0xFF);
+		portlist[i] = defportlist[i];
 	}
 
-	if (strncmp("GET", requestmethod, 3) == 0)
+	// Clear out the port result type statistics
+	for (i = 0 ; i < NUMRESULTTYPES ; i++)
 	{
-		if(NULL == querystringvar)
+		portsstats[i] = 0;
+	}
+
+	// Process id related - this version is extracted from the querystring
+	// note: this is signed, whereas original value is a suitably truncated unsigned integer
+	int64_t querysession = 0;
+
+	// Log the current time and "session" with which to initiate scan and fetch results
+	// These should ensure that each test is globally unique when client IP address is also used.
+	starttime = time(NULL);
+	if (starttime < 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for starttime %d (%s)\n", errno, strerror(errno));
+	}
+	uint64_t session = get_session();
+
+
+	// QUERY_STRING / REQUEST_METHOD
+	// URL is of the form: ipv6.cgi?name1=value1&name2=value2
+	// REQUEST_METHOD = GET
+	// QUERY_STRING = name1=value1&name2=value2
+	reqmethodvar = getenv("REQUEST_METHOD");
+	querystringvar = getenv("QUERY_STRING");
+
+	// ensure length OK
+	if (NULL == reqmethodvar)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : REQUEST_METHOD variable lookup returned NULL.");
+	}
+	else if ( strnlen(reqmethodvar, (MAXREQMETHODLEN+1)) > MAXREQMETHODLEN )
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: REQUEST_METHOD variable string is longer than allocated buffer (%d > %d)\n", (int)strnlen(reqmethodvar, (MAXREQMETHODLEN+1)), MAXREQMETHODLEN);
+		// Create the header
+		HTML_HEADER();
+		// Now finish the header
+		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+		printf("</head>\n");
+		printf("<body>\n");
+		printf("<p>I was called with REQUEST_METHOD longer than my allocated buffer. That is very disappointing.</p>\n");
+		// Finish the html
+		create_html_body_end();
+		return(EXIT_SUCCESS);
+	}
+	else if( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid request-method scan.");
+	}
+	else
+	{
+		#ifdef QUERYDEBUG
+		IPSCAN_LOG( LOGPREFIX "ipscan: Request method is : %s\n", requestmethod);
+		#endif
+
+		// Force Uppercase to ease comparison
+		for (i = 0; i < (unsigned int)strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: QUERY_STRING variable lookup returned NULL.\n");
+			thischar=requestmethod[i];
+			requestmethod[i]=(char)(toupper(thischar) &0xFF);
 		}
-		else if ( strnlen(querystringvar, MAXQUERYSTRLEN+1) > MAXQUERYSTRLEN)
+
+		if (strncmp("GET", requestmethod, 3) == 0)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: QUERY_STRING environment string is longer than allocated buffer (%d > %d)\n", (int)strnlen(querystringvar, MAXQUERYSTRLEN+1), MAXQUERYSTRLEN);
+			if(NULL == querystringvar)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: QUERY_STRING variable lookup returned NULL.\n");
+			}
+			else if ( strnlen(querystringvar, MAXQUERYSTRLEN+1) > MAXQUERYSTRLEN)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ATTACK?: QUERY_STRING environment string is longer than allocated buffer (%d > %d)\n", (int)strnlen(querystringvar, MAXQUERYSTRLEN+1), MAXQUERYSTRLEN);
+				// Create the header
+				HTML_HEADER();
+				// Now finish the header
+				printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+				printf("</head>\n");
+				printf("<body>\n");
+				printf("<p>I was called with a QUERY_STRING longer than my allocated buffer. That is very disappointing.</p>\n");
+				// Finish the html
+				create_html_body_end();
+				return(EXIT_SUCCESS);
+			}
+			else if( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
+			{
+				#ifdef QUERYDEBUG
+				// No query string will get reported here ....
+				IPSCAN_LOG( LOGPREFIX "ipscan: Invalid query-string sscanf.\n");
+				#endif
+			}
+			else
+			{
+				#ifdef QUERYDEBUG
+				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: Query-string : %s\n", querystring);
+				#endif
+
+
+				// Force lowercase to ease later comparison
+				for (i = 0; i < (unsigned int)strnlen(querystring,(MAXQUERYSTRLEN)); i++)
+				{
+					thischar=querystring[i];
+					querystring[i]=(char)(tolower(thischar) & 0xFF);
+				}
+
+				//
+				// Split the query string into variable names and values
+				//
+				// URL is of the form: ipscan-js.cgi?name1=value1&name2=value2
+				unsigned int queryindex = 0;
+				int finished = 0;
+
+				while (queryindex < MAXQUERYSTRLEN && querystring[queryindex] >= 32 && finished == 0 && numqueries < MAXQUERIES)
+				{
+					int varnameindex = 0;
+					query[numqueries].valid = 0;
+					while ( querystring[queryindex] >= 32 && querystring[queryindex] < 127 && querystring[queryindex] != '='
+							&& querystring[queryindex] != '&' && queryindex < MAXQUERYSTRLEN && varnameindex < MAXQUERYNAMELEN && finished == 0)
+					{
+						query[numqueries].varname[varnameindex] = querystring[queryindex];
+						varnameindex ++;
+						queryindex ++;
+					}
+					if (varnameindex >= MAXQUERYNAMELEN)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: query parameter name string is too long : %s\n", querystring);
+						varnameindex = MAXQUERYNAMELEN; // Truncate
+					}
+					query[numqueries].varname[varnameindex]=0; // Add termination
+
+					finished = (querystring[queryindex] < 32 || querystring[queryindex] > 126 || queryindex >= MAXQUERYSTRLEN) ? 1 : 0;
+					if (finished == 0 && querystring[queryindex] == '=')
+					{
+						// Jump over '='
+						while (querystring[queryindex] == '=' && queryindex < MAXQUERYSTRLEN)
+						{
+							queryindex++;
+						}
+						int valueindex = 0;
+						while ( querystring[queryindex] >= 32 && querystring[queryindex] < 127 && querystring[queryindex] != '='
+								&& querystring[queryindex] != '&' && valueindex < MAXQUERYVALLEN && queryindex < MAXQUERYSTRLEN)
+						{
+							valstring[valueindex] = querystring[queryindex];
+							queryindex++;
+							valueindex++;
+						}
+
+						if (valueindex >= MAXQUERYVALLEN)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: query parameter value string is too long : %s\n", querystring);
+							valueindex = MAXQUERYVALLEN; // Truncate
+						}
+						valstring[valueindex]=0; // Add termination
+
+						rc = sscanf(valstring,"%"SCNd64, &varval );
+						if (rc == 1)
+						{
+							// Mark the entry as valid, increment the number of queries found
+							query[numqueries].varval = varval;
+							query[numqueries].valid = 1;
+							#ifdef QUERYDEBUG
+							IPSCAN_LOG( LOGPREFIX "ipscan: Added a new query name: %s with a value of : %"PRId64"\n", query[numqueries].varname, query[numqueries].varval);
+							#endif
+							numqueries++;
+						}
+						else
+						{
+							#ifdef QUERYDEBUG
+							IPSCAN_LOG( LOGPREFIX "ipscan: Bad value assignment for %s, setting invalid.\n", query[numqueries].varname);
+							#endif
+							query[numqueries].varval = 0;
+							query[numqueries].valid = 0;
+							numqueries++;
+						}
+					}
+					// Move past the '&' sign
+					while (querystring[queryindex] == '&' && queryindex < MAXQUERYSTRLEN && finished == 0)
+					{
+						queryindex++;
+					}
+					finished = (querystring[queryindex] < 32 || queryindex >= MAXQUERYSTRLEN) ? 1 : 0;
+				}
+				#ifdef QUERYDEBUG
+				IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %d\n", numqueries);
+				#endif
+			}
+		}
+		else if (strncmp("HEAD", requestmethod, 4) == 0)
+		{
+			// Create the header
+			HTML_HEADER();
+			// Now finish the header
+			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+			printf("</head>\n");
+			printf("</html>\n");
+			IPSCAN_LOG( LOGPREFIX "ipscan: HEAD request method, sending headers only\n");
+			return(EXIT_SUCCESS);
+		}
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: called with an unsupported request method: %s.\n", requestmethod);
 			// Create the header
 			HTML_HEADER();
 			// Now finish the header
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
-			printf("<p>I was called with a QUERY_STRING longer than my allocated buffer. That is very disappointing.</p>\n");
+			printf("<p>I was called with an unsupported request-method. That is very disappointing.</p>\n");
 			// Finish the html
 			create_html_body_end();
 			return(EXIT_SUCCESS);
 		}
-		else if( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
-		{
-			#ifdef QUERYDEBUG
-			// No query string will get reported here ....
-			IPSCAN_LOG( LOGPREFIX "ipscan: Invalid query-string sscanf.\n");
-			#endif
-		}
-		else
-		{
-			#ifdef QUERYDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: Query-string : %s\n", querystring);
-			#endif
-
-
-			// Force lowercase to ease later comparison
-			for (i = 0; i < (unsigned int)strnlen(querystring,(MAXQUERYSTRLEN)); i++)
-			{
-				thischar=querystring[i];
-				querystring[i]=(char)(tolower(thischar) & 0xFF);
-			}
-
-			//
-			// Split the query string into variable names and values
-			//
-			// URL is of the form: ipscan-js.cgi?name1=value1&name2=value2
-			unsigned int queryindex = 0;
-			int finished = 0;
-
-			while (queryindex < MAXQUERYSTRLEN && querystring[queryindex] >= 32 && finished == 0 && numqueries < MAXQUERIES)
-			{
-				int varnameindex = 0;
-				query[numqueries].valid = 0;
-				while ( querystring[queryindex] >= 32 && querystring[queryindex] < 127 && querystring[queryindex] != '='
-					&& querystring[queryindex] != '&' && queryindex < MAXQUERYSTRLEN && varnameindex < MAXQUERYNAMELEN && finished == 0)
-				{
-					query[numqueries].varname[varnameindex] = querystring[queryindex];
-					varnameindex ++;
-					queryindex ++;
-				}
-				if (varnameindex >= MAXQUERYNAMELEN)
-				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: query parameter name string is too long : %s\n", querystring);
-					varnameindex = MAXQUERYNAMELEN; // Truncate
-				}
-				query[numqueries].varname[varnameindex]=0; // Add termination
-
-				finished = (querystring[queryindex] < 32 || querystring[queryindex] > 126 || queryindex >= MAXQUERYSTRLEN) ? 1 : 0;
-				if (finished == 0 && querystring[queryindex] == '=')
-				{
-					// Jump over '='
-					while (querystring[queryindex] == '=' && queryindex < MAXQUERYSTRLEN)
-					{
-						queryindex++;
-					}
-					int valueindex = 0;
-					while ( querystring[queryindex] >= 32 && querystring[queryindex] < 127 && querystring[queryindex] != '='
-			&& querystring[queryindex] != '&' && valueindex < MAXQUERYVALLEN && queryindex < MAXQUERYSTRLEN)
-					{
-						valstring[valueindex] = querystring[queryindex];
-						queryindex++;
-						valueindex++;
-					}
-
-					if (valueindex >= MAXQUERYVALLEN)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: query parameter value string is too long : %s\n", querystring);
-						valueindex = MAXQUERYVALLEN; // Truncate
-					}
-					valstring[valueindex]=0; // Add termination
-
-					rc = sscanf(valstring,"%"SCNd64, &varval );
-					if (rc == 1)
-					{
-						// Mark the entry as valid, increment the number of queries found
-						query[numqueries].varval = varval;
-						query[numqueries].valid = 1;
-						#ifdef QUERYDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: Added a new query name: %s with a value of : %"PRId64"\n", query[numqueries].varname, query[numqueries].varval);
-						#endif
-						numqueries++;
-					}
-					else
-					{
-						#ifdef QUERYDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: Bad value assignment for %s, setting invalid.\n", query[numqueries].varname);
-						#endif
-						query[numqueries].varval = 0;
-						query[numqueries].valid = 0;
-						numqueries++;
-					}
-				}
-				// Move past the '&' sign
-				while (querystring[queryindex] == '&' && queryindex < MAXQUERYSTRLEN && finished == 0)
-				{
-					queryindex++;
-				}
-				finished = (querystring[queryindex] < 32 || queryindex >= MAXQUERYSTRLEN) ? 1 : 0;
-			}
-			#ifdef QUERYDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %d\n", numqueries);
-			#endif
-		}
 	}
-	else if (strncmp("HEAD", requestmethod, 4) == 0)
+
+	// Determine the clients' address
+	remoteaddrvar = getenv("REMOTE_ADDR");
+	if(NULL == remoteaddrvar)
 	{
-		// Create the header
-		HTML_HEADER();
-		// Now finish the header
-		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-		printf("</head>\n");
-		printf("</html>\n");
-		IPSCAN_LOG( LOGPREFIX "ipscan: HEAD request method, sending headers only\n");
-		return(EXIT_SUCCESS);
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable lookup returned NULL.\n");
 	}
-	else
+	else if (strnlen(remoteaddrvar,(INET6_ADDRSTRLEN+1)) > INET6_ADDRSTRLEN)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: called with an unsupported request method: %s.\n", requestmethod);
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable length exceeds allocated buffer size (%d > %d)\n", (int)strnlen(remoteaddrvar, (INET6_ADDRSTRLEN+1)), INET6_ADDRSTRLEN);
 		// Create the header
 		HTML_HEADER();
 		// Now finish the header
 		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 		printf("</head>\n");
 		printf("<body>\n");
-		printf("<p>I was called with an unsupported request-method. That is very disappointing.</p>\n");
+		printf("<p>I was called with a REMOTE_ADDR variable that exceeds the supported size. That is very disappointing.</p>\n");
 		// Finish the html
 		create_html_body_end();
 		return(EXIT_SUCCESS);
 	}
-}
-
-// Determine the clients' address
-remoteaddrvar = getenv("REMOTE_ADDR");
-if(NULL == remoteaddrvar)
-{
-	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable lookup returned NULL.\n");
-}
-else if (strnlen(remoteaddrvar,(INET6_ADDRSTRLEN+1)) > INET6_ADDRSTRLEN)
-{
-	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable length exceeds allocated buffer size (%d > %d)\n", (int)strnlen(remoteaddrvar, (INET6_ADDRSTRLEN+1)), INET6_ADDRSTRLEN);
-	// Create the header
-	HTML_HEADER();
-	// Now finish the header
-	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-	printf("</head>\n");
-	printf("<body>\n");
-	printf("<p>I was called with a REMOTE_ADDR variable that exceeds the supported size. That is very disappointing.</p>\n");
-	// Finish the html
-	create_html_body_end();
-	return(EXIT_SUCCESS);
-}
-else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
-{
-	IPSCAN_LOG( LOGPREFIX "ipscan: Invalid REMOTE_ADDR variable data.\n");
-}
-else
-{	
-	// Determine the remote host address
-	rc = inet_pton(AF_INET6, remoteaddrstring, remotehost);
-	if (rc <= 0)
+	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: Unparseable IPv6 host address : %s\n", remoteaddrstring);
-		// Create the header
-		HTML_HEADER();
-		// Now finish the header
-		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-		printf("</head>\n");
-		printf("<body>\n");
-		printf("<p>I was called with an unparseable IPv6 host address. That is very disappointing.</p>\n");
-		// Finish the html
-		create_html_body_end();
-		return(EXIT_SUCCESS);
+		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid REMOTE_ADDR variable data.\n");
 	}
 	else
 	{
-		remotehost_msb = 0ULL;
-		remotehost_lsb = 0ULL;
-
-		// Split address into two 64 bit values stored within database
-		for (i=0 ; i<8 ; i++)
+		// Determine the remote host address
+		rc = inet_pton(AF_INET6, remoteaddrstring, remotehost);
+		if (rc <= 0)
 		{
-			shift = 8 * (7-i);
-			value = (remotehost[i]);
-			while (shift > 0)
-			{
-				value = (value << 8);
-				shift -= 8;
-			}
-			remotehost_msb |= value;
-			shift = 8 * (7-i);
-			value = (remotehost[8+i]);
-			while (shift > 0)
-			{
-				value = (value << 8);
-				shift -= 8;
-			}
-			remotehost_lsb |= value;
-		}
-	}
-}
-
-
-// If query string is empty then we generate the introductory html/form for the client
-
-if (numqueries == 0)
-{
-	#ifdef CLIENTDEBUG
-	IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: 0 queries\n",\
-                  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-	#endif
-
-	// Create the HTML header
-	HTML_HEADER();
-
-	#ifdef IPSCAN_HTML5_ENABLED
-	// Create the main HTML5 body
-	create_html5_form(DEFNUMPORTS, NUMUDPPORTS, portlist, udpportlist);
-	#else
-	// Create the main html body
-	create_html_form(DEFNUMPORTS, NUMUDPPORTS, portlist, udpportlist);
-	#endif
-
-	// Finish the html
-	create_html_body_end();
-}
-
-// Following is a query, so determine the passed parameters and decide whether we
-// need to initiate a scan, return the current result set or a summary of scans
-
-else
-{
-	#ifdef CLIENTDEBUG
-	IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: %d queries\n",\
-                  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                  (unsigned int)((remotehost_msb>>16) & 0xFFFF), numqueries );
-	#endif
-
-	// includeexisting should only be passed the values -1 or 1, set to 0 if not present
-	// or an unsuitable value is passed.
-
-	i = 0;
-	while (i < numqueries && strncmp("includeexisting",query[i].varname,15)!= 0) i++;
-	if (i < numqueries && query[i].valid == 1)
-	{
-		if ( abs((int)query[i].varval) == 1 )
-		{
-			includeexisting = (int)query[i].varval;
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: Unparseable IPv6 host address : %s\n", remoteaddrstring);
+			// Create the header
+			HTML_HEADER();
+			// Now finish the header
+			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+			printf("</head>\n");
+			printf("<body>\n");
+			printf("<p>I was called with an unparseable IPv6 host address. That is very disappointing.</p>\n");
+			// Finish the html
+			create_html_body_end();
+			return(EXIT_SUCCESS);
 		}
 		else
 		{
-			includeexisting = 0 ;
+			remotehost_msb = 0ULL;
+			remotehost_lsb = 0ULL;
+
+			// Split address into two 64 bit values stored within database
+			for (i=0 ; i<8 ; i++)
+			{
+				shift = 8 * (7-i);
+				value = (remotehost[i]);
+				while (shift > 0)
+				{
+					value = (value << 8);
+					shift -= 8;
+				}
+				remotehost_msb |= value;
+				shift = 8 * (7-i);
+				value = (remotehost[8+i]);
+				while (shift > 0)
+				{
+					value = (value << 8);
+					shift -= 8;
+				}
+				remotehost_lsb |= value;
+			}
 		}
 	}
-	else
+
+
+	// If query string is empty then we generate the introductory html/form for the client
+
+	if (numqueries == 0)
 	{
-		includeexisting = 0;
+		#ifdef CLIENTDEBUG
+		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: 0 queries\n",\
+				(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+				(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+		#endif
+
+// Create the HTML header
+		HTML_HEADER();
+
+		#ifdef IPSCAN_HTML5_ENABLED
+		// Create the main HTML5 body
+		create_html5_form(DEFNUMPORTS, NUMUDPPORTS, portlist, udpportlist);
+		#else
+		// Create the main html body
+		create_html_form(DEFNUMPORTS, NUMUDPPORTS, portlist, udpportlist);
+		#endif
+
+		// Finish the html
+		create_html_body_end();
 	}
 
-	// determine state of termsaccepted, if not present default to 0
-	i = 0;
-	while (i < numqueries && strncmp("termsaccepted",query[i].varname,13)!= 0) i++;
-	if (i < numqueries && query[i].valid == 1)
+	// Following is a query, so determine the passed parameters and decide whether we
+	// need to initiate a scan, return the current result set or a summary of scans
+
+	else
 	{
-		if ( abs((int)query[i].varval) == 1 )
+		#ifdef CLIENTDEBUG
+		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: %d queries\n",\
+				(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+				(unsigned int)((remotehost_msb>>16) & 0xFFFF), numqueries );
+		#endif
+
+// includeexisting should only be passed the values -1 or 1, set to 0 if not present
+		// or an unsuitable value is passed.
+		i = 0;
+		while (i < numqueries && strncmp("includeexisting",query[i].varname,15)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
 		{
-			// was termsaccepted = query[i].varval;
-			termsaccepted = 1;
+			if ( abs((int)query[i].varval) == 1 )
+			{
+				includeexisting = (int)query[i].varval;
+			}
+			else
+			{
+				includeexisting = 0 ;
+			}
+		}
+		else
+		{
+			includeexisting = 0;
+		}
+
+		// determine state of termsaccepted, if not present default to 0
+		i = 0;
+		while (i < numqueries && strncmp("termsaccepted",query[i].varname,13)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
+		{
+			if ( abs((int)query[i].varval) == 1 )
+			{
+				// was termsaccepted = query[i].varval;
+				termsaccepted = 1;
+			}
+			else
+			{
+				termsaccepted = 0;
+			}
 		}
 		else
 		{
 			termsaccepted = 0;
 		}
-	}
-	else
-	{
-		termsaccepted = 0;
-	}
 
-	// Begin the reconstitution of the query string
-	rc = snprintf(reconptr, reconquerysize, "includeexisting=%d", (int)includeexisting);
-	if (rc > 16 && rc < 19)
-	{
-		reconptr += rc;
-		reconquerysize -= (size_t)rc;
-		if (reconquerysize <= 0)
+		// Begin the reconstitution of the query string
+		rc = snprintf(reconptr, reconquerysize, "includeexisting=%d", (int)includeexisting);
+		if (rc > 16 && rc < 19)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
-			// Create the header
-			HTML_HEADER();
-			// Now finish the header
-			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-			printf("</head>\n");
-			printf("<body>\n");
-			printf("<p>I have run out of room to reconstitute the query. That is very disappointing.</p>\n");
-			// Finish the html
-			create_html_body_end();
-			return(EXIT_SUCCESS);
-		}
-	}
-	else
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
-		// Create the header
-		HTML_HEADER();
-		// Now finish the header
-		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-		printf("</head>\n");
-		printf("<body>\n");
-		printf("<p>I was called with an unexpected query length. That is very disappointing.</p>\n");
-		// Finish the html
-		create_html_body_end();
-		return(EXIT_SUCCESS);
-	}
-
-	// Continue the reconstitution of the query string
-	rc = snprintf(reconptr, reconquerysize, "&termsaccepted=%d", (int)termsaccepted);
-	if (rc == 16)
-	{
-		reconptr += rc;
-		reconquerysize -= (size_t)rc;
-		if (reconquerysize <= 0)
-		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to continue reconstituting query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
-			// Create the header
-			HTML_HEADER();
-			// Now finish the header
-			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-			printf("</head>\n");
-			printf("<body>\n");
-			printf("<p>I have run out of room to continue reconstituting the query. That is very disappointing.</p>\n");
-			// Finish the html
-			create_html_body_end();
-			return(EXIT_SUCCESS);
-		}
-	}
-	else
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 16)\n", rc);
-		// Create the header
-		HTML_HEADER();
-		// Now finish the header
-		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-		printf("</head>\n");
-		printf("<body>\n");
-		printf("<p>I was called with an unexpected query length. That is very disappointing.</p>\n");
-		// Finish the html
-		create_html_body_end();
-		return(EXIT_SUCCESS);
-	}
-
-	// Determine whether existing ports are to be included in the tested list or not:
-	if (includeexisting == 1)
-	{
-		// custom ports will be appended to the default ports list
-		numports = DEFNUMPORTS;
-	}
-	else
-	{
-		// default ports will be overwritten by any custom ports
-		numports = 0;
-	}
-
-	#ifdef QUERYDEBUG
-	IPSCAN_LOG( LOGPREFIX "ipscan: numports is initially found to be %d\n", numports);
-	#endif
-
-	//
-	// Add in the custom ports if they're valid and NOT already present in the portlist ...
-	//
-
-	int customport = 0;
-	char cpnum[17];
-	// was int cplen;
-	size_t cplen;
-
-	// Counter holding the number of received customportN statements
-	unsigned int numcustomports = 0;
-
-	while (customport < NUMUSERDEFPORTS)
-	{
-		cplen = (size_t)snprintf(cpnum, 16, "customport%d", customport);
-		i = 0;
-		while (i < numqueries && strncmp(cpnum,query[i].varname,cplen)!= 0) i++;
-
-		// If customportN parameter exists then increment the counter, irrespective of whether
-		// the parameter was valid or not
-		if (i < numqueries) numcustomports++;
-
-		// If the parameter is valid then perform further checks
-		if (i < numqueries && query[i].valid == 1)
-		{
-			// Check the port number is in the valid range
-			if (query[i].varval >=MINVALIDPORT && query[i].varval <= MAXVALIDPORT)
+			reconptr += rc;
+			reconquerysize -= (size_t)rc;
+			if (reconquerysize <= 0)
 			{
-				j = 0;
-				while (j < numports && portlist[j].port_num != query[i].varval) j++;
-				// if this customport is not one of the ports already destined for checking then
-				// add it to the port list
-				if (j == numports)
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
+				// Create the header
+				HTML_HEADER();
+				// Now finish the header
+				printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+				printf("</head>\n");
+				printf("<body>\n");
+				printf("<p>I have run out of room to reconstitute the query. That is very disappointing.</p>\n");
+				// Finish the html
+				create_html_body_end();
+				return(EXIT_SUCCESS);
+			}
+		}
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
+			// Create the header
+			HTML_HEADER();
+			// Now finish the header
+			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+			printf("</head>\n");
+			printf("<body>\n");
+			printf("<p>I was called with an unexpected query length. That is very disappointing.</p>\n");
+			// Finish the html
+			create_html_body_end();
+			return(EXIT_SUCCESS);
+		}
+
+		// Continue the reconstitution of the query string
+		rc = snprintf(reconptr, reconquerysize, "&termsaccepted=%d", (int)termsaccepted);
+		if (rc == 16)
+		{
+			reconptr += rc;
+			reconquerysize -= (size_t)rc;
+			if (reconquerysize <= 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to continue reconstituting query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
+				// Create the header
+				HTML_HEADER();
+				// Now finish the header
+				printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+				printf("</head>\n");
+				printf("<body>\n");
+				printf("<p>I have run out of room to continue reconstituting the query. That is very disappointing.</p>\n");
+				// Finish the html
+				create_html_body_end();
+				return(EXIT_SUCCESS);
+			}
+		}
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 16)\n", rc);
+			// Create the header
+			HTML_HEADER();
+			// Now finish the header
+			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+			printf("</head>\n");
+			printf("<body>\n");
+			printf("<p>I was called with an unexpected query length. That is very disappointing.</p>\n");
+			// Finish the html
+			create_html_body_end();
+			return(EXIT_SUCCESS);
+		}
+
+		// Determine whether existing ports are to be included in the tested list or not:
+		if (includeexisting == 1)
+		{
+			// custom ports will be appended to the default ports list
+			numports = DEFNUMPORTS;
+		}
+		else
+		{
+			// default ports will be overwritten by any custom ports
+			numports = 0;
+		}
+
+		#ifdef QUERYDEBUG
+		IPSCAN_LOG( LOGPREFIX "ipscan: numports is initially found to be %d\n", numports);
+		#endif
+
+		//
+		// Add in the custom ports if they're valid and NOT already present in the portlist ...
+		//
+
+		int customport = 0;
+		char cpnum[17];
+		// was int cplen;
+		size_t cplen;
+
+		// Counter holding the number of received customportN statements
+		unsigned int numcustomports = 0;
+
+		while (customport < NUMUSERDEFPORTS)
+		{
+			cplen = (size_t)snprintf(cpnum, 16, "customport%d", customport);
+			i = 0;
+			while (i < numqueries && strncmp(cpnum,query[i].varname,cplen)!= 0) i++;
+
+			// If customportN parameter exists then increment the counter, irrespective of whether
+			// the parameter was valid or not
+			if (i < numqueries) numcustomports++;
+
+			// If the parameter is valid then perform further checks
+			if (i < numqueries && query[i].valid == 1)
+			{
+				// Check the port number is in the valid range
+				if (query[i].varval >=MINVALIDPORT && query[i].varval <= MAXVALIDPORT)
 				{
-					portlist[numports].port_num = (uint16_t)(query[i].varval & VALIDPORTMASK);
-					portlist[numports].special = 0;
-					rc = snprintf(&portlist[numports].port_desc[0], PORTDESCSIZE, "User-specified: %d",(int)query[i].varval);
-					if (rc < 0 || rc >= PORTDESCSIZE)
+					j = 0;
+					while (j < numports && portlist[j].port_num != query[i].varval) j++;
+					// if this customport is not one of the ports already destined for checking then
+					// add it to the port list
+					if (j == numports)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: failed to write user-specified port description, does PORTDESCSIZE (%d) need increasing?\n", PORTDESCSIZE);
-					}
-					numports ++;
-					rc = snprintf(reconptr, reconquerysize, "&customport%d=%d", customport, (int)query[i].varval);
-					// &customport (11); cpnum (1-5) ; = (1) ; portnum (1-5)
-					if (rc >= 14 && rc <= 22)
-					{
-						reconptr += rc;
-						reconquerysize -= (size_t)rc;
-						if (reconquerysize <= 0)
+						portlist[numports].port_num = (uint16_t)(query[i].varval & VALIDPORTMASK);
+						portlist[numports].special = 0;
+						rc = snprintf(&portlist[numports].port_desc[0], PORTDESCSIZE, "User-specified: %d",(int)query[i].varval);
+						if (rc < 0 || rc >= PORTDESCSIZE)
 						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
+							IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: failed to write user-specified port description, does PORTDESCSIZE (%d) need increasing?\n", PORTDESCSIZE);
+						}
+						numports ++;
+						rc = snprintf(reconptr, reconquerysize, "&customport%d=%d", customport, (int)query[i].varval);
+						// &customport (11); cpnum (1-5) ; = (1) ; portnum (1-5)
+						if (rc >= 14 && rc <= 22)
+						{
+							reconptr += rc;
+							reconquerysize -= (size_t)rc;
+							if (reconquerysize <= 0)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: run out of room to reconstitute query, please increase MAXQUERYSTRLEN (%d) and recompile.\n", MAXQUERYSTRLEN);
+								// Create the header
+								HTML_HEADER();
+								// Now finish the header
+								printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+								printf("</head>\n");
+								printf("<body>\n");
+								printf("<p>I have run out of room to reconstitute the query. That is very disappointing.</p>\n");
+								// Finish the html
+								create_html_body_end();
+								return(EXIT_SUCCESS);
+							}
+						}
+						else
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: customport%d reconstitution failed, due to unexpected size.\n", customport);
 							// Create the header
 							HTML_HEADER();
 							// Now finish the header
@@ -821,83 +831,68 @@ else
 							return(EXIT_SUCCESS);
 						}
 					}
-					else
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: customport%d reconstitution failed, due to unexpected size.\n", customport);
-						// Create the header
-						HTML_HEADER();
-						// Now finish the header
-						printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-						printf("</head>\n");
-						printf("<body>\n");
-						printf("<p>I have run out of room to reconstitute the query. That is very disappointing.</p>\n");
-						// Finish the html
-						create_html_body_end();
-						return(EXIT_SUCCESS);
-					}
 				}
 			}
+			customport++;
 		}
-		customport++;
-	}
 
-	// Look for magic query string
-	// NEVER use the summary facility on an internet-facing host.
-	i = 0;
-	magic = -1;
-	while (i < numqueries && strncmp("magic",query[i].varname,5)!= 0) i++;
-	if (i < numqueries && query[i].valid == 1)
-	{
-		magic = query[i].varval;
-	}
-
-	// Look for the starttime query string, set it to -1 if not present or invalid
-	i = 0;
-	querystarttime = -1;
-	while (i < numqueries && strncmp("starttime",query[i].varname,9)!= 0) i++;
-	if (i < numqueries && query[i].valid == 1)
-	{
-		if (query[i].varval >= 0)
+		// Look for magic query string
+		// NEVER use the summary facility on an internet-facing host.
+		i = 0;
+		magic = -1;
+		while (i < numqueries && strncmp("magic",query[i].varname,5)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
 		{
-			querystarttime = query[i].varval;
+			magic = query[i].varval;
 		}
-	}
 
-	// Look for the session query string, set it to -1 if not present or invalid
-	i = 0;
-	querysession = -1;
-	while (i < numqueries && strncmp("session",query[i].varname,7)!= 0) i++;
-	if (i < numqueries && query[i].valid == 1)
-	{
-		if (query[i].varval >= 0)
+		// Look for the starttime query string, set it to -1 if not present or invalid
+		i = 0;
+		querystarttime = -1;
+		while (i < numqueries && strncmp("starttime",query[i].varname,9)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
 		{
-			querysession = query[i].varval;
+			if (query[i].varval >= 0)
+			{
+				querystarttime = query[i].varval;
+			}
 		}
-	}
 
-	// Look for the beginscan query string, return 0 if not present or incorrect value
-	i = 0;
-	beginscan = 0;
-	while (i < numqueries && strncmp("beginscan",query[i].varname,9)!= 0) i++;
-	if (i < numqueries && query[i].valid == 1)
-	{
-		beginscan = (query[i].varval == MAGICBEGIN ) ? 1 : 0;
-	}
+		// Look for the session query string, set it to -1 if not present or invalid
+		i = 0;
+		querysession = -1;
+		while (i < numqueries && strncmp("session",query[i].varname,7)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
+		{
+			if (query[i].varval >= 0)
+			{
+				querysession = query[i].varval;
+			}
+		}
 
-	// Look for the fetch query string
-	i = 0;
-	fetch = 0;
-	while (i < numqueries && strncmp("fetch",query[i].varname,5)!= 0) i++;
-	if (i < numqueries && query[i].valid == 1)
-	{
-		fetch = (query[i].varval >0) ? 1 : 0;
-		#if (TEXTMODE != 1)
-		if (1 == fetch && (int)(query[i].varval < 4096)) fetchnum = (int)query[i].varval;
-		#endif
-	}
+		// Look for the beginscan query string, return 0 if not present or incorrect value
+		i = 0;
+		beginscan = 0;
+		while (i < numqueries && strncmp("beginscan",query[i].varname,9)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
+		{
+			beginscan = (query[i].varval == MAGICBEGIN ) ? 1 : 0;
+		}
 
-	// Dump the variables resulting from the query-string parsing
-	#ifdef QUERYDEBUG
+		// Look for the fetch query string
+		i = 0;
+		fetch = 0;
+		while (i < numqueries && strncmp("fetch",query[i].varname,5)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
+		{
+			fetch = (query[i].varval >0) ? 1 : 0;
+			#if (TEXTMODE != 1)
+			if (1 == fetch && (int)(query[i].varval < 4096)) fetchnum = (int)query[i].varval;
+			#endif
+		}
+
+		// Dump the variables resulting from the query-string parsing
+		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numqueries = %d\n", numqueries);
 		#if (TEXTMODE != 1)
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
@@ -909,79 +904,79 @@ else
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: querysession = %"PRId64" querystarttime = %"PRId64" magic = %"PRId64"\n", querysession, querystarttime, magic );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: reconstituted query string = %s\n", reconquery );
-	#endif
-
-	//
-	//
-	//
-	// NOW DETERMINE WHAT TO DO ......
-	//
-	//
-	//
-
-	#if (TEXTMODE == 1)
-
-	char stimeresult[32]; // function calls for at least 26 characters
-	char * stptr = NULL;
-
-	// ----------------------------------------------------------------------
-	//
-	// Start of text-mode only cases
-	//
-	// ----------------------------------------------------------------------
-
-	// *IF* we have everything we need to initiate the scan/results page then we
-	// should have been passed (2+NUMUSERDEFPORTS) queries
-	// i.e. includeexisting (either +1 or -1), termsaccepted and customports 0 thru n params
-
-	if ( numqueries >= (NUMUSERDEFPORTS + 2) && (numcustomports == NUMUSERDEFPORTS) && includeexisting != 0 && termsaccepted == 1 )
-	{
-		#ifdef CLIENTDEBUG
-		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: text-mode, initiate scan\n",\
-                  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 		#endif
 
-		#if (IPSCAN_LOGVERBOSITY == 1)
-		time_t scanstart = starttime;
-		#endif
+		//
+		//
+		//
+		// NOW DETERMINE WHAT TO DO ......
+		//
+		//
+		//
 
-		// Create the header
-		HTML_HEADER();
-		// Create main output
-		printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-		printf("</head>\n");
-		printf("<body>\n");
-		printf("<h3 style=\"color:red\">IPv6 Port Scan Results for host %s</h3>\n", remoteaddrstring);
-		stptr = ctime_r(&starttime,stimeresult);
-		if (NULL == stptr)
+		#if (TEXTMODE == 1)
+
+		char stimeresult[32]; // function calls for at least 26 characters
+		char * stptr = NULL;
+
+		// ----------------------------------------------------------------------
+		//
+		// Start of text-mode only cases
+		//
+		// ----------------------------------------------------------------------
+
+		// *IF* we have everything we need to initiate the scan/results page then we
+		// should have been passed (2+NUMUSERDEFPORTS) queries
+		// i.e. includeexisting (either +1 or -1), termsaccepted and customports 0 thru n params
+
+		if ( numqueries >= (NUMUSERDEFPORTS + 2) && (numcustomports == NUMUSERDEFPORTS) && includeexisting != 0 && termsaccepted == 1 )
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR - text-mode ctime_r() failed\n");
-		}
-		else
-		{
-			printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", \
-				stimeresult, (int)ESTIMATEDTIMETORUN );
-		}
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: text-mode, initiate scan\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#endif
 
-		// Log termsaccepted
-		IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
-		 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-		 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
-		IPSCAN_LOG( LOGPREFIX "ipscan: at time %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			time_t scanstart = starttime;
+			#endif
 
-		// Only included if ping is compiled in ...
-		#if (IPSCAN_INCLUDE_PING == 1)
+			// Create the header
+			HTML_HEADER();
+			// Create main output
+			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+			printf("</head>\n");
+			printf("<body>\n");
+			printf("<h3 style=\"color:red\">IPv6 Port Scan Results for host %s</h3>\n", remoteaddrstring);
+			stptr = ctime_r(&starttime,stimeresult);
+			if (NULL == stptr)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR - text-mode ctime_r() failed\n");
+			}
+			else
+			{
+				printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", \
+						stimeresult, (int)ESTIMATEDTIMETORUN );
+			}
+
+			// Log termsaccepted
+			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %x:%x:%x:: beginning with termsaccepted = %d\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: at time %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
+
+			// Only included if ping is compiled in ...
+			#if (IPSCAN_INCLUDE_PING == 1)
 			// Ping the remote host and store the result ...
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)starttime, (uint64_t)session, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning ICMPv6 echo request to client: %04x:%04x:%04x::\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client: %x:%x:%x::\n",\
+				(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+				(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			portsstats[result]++ ;
@@ -1005,15 +1000,15 @@ else
 			}
 			printf("</tr>\n");
 			printf("</table>\n");
-		#endif
+			#endif
 
-		#if (IPSCAN_INCLUDE_UDP == 1)
+			#if (IPSCAN_INCLUDE_UDP == 1)
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
 			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of UDP ports on client  : %04x:%04x:%04x::\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of UDP ports on client  : %x:%x:%x::\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			// Scan the UDP ports in parallel
@@ -1117,17 +1112,17 @@ else
 
 			}
 			printf("</table>\n");
-		#endif
+			#endif
 
-		//
-		// TCP scan is always included
-		//
+			//
+			// TCP scan is always included
+			//
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
 			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of TCP ports on client  : %04x:%04x:%04x::\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of TCP ports on client  : %x:%x:%x::\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 			printf("<p>Individual TCP port scan results:</p>\n");
 
@@ -1331,12 +1326,12 @@ else
 		// javascript updateurl always minimally includes includeexisting
 
 		if ( numqueries >= 5 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 \
-			&& termsaccepted == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum)
+				&& termsaccepted == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: javascript-mode, fetch signalling end-of-test\n",\
-                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: javascript-mode, fetch signalling end-of-test\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			// Put out a dummy page to keep the webserver happy
@@ -1354,9 +1349,9 @@ else
 			#ifdef CLIENTDEBUG
 			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
 			fetch_to_string(fetchnum, &fetchstring[0]);
-			IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated %s completion for client : %04x:%04x:%04x::\n", fetchstring,\
-                       	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                       	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated %s completion for client : %x:%x:%x::\n", fetchstring,\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 			#endif
 
@@ -1371,12 +1366,11 @@ else
 			}
 			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
 			{
-				// Set COMPLETE to cause end of test, but also capture that is was a bad completion
-				result = (IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_BADCOMPLETE_BIT);
+				result |= IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
 			}
 			else if (IPSCAN_EVAL_ERROR == fetchnum)
 			{
-        			result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
+				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
 			else if (IPSCAN_OTHER_ERROR == fetchnum)
 			{
@@ -1384,8 +1378,7 @@ else
 			}
 			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 			{
-				// Set COMPLETE to cause end of test, but also capture that the user navigated away
-				result = (IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT); 
+				result |= IPSCAN_TESTSTATE_NAVAWAY_BIT; 
 			}
 			else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 			{
@@ -1393,16 +1386,16 @@ else
 			}
 			else
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch included unexpected value %d for client : %04x:%04x:%04x::\n",\
-                        	 fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: fetch included unexpected value %d for client : %x:%x:%x::\n",\
+						fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+						(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 			}
 			// Write the new value back to the database
-			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+			rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
 			if (rc != 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
 			}
 		}
 
@@ -1411,12 +1404,12 @@ else
 		// javascript updateurl always minimally includes includeexisting
 
 		else if ( numqueries >= 5 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 \
-			&& termsaccepted == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
+				&& termsaccepted == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: javascript-mode, query database fetch\n",\
-                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: javascript-mode, query database fetch\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			// Simplified header in which to wrap array of results
@@ -1434,12 +1427,12 @@ else
 		// session, starttime, beginscan, termsaccepted, includeexisting and >=0 userdefined ports [NOTE: no fetch]
 
 		else if ( numqueries >= 5 && querysession >= 0 && querystarttime >= 0 && beginscan == 1 \
-			&& termsaccepted == 1 && includeexisting != 0 && fetch == 0)
+				&& termsaccepted == 1 && includeexisting != 0 && fetch == 0)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: javascript-mode, initiate scan\n",\
-                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: javascript-mode, initiate scan\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			time_t scanstart = time(0);
@@ -1458,13 +1451,12 @@ else
 			// Finish the output
 			create_html_body_end();
 
-
 			// Generate database entry for test state - indicate test running
 			#ifdef CLIENTDEBUG
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "ipscan: write_db to set IPSCAN_PROTO_TESTSTATE RUNNING for client : %04x:%04x:%04x::\n",\
-                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                         (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: write_db to set IPSCAN_PROTO_TESTSTATE RUNNING for client : %x:%x:%x::\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 			#endif
 			#endif
@@ -1475,9 +1467,9 @@ else
 			}
 
 			// Log terms accepted
-			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %x:%x:%x:: beginning with termsaccepted = %d\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
 			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 
 			// Only include this section if ping is compiled in ...
@@ -1485,11 +1477,11 @@ else
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)querystarttime, (uint64_t)querysession, indirecthost);
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (IPSCAN_LOGVERBOSITY == 1)
-			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
 			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning ICMPv6 echo request to client: %04x:%04x:%04x::\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client: %x:%x:%x::\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 			portsstats[result]++ ;
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
@@ -1507,9 +1499,9 @@ else
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
 			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of UDP ports on client  : %04x:%04x:%04x::\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of UDP ports on client  : %x:%x:%x::\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			// Scan the UDP ports in parallel
@@ -1550,9 +1542,9 @@ else
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
 			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of TCP ports on client  : %04x:%04x:%04x::\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of TCP ports on client  : %x:%x:%x::\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			// Scan the TCP ports in parallel
@@ -1649,10 +1641,10 @@ else
 				}
 			}
 
-			#ifdef DEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: rmthost        was : %04x:%04x:%04x::\n",\
-                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                         (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			#if (IPSCAN_LOGVERBOSITY == 1)
+			IPSCAN_LOG( LOGPREFIX "ipscan: rmthost        was : %x:%x:%x::\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			IPSCAN_LOG( LOGPREFIX "ipscan: querystarttime was : %"PRId64"\n", querystarttime);
 			IPSCAN_LOG( LOGPREFIX "ipscan: querysession   was : %"PRId64"\n", querysession);
 			IPSCAN_LOG( LOGPREFIX "ipscan: numcustomports was : %d\n", numcustomports);
@@ -1722,7 +1714,11 @@ else
 			while (deletenowtime < timeouttime && client_finished == 0)
 			{
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
-				if ( PORTUNKNOWN == result ) IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: waiting for test end\n" );
+				if ( PORTUNKNOWN == result )
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: waiting for test end\n" );
+					result = IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
+				}
 
 				#ifdef CLIENTDEBUG
 				flagsrc = state_to_string(result, &flags[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
@@ -1733,15 +1729,15 @@ else
 
 				if (NULL != flagsrc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: IPSCAN_TESTSTATE for client : %04x:%04x:%04x:: %s\n",\
-                        	 	 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                        	 	 (unsigned int)((remotehost_msb>>16) & 0xFFFF), flagsrc );
+					IPSCAN_LOG( LOGPREFIX "ipscan: IPSCAN_TESTSTATE for client : %x:%x:%x:: %s\n",\
+							(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+							(unsigned int)((remotehost_msb>>16) & 0xFFFF), flagsrc );
 					IPSCAN_LOG( LOGPREFIX "ipscan: at querytime %"PRIu64", querysession %"PRIu64"\n", (uint64_t)querystarttime, (uint64_t)querysession);
 				}
 				#endif
 
 				if (IPSCAN_TESTSTATE_COMPLETE_BIT == (result & IPSCAN_TESTSTATE_COMPLETE_BIT) \
-					|| (IPSCAN_TESTSTATE_BADCOMPLETE_BIT == (result & IPSCAN_TESTSTATE_BADCOMPLETE_BIT)))
+						|| (IPSCAN_TESTSTATE_BADCOMPLETE_BIT == (result & IPSCAN_TESTSTATE_BADCOMPLETE_BIT)))
 				{
 					client_finished = 1;
 				}
@@ -1788,24 +1784,23 @@ else
 		// i.e. includeexisting (either +1 or -1) and customports 0 thru n params
 
 		else if (numqueries >= (NUMUSERDEFPORTS + 1) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 \
-			&& termsaccepted == 1 && fetch == 0)
+				&& termsaccepted == 1 && fetch == 0)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: javascript-mode, create start page\n",\
-                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: javascript-mode, create start page\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			#if (IPSCAN_LOGVERBOSITY == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Creating the standard web results page start point\n");
 
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: for client : %04x:%04x:%04x::\n",\
-                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                         (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: for client : %x:%x:%x::\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			IPSCAN_LOG( LOGPREFIX "ipscan: at starttime %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
 			#endif
-
 			#endif
 
 			// Create the header and body
@@ -1834,36 +1829,12 @@ else
 		//
 		// ----------------------------------------------------------------------
 
-		#if (SUMMARYENABLE == 1)
-		// Generate a summary of scans - limited to IPv6 addresses and time/date
-		else if (numqueries == 1 && magic == MAGICSUMMARY )
-		{
-			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: common-mode, summary of scans\n",\
-                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			#endif
-
-			HTML_HEADER();
-			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
-			printf("</head>\n");
-			printf("<body>\n");
-			printf("<h3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</h3>\n");
-			printf("<p>Summary of Scans:</p>\n");
-			// Output the scan summary
-			rc = summarise_db();
-			// Finish the output
-			create_html_body_end();
-			IPSCAN_LOG( LOGPREFIX "ipscan: summarise_db: provided the requested summary, exited with rc=%d\n", rc);
-		}
-		#endif
-
 		else if (termsaccepted == 0)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: common-mode, terms not accepted\n",\
-                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: common-mode, terms not accepted\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			// Tell the user that they haven't accepted the terms and conditions
@@ -1891,17 +1862,17 @@ else
 			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
 			IPSCAN_LOG( LOGPREFIX "ipscan: querysession = %"PRId64" querystarttime = %"PRId64" numports = %d and numcustomports = %d.\n", \
 					querysession, querystarttime, numports, numcustomports);
-			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %x:%x:%x:: beginning with termsaccepted = %d\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
 		}
 
 		else
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %04x:%04x:%04x:: common-mode, final else - hack?\n",\
-                	  (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-               		  (unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: common-mode, final else - hack?\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
 			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
@@ -1922,9 +1893,9 @@ else
 			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
 			IPSCAN_LOG( LOGPREFIX "ipscan: querysession = %"PRId64" querystarttime = %"PRId64" numports = %d and numcustomports = %d.\n", \
 					querysession, querystarttime, numports, numcustomports);
-			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %04x:%04x:%04x:: beginning with termsaccepted = %d\n",\
-			 (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-			 (unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %x:%x:%x:: beginning with termsaccepted = %d\n",\
+					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
 		}
 	}
 	// Call tidy_up_db() to purge any expired results 

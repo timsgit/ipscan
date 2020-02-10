@@ -56,7 +56,7 @@
 
 // Logging with syslog requires additional include
 #if (LOGMODE == 1)
-	#include <syslog.h>
+#include <syslog.h>
 #endif
 
 //
@@ -105,25 +105,25 @@ void proto_to_string(int proto, char * retstring)
 	int rc = 0;
 	switch (proto)
 	{
-		case IPSCAN_PROTO_TCP:
-			rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "TCPv6");
-			break;
+	case IPSCAN_PROTO_TCP:
+		rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "TCPv6");
+		break;
 
-		case IPSCAN_PROTO_UDP:
-			rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "UDPv6");
-			break;
+	case IPSCAN_PROTO_UDP:
+		rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "UDPv6");
+		break;
 
-		case IPSCAN_PROTO_ICMPV6:
-			rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "ICMPv6");
-			break;
+	case IPSCAN_PROTO_ICMPV6:
+		rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "ICMPv6");
+		break;
 
-		case IPSCAN_PROTO_TESTSTATE:
-			rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "TESTSTATE");
-			break;
+	case IPSCAN_PROTO_TESTSTATE:
+		rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "TESTSTATE");
+		break;
 
-		default:
-			rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "UNDEFINED");
-			break;
+	default:
+		rc = snprintf(retstring, IPSCAN_PROTO_STRING_MAX, "%s", "UNDEFINED");
+		break;
 
 	}
 	// Report error - does IPSCAN_PROTO_STRING_MAX need increasing?
@@ -190,78 +190,78 @@ char * state_to_string(int statenum, char * retstringptr, int retstringfree)
 	if (0 >= retstringfree) return (char *)NULL;
 	char * retstringptrstart = retstringptr;
 	int rc = 0;
-        rc = snprintf(retstringptr, retstringfree, "%s", "flags: ");
+	rc = snprintf(retstringptr, retstringfree, "%s", "flags: ");
 	if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-        retstringptr += rc;
-        retstringfree -= rc;
+	retstringptr += rc;
+	retstringfree -= rc;
 
-        if (0 != (statenum & PORTUNKNOWN))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "UNKNOWN, ");
+	if (0 != (statenum & PORTUNKNOWN))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "UNKNOWN, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        if (0 != (statenum & IPSCAN_TESTSTATE_RUNNING_BIT))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "RUNNING, ");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_RUNNING_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "RUNNING, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        if (0 != (statenum & IPSCAN_TESTSTATE_COMPLETE_BIT))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "COMPLETE, ");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_COMPLETE_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "COMPLETE, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        if (0 != (statenum & IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "TIMEOUT, ");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "TIMEOUT, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        if (0 != (statenum & IPSCAN_TESTSTATE_EVALERROR_BIT))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "EVALERROR, ");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_EVALERROR_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "EVALERROR, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        if (0 != (statenum & IPSCAN_TESTSTATE_OTHERERROR_BIT))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "OTHERERROR, ");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_OTHERERROR_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "OTHERERROR, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        if (0 != (statenum & IPSCAN_TESTSTATE_NAVAWAY_BIT))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "NAVAWAY, ");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_NAVAWAY_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "NAVAWAY, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        if (0 != (statenum & IPSCAN_TESTSTATE_UNEXPCHANGE_BIT))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "UNEXPECTED, ");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_UNEXPCHANGE_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "UNEXPECTED, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        if (0 != (statenum & IPSCAN_TESTSTATE_BADCOMPLETE_BIT))
-        {
-                rc = snprintf(retstringptr, retstringfree, "%s", "BADCOMPLETE, ");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_BADCOMPLETE_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "BADCOMPLETE, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-                retstringptr += rc;
-                retstringfree -= rc;
-        }
-        rc = snprintf(retstringptr, retstringfree, "%s", "<EOL>\n\0");
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	rc = snprintf(retstringptr, retstringfree, "%s", "<EOL>\n\0");
 	if (rc < 0 || rc >= retstringfree) return (char *)NULL;
-        retstringptr += rc;
-        retstringfree -= rc;
+	retstringptr += rc;
+	retstringfree -= rc;
 	if (0 > retstringfree) return (char *)NULL;
 	return retstringptrstart;
 }
@@ -272,95 +272,95 @@ char * state_to_string(int statenum, char * retstringptr, int retstringfree)
 //
 void result_to_string(int result, char * retstring)
 {
- 	int rc; 
+	int rc;
 
-        if (PORTOPEN == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "OPEN");
-        }
-        else if (PORTABORT == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ABORT");
-        }
-        else if (PORTREFUSED == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "REFUSED");
-        }
-        else if (PORTCRESET == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "CRESET");
-        }
-        else if (PORTNRESET == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "NRESET");
-        }
-        else if (PORTINPROGRESS == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "IN-PROGRESS");
-        }
-        else if (PORTPROHIBITED == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PROHIBITED");
-        }  
-        else if (PORTUNREACHABLE == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNREACHABLE");
-        }  
-        else if (PORTNOROUTE == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "NO ROUTE");
-        }  
-        else if (PORTPKTTOOBIG == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PKT TOO BIG");
-        }  
-        else if (PORTPARAMPROB == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PARAM PROBLEM");
-        }  
-        else if (ECHONOREPLY == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ECHO NO-REPLY");
-        }  
-        else if (ECHOREPLY == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ECHO REPLY");
-        }  
-        else if (UDPOPEN == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UDP OPEN");
-        }  
-        else if (UDPSTEALTH == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UDP STEALTH");
-        }  
-        else if (PORTUNEXPECTED == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNEXPECTED");
-        }  
-        else if (PORTUNKNOWN == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNKNOWN");
-        }  
-        else if (PORTINTERROR == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "INTERNAL ERROR");
-        }  
-        else if (PORTEOL == result)
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "<EOL>");
-        }  
-        else
-        {
-                rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s:%d", "<MISSING>", result);
-        }
-        // Report error - does IPSCAN_RESULT_STRING_MAX need increasing?
-        if (rc < 0 || rc >= IPSCAN_RESULT_STRING_MAX)
-        {
-                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot fit result string into buffer, returned %d\n", rc);
-        }
+	if (PORTOPEN == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "OPEN");
+	}
+	else if (PORTABORT == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ABORT");
+	}
+	else if (PORTREFUSED == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "REFUSED");
+	}
+	else if (PORTCRESET == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "CRESET");
+	}
+	else if (PORTNRESET == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "NRESET");
+	}
+	else if (PORTINPROGRESS == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "IN-PROGRESS");
+	}
+	else if (PORTPROHIBITED == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PROHIBITED");
+	}
+	else if (PORTUNREACHABLE == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNREACHABLE");
+	}
+	else if (PORTNOROUTE == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "NO ROUTE");
+	}
+	else if (PORTPKTTOOBIG == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PKT TOO BIG");
+	}
+	else if (PORTPARAMPROB == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PARAM PROBLEM");
+	}
+	else if (ECHONOREPLY == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ECHO NO-REPLY");
+	}
+	else if (ECHOREPLY == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ECHO REPLY");
+	}
+	else if (UDPOPEN == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UDP OPEN");
+	}
+	else if (UDPSTEALTH == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UDP STEALTH");
+	}
+	else if (PORTUNEXPECTED == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNEXPECTED");
+	}
+	else if (PORTUNKNOWN == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNKNOWN");
+	}
+	else if (PORTINTERROR == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "INTERNAL ERROR");
+	}
+	else if (PORTEOL == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "<EOL>");
+	}
+	else
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s:%d", "<MISSING>", result);
+	}
+	// Report error - does IPSCAN_RESULT_STRING_MAX need increasing?
+	if (rc < 0 || rc >= IPSCAN_RESULT_STRING_MAX)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot fit result string into buffer, returned %d\n", rc);
+	}
 
-        return;
+	return;
 }
 //
 // -----------------------------------------------------------------------------
