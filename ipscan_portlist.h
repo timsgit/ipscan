@@ -1,6 +1,6 @@
-//    IPscan - an http-initiated IPv6 port scanner.
+//    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2020 Tim Chappell.
+//    Copyright (C) 2011-2021 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -37,6 +37,8 @@
 // 0.13 - add memcached UDP check
 // 0.14 - update copyright dates
 // 0.15 - update copyright dates
+// 0.16 - update copyright year
+// 0.17 - add whois, TCP/43
 
 #include "ipscan.h"
 
@@ -55,6 +57,7 @@ struct portlist_struc defportlist[] =
 		{   23, 0, "Telnet" },\
 		{   25, 0, "SMTP" },\
 		{   37, 0, "Time" },\
+		{   43, 0, "WHOIS" },\
 		{   53, 0, "DNS" },\
 		{   79, 0, "Finger" },\
 		{   80, 0, "HTTP" },\

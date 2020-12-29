@@ -1,6 +1,6 @@
-//    IPscan - an http-initiated IPv6 port scanner.
+//    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2020 Tim Chappell.
+//    Copyright (C) 2011-2021 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -55,6 +55,9 @@
 // 0.34 - improved tidy_up_db debug logging, copyright update
 // 0.35 - removed summarise_db() functionality
 // 0.36 - add update_db() for use in place of write_db() for IPSCAN_TESTSTATE monitoring
+// 0.37 - additional debug for write_db() and update_db()
+// 0.38 - move primary key statements, update copyright year
+// 0.39 - add LGTM pragmas to prevent false reporting of SQL injection
 
 #include "ipscan.h"
 //
@@ -133,7 +136,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 	connection = mysql_init(NULL);
 	if (NULL == connection)
 	{
-		IPSCAN_LOG( LOGPREFIX "write_db: Failed to initialise MySQL\n");
+		IPSCAN_LOG( LOGPREFIX "write_db: ERROR: Failed to initialise MySQL\n");
 		retval = 1;
 	}
 	else
@@ -148,7 +151,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
-				IPSCAN_LOG( LOGPREFIX "write_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
+				IPSCAN_LOG( LOGPREFIX "write_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
 				IPSCAN_LOG( LOGPREFIX "write_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 				retval = 3;
 			}
@@ -159,50 +162,51 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				{
 					#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
 					// Use memory engine - ensures sensitive data does not persist if MySQL is stopped/restarted
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '', PRIMARY KEY (id) ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#else
 					// Use the default engine - sensitive data may persist until next tidy_up_db() call
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '', PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#endif
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
 						rc = mysql_real_query(connection, query, qrylen);
 						if (0 == rc)
 						{
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%"PRIu64"', '%u', '%d', '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
+							qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %u, %d, '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
 							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 							{
 								#ifdef DBDEBUG
 								IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 								#endif
-								rc = mysql_real_query(connection, query, qrylen);
+								// Prevent LGTM false positive - external inputs are constrained to numbers
+								rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
 								if (0 == rc)
 								{
 									retval = 0;
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute insert query %d (%s)\n",\
-											mysql_errno(connection), mysql_error(connection) );
+									IPSCAN_LOG( LOGPREFIX "write_db: ERROR: Failed to execute insert query \"%s\" %d (%s)\n",\
+											query, mysql_errno(connection), mysql_error(connection) );
 									retval = 7;
 								}
 							}
 							else
 							{
-								IPSCAN_LOG( LOGPREFIX "write_db: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+								IPSCAN_LOG( LOGPREFIX "write_db: ERROR: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
 								retval = 8;
 							}
 						}
 						else
 						{
-							IPSCAN_LOG( LOGPREFIX "write_db: Failed to execute create_table query %d (%s)\n",\
-									mysql_errno(connection), mysql_error(connection) );
+							IPSCAN_LOG( LOGPREFIX "write_db: ERROR: Failed to execute create_table query \"%s\" %d (%s)\n",\
+									query, mysql_errno(connection), mysql_error(connection) );
 							retval = 6;
 						}
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "write_db: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+						IPSCAN_LOG( LOGPREFIX "write_db: ERROR: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
 						retval = 5;
 					}
 				} // matches with retval < 0
@@ -250,7 +254,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 	connection = mysql_init(NULL);
 	if (NULL == connection)
 	{
-		IPSCAN_LOG( LOGPREFIX "dump_db: Failed to initialise MySQL\n");
+		IPSCAN_LOG( LOGPREFIX "dump_db: ERROR: Failed to initialise MySQL\n");
 		retval = 1;
 	}
 	else
@@ -265,7 +269,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
-				IPSCAN_LOG( LOGPREFIX "dump_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+				IPSCAN_LOG( LOGPREFIX "dump_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
 				IPSCAN_LOG( LOGPREFIX "dump_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 				retval = 3;
 			}
@@ -280,7 +284,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "dump_db: MySQL Query is : %s\n", query);
 					#endif
-					rc = mysql_real_query(connection, query, qrylen);
+					// Prevent LGTM false positive - external inputs are constrained to numbers
+					rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
@@ -360,13 +365,14 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "dump_db: Failed to execute select query\n");
+						IPSCAN_LOG( LOGPREFIX "dump_db: ERROR: Failed to execute select query \"%s\" %d (%s)\n",\
+                                                                                        query, mysql_errno(connection), mysql_error(connection) );
 						retval = 5;
 					}
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "dump_db: Failed to create select query\n");
+					IPSCAN_LOG( LOGPREFIX "dump_db: ERROR: Failed to create select query\n");
 					retval = 4;
 				}
 			}
@@ -375,7 +381,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "dump_db: mysql_options() failed - check your my.cnf file\n");
+			IPSCAN_LOG( LOGPREFIX "dump_db: ERROR: mysql_options() failed - check your my.cnf file\n");
 			retval = 9;
 		}
 	}
@@ -398,7 +404,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	connection = mysql_init(NULL);
 	if (NULL == connection)
 	{
-		IPSCAN_LOG( LOGPREFIX "delete_from_db: Failed to initialise MySQL\n");
+		IPSCAN_LOG( LOGPREFIX "delete_from_db: ERROR: Failed to initialise MySQL\n");
 		retval = 1;
 	}
 	else
@@ -413,7 +419,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
-				IPSCAN_LOG( LOGPREFIX "delete_from_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+				IPSCAN_LOG( LOGPREFIX "delete_from_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
 				IPSCAN_LOG( LOGPREFIX "delete_from_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 				retval = 3;
 			}
@@ -427,7 +433,8 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "delete_from_db: MySQL Query is : %s\n", query);
 					#endif
-					rc = mysql_real_query(connection, query, qrylen);
+					// Prevent LGTM false positive - external inputs are constrained to numbers
+					rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
 					if (0 == rc)
 					{
 						my_ulonglong affected_rows = mysql_affected_rows(connection);
@@ -448,13 +455,13 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "delete_from_db: Delete failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						IPSCAN_LOG( LOGPREFIX "delete_from_db: ERROR: Delete failed, returned %d (%s).\n", rc, mysql_error(connection) );
 						retval = 10;
 					}
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "delete_from_db: Failed to create select query\n");
+					IPSCAN_LOG( LOGPREFIX "delete_from_db: ERROR: Failed to create select query\n");
 					retval = 4;
 				}
 			}
@@ -463,7 +470,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "delete_from_db: mysql_options() failed - check your my.cnf file\n");
+			IPSCAN_LOG( LOGPREFIX "delete_from_db: ERROR: mysql_options() failed - check your my.cnf file\n");
 			retval = 9;
 		}
 	}
@@ -519,7 +526,8 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
-					rc = mysql_real_query(connection, query, qrylen);
+					// Prevent LGTM false positive - external inputs are constrained to numbers
+					rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
@@ -565,7 +573,8 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Failed to execute select query\n");
+						IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Failed to execute select query \"%s\" %d (%s)\n",\
+                                                                                        query, mysql_errno(connection), mysql_error(connection) );
 						retres = PORTINTERROR;
 					}
 				}
@@ -580,7 +589,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "read_db_result: mysql_options() failed - check your my.cnf file\n");
+			IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: mysql_options() failed - check your my.cnf file\n");
 			retres = PORTINTERROR;
 		}
 	}
@@ -632,7 +641,7 @@ int tidy_up_db(uint64_t time_now)
 	connection = mysql_init(NULL);
 	if (NULL == connection)
 	{
-		IPSCAN_LOG( LOGPREFIX "tidy_up_db: Failed to initialise MySQL\n");
+		IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR: Failed to initialise MySQL\n");
 		retval = 1;
 	}
 	else
@@ -647,7 +656,7 @@ int tidy_up_db(uint64_t time_now)
 			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
-				IPSCAN_LOG( LOGPREFIX "tidy_up_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
+				IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
 				IPSCAN_LOG( LOGPREFIX "tidy_up_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 				retval = 3;
 			}
@@ -662,7 +671,6 @@ int tidy_up_db(uint64_t time_now)
 				{
 
 					IPSCAN_LOG( LOGPREFIX "tidy_up_db: MySQL SELECT query is : %s\n", query);
-
 					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
@@ -765,12 +773,12 @@ int tidy_up_db(uint64_t time_now)
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "tidy_up_db: select failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR: select failed, returned %d (%s).\n", rc, mysql_error(connection) );
 					}
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "tidy_up_db: select query creation returned: %d.\n", qrylen );
+					IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR: select query creation returned: %d.\n", qrylen );
 				}
 				#endif
 
@@ -803,13 +811,13 @@ int tidy_up_db(uint64_t time_now)
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "tidy_up_db: Delete failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR: Delete failed, \"%s\" returned %d (%s).\n", query, rc, mysql_error(connection) );
 						retval = 10;
 					}
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "tidy_up_db: Failed to create select query\n");
+					IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR: Failed to create select query\n");
 					retval = 4;
 				}
 			}
@@ -818,7 +826,7 @@ int tidy_up_db(uint64_t time_now)
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "tidy_up_db: mysql_options() failed - check your my.cnf file\n");
+			IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR: mysql_options() failed - check your my.cnf file\n");
 			retval = 9;
 		}
 	}
@@ -863,7 +871,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	connection = mysql_init(NULL);
 	if (NULL == connection)
 	{
-		IPSCAN_LOG( LOGPREFIX "update_db: Failed to initialise MySQL\n");
+		IPSCAN_LOG( LOGPREFIX "update_db: ERROR: Failed to initialise MySQL\n");
 		retval = 1;
 	}
 	else
@@ -878,7 +886,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
-				IPSCAN_LOG( LOGPREFIX "update_db: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
+				IPSCAN_LOG( LOGPREFIX "update_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
 				IPSCAN_LOG( LOGPREFIX "update_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 				retval = 3;
 			}
@@ -889,50 +897,51 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 				{
 					#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
 					// Use memory engine - ensures sensitive data does not persist if MySQL is stopped/restarted
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '', PRIMARY KEY (id) ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#else
 					// Use the default engine - sensitive data may persist until next tidy_up_db() call
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '', PRIMARY KEY (id) )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#endif
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
 						rc = mysql_real_query(connection, query, qrylen);
 						if (0 == rc)
 						{
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` set portresult = '%d' WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%u' AND indhost = '%s' )" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port, indirecthost);
+							qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` set `portresult` = %d WHERE ( `hostmsb` = %"PRIu64" AND `hostlsb` = %"PRIu64" AND `createdate` = %"PRIu64" AND `session` = %"PRIu64" AND `portnum` = %u AND `indhost` = '%s' )" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port, indirecthost);
 							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 							{
 								#ifdef DBDEBUG
 								IPSCAN_LOG( LOGPREFIX "update_db: MySQL Query is : %s\n", query);
 								#endif
-								rc = mysql_real_query(connection, query, qrylen);
+								// Prevent LGTM false positive - external inputs are constrained to numbers
+								rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
 								if (0 == rc)
 								{
 									retval = 0;
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "update_db: Failed to execute insert query %d (%s)\n",\
-											mysql_errno(connection), mysql_error(connection) );
+									IPSCAN_LOG( LOGPREFIX "update_db: ERROR: Failed to execute update query \"%s\" %d (%s)\n",\
+											query, mysql_errno(connection), mysql_error(connection) );
 									retval = 7;
 								}
 							}
 							else
 							{
-								IPSCAN_LOG( LOGPREFIX "update_db: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+								IPSCAN_LOG( LOGPREFIX "update_db: ERROR: Failed to create update query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
 								retval = 8;
 							}
 						}
 						else
 						{
-							IPSCAN_LOG( LOGPREFIX "update_db: Failed to execute create_table query %d (%s)\n",\
-									mysql_errno(connection), mysql_error(connection) );
+							IPSCAN_LOG( LOGPREFIX "update_db: ERROR: Failed to execute create_table query \"%s\" %d (%s)\n",\
+									query, mysql_errno(connection), mysql_error(connection) );
 							retval = 6;
 						}
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "update_db: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+						IPSCAN_LOG( LOGPREFIX "update_db: ERROR: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
 						retval = 5;
 					}
 				} // matches with retval < 0
@@ -940,7 +949,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 		} // MySQL options
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "update_db: mysql_options() failed - check your my.cnf file\n");
+			IPSCAN_LOG( LOGPREFIX "update_db: ERROR: mysql_options() failed - check your my.cnf file\n");
 			retval = 2;
 		}
 		// Tidy up

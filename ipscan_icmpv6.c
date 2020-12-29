@@ -1,6 +1,6 @@
-//    IPscan - an http-initiated IPv6 port scanner.
+//    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2020 Tim Chappell.
+//    Copyright (C) 2011-2021 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -31,6 +31,8 @@
 // 0.11			extern no longer defined here
 // 0.12			correct signedness of sprintf/sscanf used for packet data
 // 0.13			update copyright year
+// 0.14			swap comparison terms, where appropriate
+// 0.15			delete old comments, update copyright year
 
 #include "ipscan.h"
 //
@@ -184,7 +186,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	}
 
 	// run with ROOT privileges, keep section to a minimum
-	if (retval == PORTUNKNOWN)
+	if (PORTUNKNOWN == retval)
 	{
 		sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
 		errsv = errno;
@@ -259,7 +261,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 	// If something bad has happened then return now ...
 	// mustn't return to caller with root privileges, hence done here ...
-	if (retval != PORTUNKNOWN)
+	if (PORTUNKNOWN != retval)
 	{
 		if (-1 != sock) close(sock); // close socket if appropriate
 		return(retval);
@@ -600,7 +602,6 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 						uint64_t rx2starttime, rx2session;
 						unsigned int rx2magic1, rx2magic2;
 
-						// was rc = sscanf(&rxpackdata[sizeof(struct icmp6_hdr)+sizeof(struct ip6_hdr)+ICMP6DATAOFFSET], "%"PRId64" %"PRId64" %d %d", &rx2starttime, &rx2session, &rx2magic1, &rx2magic2);
 						rc = sscanf(&rxpackdata[sizeof(struct icmp6_hdr)+sizeof(struct ip6_hdr)+ICMP6DATAOFFSET], "%"PRIu64" %"PRIu64" %u %u", &rx2starttime, &rx2session, &rx2magic1, &rx2magic2);
 						if (rc == 4)
 						{
@@ -788,7 +789,6 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			uint64_t rxstarttime, rxsession;
 			unsigned int rxmagic1, rxmagic2;
 
-			// was rc = sscanf(&rxpackdata[ICMP6DATAOFFSET], "%"PRId64" %"PRId64" %d %d", &rxstarttime, &rxsession, &rxmagic1, &rxmagic2);
 			rc = sscanf(&rxpackdata[ICMP6DATAOFFSET], "%"PRIu64" %"PRIu64" %u %u", &rxstarttime, &rxsession, &rxmagic1, &rxmagic2);
 			if (rc == 4)
 			{

@@ -1,7 +1,7 @@
 # IPscan
 ### An HTTP-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 
-Copyright (C) 2011-2020 Tim Chappell.
+Copyright (C) 2011-2021 Tim Chappell.
 
 This file is part of IPscan.
 
@@ -20,8 +20,9 @@ along with IPscan. If not, see <http://www.gnu.org/licenses/>.
 
 ---
 
-IPscan requires access to a MySQL database and the associated client development libraries 
-(libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. 
+IPscan requires access to a MySQL, or MariaDB, database and the associated client development libraries 
+(libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. The database
+is used to temporarily hold scan results until shortly after the test completes. 
 IPscan is known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 7, Fedora 16, 
 Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and Raspbian and run alongside 
 Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 
@@ -99,7 +100,7 @@ versions 0.90 and later. See step 4 below for details.
         Note: when updating an existing installation to version 1.10 and beyond it may be necessary to manually 
         remove the ipscan_checks.c file, if it remains in your install directory, prior to building. 
         The functionality within ipscan_checks.c has been redistributed to separate files which 
-        handle tcp, udp and icmpv6 testing.
+        handle TCP, UDP and ICMPv6 testing.
        
         Note: please use gmake under FreeBSD.
     
@@ -161,7 +162,7 @@ versions 0.90 and later. See step 4 below for details.
         javascript-enabled browsers and the other for text-based browsers. Additionally, the standard 
         build provides fast and standard versions of both of these tests. The fast version tests 
         multiple TCP or UDP ports in parallel, whereas the standard version tests only 1 port at a time,
-        at a default rate of 1 port per second. Please be aware that some OS and firewalls apply 
+        at a default rate of 1 port per second. Please be aware that some OSes and firewalls apply 
         rate-limiting to their generation, or passing, of ICMPv6 responses on the basis that this 
         behaviour is indicative of a port scan being performed. Consequently such rate-limiting might 
         cause a port which would normally generate an ICMPv6 response (e.g. PHBTD) to send no response 

@@ -1,6 +1,6 @@
-//    IPscan - an http-initiated IPv6 port scanner.
+//    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2020 Tim Chappell.
+//    Copyright (C) 2011-2021 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -57,6 +57,9 @@
 // 0.37 - javascript updates (removal of eval) and tidy
 // 0.38 - add log for time_r failures
 // 0.39 - update copyright year
+// 0.40 - move to use client starttime to ensure unique parameters
+// 0.41 - convert some variables to const, re-scope others, update copyright year
+// 0.42 - move to client session/starttime generation
 
 #include "ipscan.h"
 
@@ -72,7 +75,7 @@
 #include <inttypes.h>
 
 // Logging with syslog requires additional include
-#if (LOGMODE == 1)
+#if (1 == LOGMODE)
 #include <syslog.h>
 #endif
 
@@ -92,7 +95,7 @@ void create_html_common_header(void)
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\">\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
 	#endif
 	printf("<meta name=\"robots\" content=\"noindex, nofollow\">\n");
-	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2020 tim chappell.\">\n");
+	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2021 tim chappell.\">\n");
 }
 
 #ifdef IPSCAN_HTML5_ENABLED
@@ -110,7 +113,7 @@ void create_html5_common_header(void)
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\"/>\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
 	#endif
 	printf("<meta name=\"robots\" content=\"noindex, nofollow\"/>\n");
-	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2020 tim chappell.\">\n");
+	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2021 tim chappell.\">\n");
 	printf("<style>\n");
 	printf("body {\n");
 	printf("background-color: #f0f0f2;\n");
@@ -148,7 +151,7 @@ void create_json_header(void)
 	printf("%s%c%c\n","Content-type:application/json;charset=utf-8",13,10);
 }
 
-void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, uint16_t numudpports, char * reconquery)
+void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery)
 {
 	uint16_t i;
 
@@ -157,10 +160,17 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("<script type = \"text/javascript\" language=\"javascript\">\n");
 	printf("<!--  to hide script contents from old browsers\n");
+	// Handler to emulate Date.now() for IE8 and earlier
+	printf("Date.prototype.now = function() { return typeof(Date.now) == 'function' ? Date.now() : new Date().getTime(); }; ");
+	// Globals
 	printf("var myInterval = 0, myBlink = 0, myHTTPTimeout, myXmlHttpReqObj, fetches = 0, lastUpdate = 0;\n");
+	// myTimeStamp becomes the starttime query parameter
+	// mySession becomes the session query parameter - multiple runs on same browser should be unique
+	printf("var myTimeStamp = new Date().now();");
+	printf("var mySession = getSessionNumber();");
 
 	// create a prefilled array containing the potential states returned for each port
-	printf("var retVals = [");
+	printf("const retVals = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (0 == i) printf("%d",resultsstruct[i].returnval); else printf(", %d",resultsstruct[i].returnval);
@@ -168,7 +178,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("];\n");
 
 	// create a prefilled array containing the text label (shorthand) describing each of the potential states returned for each port
-	printf("var labels = [");
+	printf("const labels = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (0 == i) printf("\"%s\"",resultsstruct[i].label); else printf(", \"%s\"",resultsstruct[i].label);
@@ -176,7 +186,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("];\n");
 
 	// create a prefilled array containing the colour to be applied to each of the potential states returned for each port
-	printf("var colours = [");
+	printf("const colours = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (0 == i) printf("\"%s\"",resultsstruct[i].colour); else printf(", \"%s\"",resultsstruct[i].colour);
@@ -211,7 +221,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	// function to report HTTP transfer timed out
 	printf("function HTTPTimedOut()");
 	printf(" {");
-	printf(" var badfinishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
+	printf(" let badfinishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" myXmlHttpReqObj.open(\"GET\", badfinishURL, true);");
@@ -221,7 +231,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	// function to report test never finished
 	printf("function HTTPUnfinished()");
 	printf(" {");
-	printf(" var badfinishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
+	printf(" let badfinishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" myXmlHttpReqObj.open(\"GET\", badfinishURL, true);");
 	printf(" myXmlHttpReqObj.send(\"\");");
@@ -231,7 +241,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("function HTTPFinished()");
 	printf(" {");
 	//If we get to here then we've managed to fetch all the results and the test is complete
-	printf(" var finishURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
+	printf(" let finishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
 	// Send indication that fetch is complete and results can be deleted.
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" myXmlHttpReqObj.open(\"GET\", finishURL, true);");
@@ -241,8 +251,8 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	// function to report HTTP transfer completed with unexpected state
 	printf("function HTTPUnexpected(myReadyState,myStatus)");
 	printf(" {");
-	printf(" var errorstring = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
-	printf(" var unexpectedURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d&string=\" + encodeURIComponent(errorstring);", session, (uint32_t)timestamp, reconquery, IPSCAN_UNEXPECTED_CHANGE);
+	printf(" let errorstring = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
+	printf(" let unexpectedURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(errorstring);", reconquery, IPSCAN_UNEXPECTED_CHANGE);
 	// HTTP GET completed, but with an unexpected HTTP status code (i.e. not 200 OK)
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" myXmlHttpReqObj.open(\"GET\", unexpectedURL, true);");
@@ -252,7 +262,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	// function to report User chose to navigate away from the test, before completion
 	printf("function HTTPNavAway()");
 	printf(" {");
-	printf(" var navAwayURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=%d\";", session, (uint32_t)timestamp, reconquery, IPSCAN_NAVIGATE_AWAY);
+	printf(" let navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" myXmlHttpReqObj.open(\"GET\", navAwayURL, true);");
@@ -264,20 +274,42 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf(" {");
 	// Include window.event in case the causative event wasn't passed in directly
 	printf(" if (!e) var e = window.event;");
+	printf(" e.preventDefault();"); // Firefox requires this
 	printf(" var message = 'Do you wish to end the IPv6 port scan prematurely?';");
 	printf(" HTTPNavAway();");
-	// For legacy browsers
-	printf(" if (e) { e.returnValue = message; }");
+	// For Chrome and some legacy browsers
+	printf(" e.returnValue = message;");
 	// For modern browsers
 	printf(" return message;");
 	printf(" }\n");
+
+	// function to create a random-ish session value
+	printf("function getSessionNumber() ");
+	printf(" {");
+    	printf(" if(window.crypto && window.crypto.getRandomValues)"); 
+    	printf(" {");
+      	printf(" let result = new Uint32Array(1);");
+      	printf(" window.crypto.getRandomValues(result);");
+      	printf(" return ( result[0].toString() );");
+    	printf(" }");
+    	printf(" else if(window.msCrypto && window.msCrypto.getRandomValues)"); 
+    	printf(" {");
+      	printf(" let result = new Uint32Array(1);");
+      	printf(" window.msCrypto.getRandomValues(result);");
+      	printf(" return ( result[0].toString() );");
+    	printf(" }");
+    	printf(" else");
+    	printf(" {");
+      	printf(" return ( (Math.floor(Math.random() * (Math.pow(2,31) - 1))).toString() );");
+    	printf(" }");
+  	printf(" }\n");
 
 	//
 	// function to handle GET state change
 	//
 	printf("function myStateChange(request) ");
 	printf("{");
-	printf(" var i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
+	printf(" let i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
 	printf(" if (request.readyState == 4 && request.status == 200)");
 	printf(" {");
 	printf(" clearTimeout(myHTTPTimeout);");
@@ -305,7 +337,6 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf(" clearInterval(myBlink);");
 	printf(" HTTPFinished();");
 	printf(" }");
-
 	//
 	// go around the latest received state and update display as required
 	//
@@ -402,7 +433,7 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf("function update() ");
 	printf("{ ");
 	printf("fetches += 1; ");
-	printf("var updateURL = \""URIPATH"/"EXENAME"?session=%"PRIu64"&starttime=%"PRIu32"&%s&fetch=\" + fetches; ", session, (uint32_t)timestamp, reconquery);
+	printf("var updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches; ", reconquery);
 	printf("if (fetches > %d) ",(int)( 8 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )) );
 	printf("{");
 	printf(" clearInterval(myInterval);");
@@ -424,10 +455,12 @@ void create_html_header(uint64_t session, time_t timestamp, uint16_t numports, u
 	printf(" {");
 	printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING.\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
+	// Use Date().now() as our timestamp to ensure all runs are unique
+	printf(" myTimeStamp = new Date().now();");
 	// Install the page exit handler
 	printf(" window.onbeforeunload = pageExitHandler;\n");
 	printf(" myBlink = setInterval(function(){blink(); }, 1000);");
-	printf(" var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=%"PRIu64"&starttime=%"PRIu32"&%s\";", MAGICBEGIN, session, (uint32_t)timestamp, reconquery);
+	printf(" let startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
 	printf(" myXmlHttpReqObj = makeHttpObject();");
 	printf(" myXmlHttpReqObj.open(\"GET\", startURL, true);");
 	printf(" myXmlHttpReqObj.send(\"\");");
@@ -451,7 +484,7 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	printf("<p style=\"font-weight:bold\">");
 	if (NULL != tsptr)
 	{
-		if (strftime(tstring, sizeof(tstring),"%a,%%20%d%%20%b%%20%Y%%20%T%%20%z", &timestampbdt) != 0)
+		if (0 != strftime(tstring, sizeof(tstring),"%a,%%20%d%%20%b%%20%Y%%20%T%%20%z", &timestampbdt))
 		{
 			printf("Special protocol tests, signified by [x] after a port number, test for known protocol weaknesses. ");
 			printf("Further details of these tests can be found at <a href=\"%s\">Special protocol tests.</a>\n", IPSCAN_SPECIALTESTS_URL);
@@ -482,7 +515,7 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	}
 	printf("</table>\n");
 	// Only include if ping is supported
-	#if (IPSCAN_INCLUDE_PING ==1)
+	#if (1 == IPSCAN_INCLUDE_PING)
 	printf("<p>NOTE: Results in the ICMPv6 ECHO REQUEST test marked as INDIRECT indicate an ICMPv6 error response was received from another host (e.g. a router or firewall) rather");
 	printf(" than the host under test. In this case the address of the responding host is also displayed.</p>\n");
 	#endif
@@ -527,14 +560,14 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	printf("<td width=\"50%%\">Scan status is : </td><td width=\"50%%\" style=\"font-weight: bold\" id=\"scanstate\">IDLE.</td>\n");
 	printf("</tr>\n");
 	// Only include the PING result row if necessary
-	#if (IPSCAN_INCLUDE_PING ==1)
+	#if (1 == IPSCAN_INCLUDE_PING)
 	printf("<tr style=\"font-weight: normal\">\n");
 	printf("<td width=\"50%%\" title=\"IPv6 Ping\">ICMPv6 ECHO REQUEST returned : </td><td width=\"50%%\" style=\"background-color:%s\" id=\"pingstate\">%s</td>\n",resultsstruct[PORTUNKNOWN].colour,resultsstruct[PORTUNKNOWN].label);
 	printf("</tr>\n");
 	#endif
 	printf("</table>\n");
 
-	if (numudpports > 0)
+	if (0 < numudpports)
 	{
 		printf("<p style=\"font-weight: bold\">Individual IPv6 UDP port scan results (hover for service names):</p>\n");
 		// Start of UDP table
@@ -546,7 +579,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 			special = udpportlist[portindex].special;
 			last = (portindex == (numudpports-1)) ? 1 : 0 ;
 
-			if (position ==0) printf("<tr style=\"text-align:center\">\n");
+			if (0 == position) printf("<tr style=\"text-align:center\">\n");
 			if (0 != special)
 			{
 				printf("<td width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"udpport%d:%d\">Port %d[%d] = %s</td>\n",COLUMNUDPPCT,udpportlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
@@ -558,7 +591,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 						port, port, resultsstruct[PORTUNKNOWN].label );
 			}
 			position++;
-			if (position >= MAXUDPCOLS || last == 1) { printf("</tr>\n"); position=0; };
+			if (MAXUDPCOLS <= position || 1 == last) { printf("</tr>\n"); position=0; };
 		}
 		// end of table
 		printf("</table>\n");
@@ -575,7 +608,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 		special = portlist[portindex].special;
 		last = (portindex == (numports-1)) ? 1 : 0 ;
 
-		if (position ==0) printf("<tr style=\"text-align:center\">\n");
+		if (0 == position) printf("<tr style=\"text-align:center\">\n");
 		if (0 != special)
 		{
 			printf("<td width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d:%d\">Port %d[%d] = %s</td>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
@@ -587,7 +620,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 					port, port, resultsstruct[PORTUNKNOWN].label );
 		}
 		position++;
-		if (position >= MAXCOLS || last == 1) { printf("</tr>\n"); position=0; };
+		if (MAXCOLS <= position || 1 == last) { printf("</tr>\n"); position=0; };
 	}
 
 	// end of table
@@ -623,7 +656,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 	printf("<p>Please note that this test may take up to %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
 
-	if (numudpports > 0)
+	if (0 < numudpports)
 	{
 		printf("<p>The list of UDP ports that will be tested are:</p>\n");
 
@@ -663,7 +696,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 		special = portlist[portindex].special;
 		last = (portindex == (numports-1)) ? 1 : 0 ;
 
-		if (position == 0) printf("<tr style=\"text-align:center\">\n");
+		if (0 == position) printf("<tr style=\"text-align:center\">\n");
 		if (0 != special)
 		{
 			printf("<td width=\"%d%%\" title=\"%s\">Port %d[%d]</td>\n",COLUMNPCT, portlist[portindex].port_desc, port, special);
@@ -674,7 +707,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 		}
 
 		position++;
-		if (position >= MAXCOLS || last == 1) { printf("</tr>\n"); position=0; };
+		if (MAXCOLS <= position || 1 == last) { printf("</tr>\n"); position=0; };
 	}
 	// end of table
 	printf("</table>\n");

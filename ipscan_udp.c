@@ -1,6 +1,6 @@
-//    IPscan - an http-initiated IPv6 port scanner.
+//    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2020 Tim Chappell.
+//    Copyright (C) 2011-2021 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -46,6 +46,8 @@
 // 0.26			extern updated
 // 0.27			fix snprintf size parameter type
 // 0.28			Update copyright dates
+// 0.29			swap comparison terms, where appropriate
+// 0.30			delete old comments, update copyright year
 
 #include "ipscan.h"
 //
@@ -112,7 +114,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	// Local address update indication
 	int la_update = 0;
 
-	// was int rc = 0, i;
 	int rc = 0;
 	unsigned int i = 0;
 	const char * rccharptr;
@@ -235,7 +236,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	remoteaddr.sin6_scope_id = 0; // unused in our case
 
 	// Attempt to create a socket
-	if (retval == PORTUNKNOWN)
+	if (PORTUNKNOWN == retval)
 	{
 		fd = socket(AF_INET6, SOCK_DGRAM, 0);
 		if (fd == -1)
@@ -258,7 +259,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		}
 	}
 
-	if (retval == PORTUNKNOWN) // continue
+	if (PORTUNKNOWN == retval) // continue
 	{
 		memset(&timeout, 0, sizeof(timeout));
 		timeout.tv_sec = UDPTIMEOUTSECS;
@@ -272,7 +273,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		}
 	}
 
-	if (retval == PORTUNKNOWN)
+	if (PORTUNKNOWN == retval)
 	{
 		// Need to connect, since otherwise asynchronous ICMPv6 responses will not be delivered to us
 		rc = connect( fd, (struct sockaddr *)&remoteaddr, sizeof(remoteaddr) );
@@ -284,7 +285,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	}
 
 
-	if (retval == PORTUNKNOWN)
+	if (PORTUNKNOWN == retval)
 	{
 		// Fill the txmessage with the appropriate message (depends on service)
 		switch (port)
@@ -354,7 +355,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 			// Only add new octets if no internal error has been encountered
 			//
-			if (retval == PORTUNKNOWN)
+			if (PORTUNKNOWN == retval)
 			{
 				txmessage[len++]= (char)strlen(dnsquery2);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
@@ -371,7 +372,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 			// Only add new octets if no internal error has been encountered
 			//
-			if (retval == PORTUNKNOWN)
+			if (PORTUNKNOWN == retval)
 			{
 				txmessage[len++]= (char)strlen(dnsquery3);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
@@ -388,7 +389,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 			// Only add new octets if no internal error has been encountered
 			//
-			if (retval == PORTUNKNOWN)
+			if (PORTUNKNOWN == retval)
 			{
 				txmessage[len++]= (char)strlen(dnsquery4);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
@@ -405,7 +406,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 			// Only add new octets if no internal error has been encountered
 			//
-			if (retval == PORTUNKNOWN)
+			if (PORTUNKNOWN == retval)
 			{
 				// End of name
 				txmessage[len++]= 0;
@@ -523,7 +524,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// SNMPv1 or SNMPv2c get
 				// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
 				char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
-				// was int miblen = 6;
 				unsigned int miblen = 6;
 
 				// SNMP packet start
@@ -548,7 +548,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 
 				// MIB - check there's enough room before adding
-				if (retval == PORTUNKNOWN && (len < (int)(UDP_BUFFER_SIZE-24-miblen)) )
+				if (PORTUNKNOWN == retval && (len < (int)(UDP_BUFFER_SIZE-24-miblen)) )
 				{
 					txmessage[len++] = 0xA0; // SNMP GET request
 					txmessage[len++] = (char)(22 + miblen); //0x1c
@@ -588,7 +588,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 					txmessage[len++] = 0x05; // Null object
 					txmessage[len++] = 0x00; // length of 0
 				}
-				else if (retval == PORTUNKNOWN && (len >= (int)(UDP_BUFFER_SIZE-24-miblen)))
+				else if (PORTUNKNOWN == retval && (len >= (int)(UDP_BUFFER_SIZE-24-miblen)))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Insufficient room to add OID, len = %d\n", len);
 					retval = PORTINTERROR;
@@ -1719,7 +1719,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			txmessage[len++] = 0x0A;
 			txmessage[len++] = 0x0D;
 			txmessage[len++] = 0x0;
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2020 Tim Chappell. This message is destined for UDP port %d\n", port);
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2021 Tim Chappell. This message is destined for UDP port %d\n", port);
 			if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
@@ -1734,7 +1734,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		}
 	}
 
-	if (retval == PORTUNKNOWN)
+	if (PORTUNKNOWN == retval)
 	{
 		rc = write(fd,&txmessage,(size_t)len);
 		if (rc < 0)
@@ -1764,7 +1764,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		}
 	}
 
-	if (retval == PORTUNKNOWN)
+	if (PORTUNKNOWN == retval)
 	{
 		rc=read(fd,&rxmessage,UDP_BUFFER_SIZE);
 		if (rc < 0)

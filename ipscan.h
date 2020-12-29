@@ -1,6 +1,6 @@
-//    IPscan - an http-initiated IPv6 port scanner.
+//    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2020 Tim Chappell.
+//    Copyright (C) 2011-2021 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.78"
+	#define IPSCAN_VERNUM "1.82"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -192,6 +192,10 @@
 	//      improved client debug and copyright dates update
 	// 1.77 Removed summarise_db() functionality - no longer used or desirable
 	// 1.78 Add update_db to correctly handle test state logging
+	// 1.79 Changes to use client determined starttime
+	// 1.80 Additional debug for end-of-test checking
+	// 1.81 Javascript improvements
+	// 1.82 Add comments to disregard LGTM SQL injection false positives
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -487,7 +491,7 @@
 	#define IPSCAN_MINTIME_PER_PORT 1
 
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
-	#define JSONFETCHEVERY 4
+	#define JSONFETCHEVERY 5
 
 	// ICMPv6 ECHO REQUEST packet size - suggest larger than 64 byte minimum is sensible, but as a minimum
 	// needs to support magic string insertion anyway
