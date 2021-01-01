@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.82"
+	#define IPSCAN_VERNUM "1.83"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -196,6 +196,7 @@
 	// 1.80 Additional debug for end-of-test checking
 	// 1.81 Javascript improvements
 	// 1.82 Add comments to disregard LGTM SQL injection false positives
+	// 1.83 Further Javascript improvements
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -599,6 +600,7 @@
 		IPSCAN_OTHER_ERROR,
 		IPSCAN_UNSUCCESSFUL_COMPLETION,
 		IPSCAN_NAVIGATE_AWAY,
+		IPSCAN_BAD_JSON_ERROR,
 		IPSCAN_UNEXPECTED_CHANGE,
 	};
 
