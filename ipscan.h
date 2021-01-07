@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.83"
+	#define IPSCAN_VERNUM "1.84"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -197,6 +197,7 @@
 	// 1.81 Javascript improvements
 	// 1.82 Add comments to disregard LGTM SQL injection false positives
 	// 1.83 Further Javascript improvements
+	// 1.84 Delete unused code, further Javascript improvements and remove LGTM pragmas
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"

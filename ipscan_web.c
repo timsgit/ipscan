@@ -61,6 +61,8 @@
 // 0.41 - convert some variables to const, re-scope others, update copyright year
 // 0.42 - move to client session/starttime generation
 // 0.43 - catch bad JSON parse result, return to const and var
+// 0.44 - remove commented out code
+// 0.45 - make Javascript style more consistent
 
 #include "ipscan.h"
 
@@ -289,8 +291,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// Page Exit Handler
 	printf("var pageExitHandler = function(pe)");
 	printf(" {");
-	// Include window.event in case the causative event wasn't passed in directly
-	// TODO remove? printf(" if (!pe) var pe = window.event;");
 	printf(" pe.preventDefault();"); // Firefox requires this
 	printf(" var message = \"Do you wish to end the IPv6 port scan prematurely?\";");
 	printf(" HTTPNavAway();");
@@ -324,8 +324,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	// function to handle GET state change
 	//
-	printf("function myStateChange(request) ");
-	printf("{");
+	printf("function myStateChange(request)");
+	printf(" {");
 	printf(" var i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
 	printf(" if (request.readyState == 4 && request.status == 200)");
 	printf(" {");
@@ -362,7 +362,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	// go around the latest received state and update display as required
 	//
-	printf(" for (i = 0; i < (latestState.length - 3); i += 3) {");
+	printf(" for (i = 0; i < (latestState.length - 3); i += 3)");
+	printf(" {");
 	printf(" textupdate = \"%s\";", resultsstruct[PORTUNKNOWN].label);
 	printf(" colourupdate = \"%s\";", resultsstruct[PORTUNKNOWN].colour);
 	printf(" elemid = \"pingstate\";");
@@ -385,6 +386,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" if (retVals[j] == (result & %d)) {", IPSCAN_INDIRECT_MASK);
 
 	printf(" switch(proto) {");
+
 	printf(" case %d:", IPSCAN_PROTO_ICMPV6); // ICMPv6
 	printf(" if (result >= %d)", IPSCAN_INDIRECT_RESPONSE);
 	printf(" { textupdate = \"INDIRECT-\" + labels[j] + \" (from \" + host + \")\"; } else { textupdate = labels[j]; }");
@@ -403,12 +405,12 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" if (0 != special) { textupdate = \"Port \" + port + \"[\" + special + \"]\" + labels[j]; } else { textupdate = \"Port \" + port + \" = \" + labels[j]; }");
 	printf(" break;");
 
-	printf(" }");
+	printf(" }"); // end of switch(proto)
 
 	// Colour setting
 	printf(" colourupdate = colours[j];");
-	printf(" }");
-	printf(" }");
+	printf(" }"); // end of if (retval == thisresult)
+	printf(" }"); // end of innerfor (j) loop
 
 	// update the selected text on the page ....
 	printf(" document.getElementById(elemid).innerHTML = textupdate;");
@@ -427,7 +429,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
 	// Disable the Page Exit handler
 	printf(" window.onbeforeunload = null;\n");
-	printf(" }");
+	printf(" }"); // end of if (complete set of results received)
 
 	printf(" }"); // end of main if (more than 3 elements in array)
 	printf(" }"); // if (return code == 200)
@@ -452,23 +454,22 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" }\n"); // end of myStateChange function()
 
 	// the update() function schedules a GET from the server and then awaits its successful completion.
-	printf("function update() ");
-	printf("{ ");
-	printf("fetches += 1; ");
-	printf("var updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches; ", reconquery);
-	printf("if (fetches > %d) ",(int)( 8 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )) );
-	printf("{");
+	printf("function update()");
+	printf(" {");
+	printf(" fetches += 1;"); // increment the fetch counter
+	printf(" var updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches;", reconquery);
+	printf(" if (fetches > %d)",(int)( 8 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )) );
+	printf(" {");
 	printf(" clearInterval(myInterval);");
-	printf(" lastUpdate = 1; ");
-	printf("}");
-	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+	printf(" lastUpdate = 1;");
+	printf(" }");
+	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }"); // abort if in progress
 	printf(" myXmlHttpReqObj.open(\"GET\", updateURL, true);");
 	// the myStateChange() function waits for the asynchronous HTTP 200 code to be received and then evaluates the returned JSON array.
 	printf(" myXmlHttpReqObj.onreadystatechange = function(){myStateChange(myXmlHttpReqObj); };");
 	printf(" myHTTPTimeout = setTimeout(function() {HTTPTimedOut(); }, %d);", ((JSONFETCHEVERY - 1) * 1000) );
 	printf(" myXmlHttpReqObj.send(\"\");");
-	// end of function update()
-	printf("}\n");
+	printf(" }\n"); // end of function update()
 
 	// startTimer() is really the initiation function. it sets the scanstate to RUNNING to give the user confidence that things are happening.
 	// then the initial GET is performed to request that the server begins the scan.
@@ -479,7 +480,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
 	// Use Date().now() as our timestamp to ensure all runs are unique
 	printf(" myTimeStamp = new Date().now();");
-	// Get a random-ish session number
+	// Also get a random-ish session number
 	printf(" mySession = getSessionNumber();");
 	// Install the page exit handler
 	printf(" window.onbeforeunload = pageExitHandler;\n");

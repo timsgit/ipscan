@@ -57,7 +57,8 @@
 // 0.36 - add update_db() for use in place of write_db() for IPSCAN_TESTSTATE monitoring
 // 0.37 - additional debug for write_db() and update_db()
 // 0.38 - move primary key statements, update copyright year
-// 0.39 - add LGTM pragmas to prevent false reporting of SQL injection
+// 0.39 - add LGTM pragmas to prevent False Positive (FP) reporting of SQL injection vuln
+// 0.40 - remove LGTM pragmas since FP diagnosis accepted and alerts should go away soon
 
 #include "ipscan.h"
 //
@@ -179,7 +180,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 								IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 								#endif
 								// Prevent LGTM false positive - external inputs are constrained to numbers
-								rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
+								rc = mysql_real_query(connection, query, qrylen);
 								if (0 == rc)
 								{
 									retval = 0;
@@ -285,7 +286,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					IPSCAN_LOG( LOGPREFIX "dump_db: MySQL Query is : %s\n", query);
 					#endif
 					// Prevent LGTM false positive - external inputs are constrained to numbers
-					rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
+					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
@@ -434,7 +435,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					IPSCAN_LOG( LOGPREFIX "delete_from_db: MySQL Query is : %s\n", query);
 					#endif
 					// Prevent LGTM false positive - external inputs are constrained to numbers
-					rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
+					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
 						my_ulonglong affected_rows = mysql_affected_rows(connection);
@@ -527,7 +528,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					// Prevent LGTM false positive - external inputs are constrained to numbers
-					rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
+					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
@@ -914,7 +915,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 								IPSCAN_LOG( LOGPREFIX "update_db: MySQL Query is : %s\n", query);
 								#endif
 								// Prevent LGTM false positive - external inputs are constrained to numbers
-								rc = mysql_real_query(connection, query, qrylen); // lgtm [cpp/sql-injection]
+								rc = mysql_real_query(connection, query, qrylen);
 								if (0 == rc)
 								{
 									retval = 0;
