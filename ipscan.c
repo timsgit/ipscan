@@ -76,6 +76,7 @@
 // 0.55 - update logging for cases where database lookup returns UNKNOWN
 // 0.56 - minor debug update to identify end-of-test client
 // 0.57 - update copyright year and move to client session/starttime generation
+// 0.58 - minor tweaks to delays before database record deletion at end of javascript test
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -1338,17 +1339,19 @@ int main(void)
 
 		// *IF* we have everything we need to query the database ...
 		// (1)querysession, (2)querystarttime, (3)fetch, (4)includeexisting and (5)termsaccepted. 
-		// Could also have one or more customports. Handles cases where fetch indicates completion/failure.
+		// Could also have one or more customports. 
+		// This statement handles cases where fetch indicates completion/failure.
 
 		if ( numqueries >= 5 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 \
 				&& termsaccepted == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: javascript-mode, fetch signalling end-of-test\n",\
+			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
+			fetch_to_string(fetchnum, &fetchstring[0]);
+			IPSCAN_LOG( LOGPREFIX "ipscan: Fetch indicated %s completion for client : %x:%x:%x::\n", fetchstring,\
 					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRId64", querysession %"PRId64"\n",\
-					querystarttime, querysession);
+			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRId64", querysession %"PRId64"\n", querystarttime, querysession);
 			#endif
 
 			// Put out a dummy page to keep the webserver happy
@@ -1369,18 +1372,16 @@ int main(void)
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRId64", querysession %"PRId64"\n",\
 					querystarttime, querysession);
-				result = IPSCAN_TESTSTATE_RUNNING_BIT;
-				IPSCAN_LOG( LOGPREFIX "ipscan: running state changed to RUNNING\n" );
+				// Set state to running but flag that database returned something unexpected
+				result = ( IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_DATABASE_ERROR_BIT );
+				IPSCAN_LOG( LOGPREFIX "ipscan: running state changed to indicate DATABASE error\n" );
+				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession,\
+					 (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+				if (rc != 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE rewrite returned non-zero: %d\n", rc);
+				}
 			}
-
-			#ifdef CLIENTDEBUG
-			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
-			fetch_to_string(fetchnum, &fetchstring[0]);
-			IPSCAN_LOG( LOGPREFIX "ipscan: fetch indicated %s completion for client : %x:%x:%x::\n", fetchstring,\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRId64", querysession %"PRId64"\n", querystarttime, querysession);
-			#endif
 
 			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
 			{
@@ -1391,10 +1392,6 @@ int main(void)
 			{
 				result |= IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
 			}
-			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
-			{
-				result |= IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
-			}
 			else if (IPSCAN_EVAL_ERROR == fetchnum)
 			{
 				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
@@ -1403,9 +1400,17 @@ int main(void)
 			{
 				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 			}
+			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
+			{
+				result |= IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
+			}
 			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 			{
 				result |= IPSCAN_TESTSTATE_NAVAWAY_BIT; 
+			}
+			else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
+			{
+				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
 			else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 			{
@@ -1417,6 +1422,8 @@ int main(void)
 						fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 						(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 				IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRId64", querysession %"PRId64"\n", querystarttime, querysession);
+				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
+				IPSCAN_LOG( LOGPREFIX "ipscan: running state changed to indicate OTHER error\n" );
 			}
 			// Write the new value back to the database
 			rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
@@ -1429,7 +1436,7 @@ int main(void)
 		// *IF* we have everything we need to query the database ...
 		// (1)querysession, (2)querystarttime, (3)fetch, (4)includeexisting and (5)termsaccepted. 
 		// Could also have one or more customports.
-		// Check that fetch number is less than one which indicates completion/failure
+		// Check that fetch number is less than a value which indicates completion/failure
 
 		else if ( numqueries >= 5 && querysession >= 0 && querystarttime >= 0 && beginscan == 0 && fetch == 1 \
 				&& termsaccepted == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
@@ -1765,6 +1772,10 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for first deletenowtime %d (%s)\n", errno, strerror(errno));
 				deletenowtime = timeouttime;
 			}
+
+			//
+			// wait for client to signal test complete or timeout
+			//
 			while (deletenowtime < timeouttime && client_finished == 0)
 			{
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession,\
@@ -1776,7 +1787,7 @@ int main(void)
 							(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 							(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 					IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRId64", querysession %"PRId64"\n", querystarttime, querysession);
-					result = IPSCAN_TESTSTATE_RUNNING_BIT;
+					result = IPSCAN_TESTSTATE_DATABASE_ERROR_BIT;
 				}
 
 				#ifdef CLIENTDEBUG
@@ -1797,7 +1808,6 @@ int main(void)
 
 				// Check whether the client has signalled the test is complete - various reasons
 				if (IPSCAN_TESTSTATE_COMPLETE_BIT == (result & IPSCAN_TESTSTATE_COMPLETE_BIT) \
-						|| (IPSCAN_TESTSTATE_NAVAWAY_BIT == (result & IPSCAN_TESTSTATE_NAVAWAY_BIT)) \
 						|| (IPSCAN_TESTSTATE_BADCOMPLETE_BIT == (result & IPSCAN_TESTSTATE_BADCOMPLETE_BIT)))
 				{
 					client_finished = 1;
@@ -1814,7 +1824,7 @@ int main(void)
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for deletenowtime %d (%s)\n", errno, strerror(errno));
 					deletenowtime = timeouttime;
 				}
-			}
+			} // end of wait for client to signal test complete or timeout
 
 			#ifdef CLIENTDEBUG
 			char cdstartres[32]; // ctime_r requires 26 chars
@@ -1836,10 +1846,11 @@ int main(void)
 			}
 			#endif
 
+			// Wait so that errant/delayed JSON fetches are likely to subside
+			sleep( IPSCAN_DELETE_WAIT_PERIOD );
+
 			// Delete the results
 			//
-			// If we finished successfully, wait a period, so everything can complete first
-			if (1 == client_finished ) sleep(IPSCAN_TESTSTATE_COMPLETE_SLEEP);
 			rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession);
 			if (0 != rc)
 			{

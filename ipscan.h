@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.84"
+	#define IPSCAN_VERNUM "1.85"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -198,6 +198,7 @@
 	// 1.82 Add comments to disregard LGTM SQL injection false positives
 	// 1.83 Further Javascript improvements
 	// 1.84 Delete unused code, further Javascript improvements and remove LGTM pragmas
+	// 1.85 define database delete wait-period separately
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -570,10 +571,15 @@
 	#define IPSCAN_RESULT_STRING_MAX (32)
 
 	// Timeout before results are deleted ...
+	// Should significantly exceed maximum test duration
 	#define IPSCAN_DELETE_TIMEOUT (180)
 
 	// Sleep time between polls when waiting to delete results
 	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (10)
+
+	// Time to wait before deleting database entries
+	// Should exceed time for multiple JSON fetches and sleep period
+	#define IPSCAN_DELETE_WAIT_PERIOD (IPSCAN_TESTSTATE_COMPLETE_SLEEP + 2 * JSONFETCHEVERY)
 
 	// Offset from now in seconds. All results older than (now-this) are deleted
 	// Should hardly ever be used, but ensures tests which were in progress when
@@ -623,6 +629,7 @@
 	#define IPSCAN_TESTSTATE_NAVAWAY_BIT (1024)
 	#define IPSCAN_TESTSTATE_UNEXPCHANGE_BIT (2048)
 	#define IPSCAN_TESTSTATE_BADCOMPLETE_BIT (4096)
+	#define IPSCAN_TESTSTATE_DATABASE_ERROR_BIT (8192)
 
 	// Mapping for connection attempt results
 	// To add a new entry first insert a new internal state in the PORTSTATE enumeration and then add a

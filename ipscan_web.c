@@ -63,6 +63,7 @@
 // 0.43 - catch bad JSON parse result, return to const and var
 // 0.44 - remove commented out code
 // 0.45 - make Javascript style more consistent
+// 0.46 - add cache-control private
 
 #include "ipscan.h"
 
@@ -92,7 +93,7 @@ void create_html_common_header(void)
 	printf("<meta http-equiv=\"x-ua-compatible\" content=\"ie=emulateie7\">\n");
 	printf("<meta http-equiv=\"content-type\" content=\"text/html;charset=iso-8859-1\">\n");
 	printf("<meta name=\"author\" content=\"tim chappell\">\n");
-	printf("<meta http-equiv=\"cache-control\" content=\"no-store, no-cache, must-revalidate, max-age=0\">\n");
+	printf("<meta http-equiv=\"cache-control\" content=\"no-store, private, no-cache, must-revalidate, max-age=0\">\n");
 	printf("<meta http-equiv=\"pragma\" content=\"no-cache\">\n");
 	#ifdef IPSCAN_ICON_ENABLED
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\">\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
@@ -110,7 +111,7 @@ void create_html5_common_header(void)
 	printf("<head>\n");
 	printf("<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n");
 	printf("<meta name=\"author\" content=\"tim chappell\">\n");
-	printf("<meta http-equiv=\"cache-control\" content=\"no-store, no-cache, must-revalidate, max-age=0\">\n");
+	printf("<meta http-equiv=\"cache-control\" content=\"no-store, private, no-cache, must-revalidate, max-age=0\">\n");
 	printf("<meta http-equiv=\"pragma\" content=\"no-cache\">\n");
 	#ifdef IPSCAN_ICON_ENABLED
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\"/>\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);

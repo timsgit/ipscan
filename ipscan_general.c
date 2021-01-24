@@ -28,6 +28,7 @@
 // 0.08 - add result_to_string()
 // 0.09 - update copyright dates
 // 0.10 - update copyright year
+// 0.11 - reorder entries to match definitions, add database error
 
 #include "ipscan.h"
 //
@@ -149,10 +150,6 @@ void fetch_to_string(int fetchnum, char * retstring)
 	{
 		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "HTTP-TIMEOUT");
 	}
-	else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
-	{
-		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "UNSUCCESSFUL");
-	}
 	else if (IPSCAN_EVAL_ERROR == fetchnum)
 	{
 		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "EVAL ERROR");
@@ -161,10 +158,18 @@ void fetch_to_string(int fetchnum, char * retstring)
 	{
 		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "OTHER ERROR");
 	}
+	else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
+	{
+		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "UNSUCCESSFUL");
+	}
 	else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 	{
 		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "NAVIGATEAWAY");
 	}
+	else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
+	{
+		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "BAD JSON ERR");
+	}  
 	else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 	{
 		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "UNEXP CHANGE");
@@ -255,6 +260,13 @@ char * state_to_string(int statenum, char * retstringptr, int retstringfree)
 	if (0 != (statenum & IPSCAN_TESTSTATE_BADCOMPLETE_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "BADCOMPLETE, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_DATABASE_ERROR_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "DB ERROR, ");
 		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
 		retstringfree -= rc;

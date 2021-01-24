@@ -179,7 +179,6 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 								#ifdef DBDEBUG
 								IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 								#endif
-								// Prevent LGTM false positive - external inputs are constrained to numbers
 								rc = mysql_real_query(connection, query, qrylen);
 								if (0 == rc)
 								{
@@ -285,7 +284,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "dump_db: MySQL Query is : %s\n", query);
 					#endif
-					// Prevent LGTM false positive - external inputs are constrained to numbers
 					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
@@ -329,7 +327,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									}
 									else
 									{
-										IPSCAN_LOG( LOGPREFIX "dump_db: Unexpected row scan results - rcport = %d, rcres = %d, rchost = %d, port = %d\n", rcport, rcres, rchost, port);
+										IPSCAN_LOG( LOGPREFIX "dump_db: Unexpected row scan results - rcport = %d, rcres = %d, rchost = %d\n", rcport, rcres, rchost);
 									}
 								}
 								else // original approach
@@ -434,7 +432,6 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "delete_from_db: MySQL Query is : %s\n", query);
 					#endif
-					// Prevent LGTM false positive - external inputs are constrained to numbers
 					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
@@ -527,7 +524,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
-					// Prevent LGTM false positive - external inputs are constrained to numbers
 					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
@@ -914,7 +910,6 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 								#ifdef DBDEBUG
 								IPSCAN_LOG( LOGPREFIX "update_db: MySQL Query is : %s\n", query);
 								#endif
-								// Prevent LGTM false positive - external inputs are constrained to numbers
 								rc = mysql_real_query(connection, query, qrylen);
 								if (0 == rc)
 								{
