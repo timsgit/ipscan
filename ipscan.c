@@ -77,6 +77,7 @@
 // 0.56 - minor debug update to identify end-of-test client
 // 0.57 - update copyright year and move to client session/starttime generation
 // 0.58 - minor tweaks to delays before database record deletion at end of javascript test
+// 0.59 - added LGTM pragmas to ignore cross-site scripting false positives
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -1214,10 +1215,16 @@ int main(void)
 					portsstats[result]++ ;
 					if (0 != special)
 					{
+						// False positive - port_desc is predefined text with integer
+						// port and special are restricted-range integers
+						// lgtm[cpp/cgi-xss]
 						printf("<td title=\"%s\" style=\"background-color:%s\">Port %d[%d] = %s</td>", portlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label);
 					}
 					else
 					{
+						// False positive - port_desc is predefined text with integer
+						// port is a restricted-range integer
+						// lgtm[cpp/cgi-xss]
 						printf("<td title=\"%s\" style=\"background-color:%s\">Port %d = %s</td>", portlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
 					}
 
@@ -1226,11 +1233,17 @@ int main(void)
 				{
 					if (0 != special)
 					{
+						// False positive - port_desc is predefined text with integer
+						// port and special are restricted-range integers
+						// lgtm[cpp/cgi-xss]
 						printf("<td title=\"%s\" style=\"background-color:white\">Port %d[%d] = BAD</td>", portlist[portindex].port_desc, port, special);
 						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for TCP port %d:%d is %d\n", port, special, result);
 					}
 					else
 					{
+						// False positive - port_desc is predefined text with integer
+						// port is a restricted-range integer
+						// lgtm[cpp/cgi-xss]
 						printf("<td title=\"%s\" style=\"background-color:white\">Port %d = BAD</td>", portlist[portindex].port_desc, port);
 						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for TCP port %d is %d\n",port,result);
 					}

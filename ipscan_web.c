@@ -64,6 +64,7 @@
 // 0.44 - remove commented out code
 // 0.45 - make Javascript style more consistent
 // 0.46 - add cache-control private
+// 0.47 - add LGTM pragmas to ignore cross-site scripting false positives
 
 #include "ipscan.h"
 
@@ -231,6 +232,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report HTTP transfer timed out
 	printf("function HTTPTimedOut()");
 	printf(" {");
+	// Ignore LGTM false positive - reconquery is the reconstituted query string - audited integers only
+	// lgtm[cpp/cgi-xss]
 	printf(" var timeoutURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
@@ -241,6 +244,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report test never finished
 	printf("function HTTPUnfinished()");
 	printf(" {");
+	// Ignore LGTM false positive - reconquery is the reconstituted query string - audited integers only
+	// lgtm[cpp/cgi-xss]
 	printf(" var unfinishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" myXmlHttpReqObj.open(\"GET\", unfinishURL, true);");
@@ -251,6 +256,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function HTTPFinished()");
 	printf(" {");
 	//If we get to here then we've managed to fetch all the results and the test is complete
+	// Ignore LGTM false positive - reconquery is the reconstituted query string - audited integers only
+	// lgtm[cpp/cgi-xss]
 	printf(" var finishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
 	// Send indication that fetch is complete and results can be deleted.
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
@@ -262,6 +269,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function HTTPUnexpected(myReadyState,myStatus)");
 	printf(" {");
 	printf(" var errorString = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
+	// Ignore LGTM false positive - reconquery is the reconstituted query string - audited integers only
+	// lgtm[cpp/cgi-xss]
 	printf(" var unexpectedURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(errorString);", reconquery, IPSCAN_UNEXPECTED_CHANGE);
 	// HTTP GET completed, but with an unexpected HTTP status code (i.e. not 200 OK)
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
@@ -273,6 +282,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
         printf("function badJSONParse(es)");
         printf(" {");
         printf(" var exceptionString = \"EXCEPTION:\" + es;");
+	// Ignore LGTM false positive - reconquery is the reconstituted query string - audited integers only
+	// lgtm[cpp/cgi-xss]
         printf(" var badJSONParseURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(exceptionString);", reconquery, IPSCAN_BAD_JSON_ERROR);
         printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
         printf(" myXmlHttpReqObj.open(\"GET\", badJSONParseURL, true);");
@@ -282,6 +293,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report User chose to navigate away from the test, before completion
 	printf("function HTTPNavAway()");
 	printf(" {");
+	// Ignore LGTM false positive - reconquery is the reconstituted query string - audited integers only
+	// lgtm[cpp/cgi-xss]
 	printf(" var navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
@@ -458,6 +471,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function update()");
 	printf(" {");
 	printf(" fetches += 1;"); // increment the fetch counter
+	// Ignore LGTM false positive - reconquery is the reconstituted query string - audited integers only
+	// lgtm[cpp/cgi-xss]
 	printf(" var updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches;", reconquery);
 	printf(" if (fetches > %d)",(int)( 8 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )) );
 	printf(" {");
@@ -486,6 +501,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// Install the page exit handler
 	printf(" window.onbeforeunload = pageExitHandler;\n");
 	printf(" myBlink = setInterval(function(){blink(); }, 1000);");
+	// Ignore LGTM false positive - reconquery is the reconstituted query string - audited integers only
+	// lgtm[cpp/cgi-xss]
 	printf(" var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
 	printf(" myXmlHttpReqObj = makeHttpObject();");
 	printf(" myXmlHttpReqObj.open(\"GET\", startURL, true);");
@@ -637,13 +654,15 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 		if (0 == position) printf("<tr style=\"text-align:center\">\n");
 		if (0 != special)
 		{
-			printf("<td width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d:%d\">Port %d[%d] = %s</td>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
-					port, special, port, special, resultsstruct[PORTUNKNOWN].label );
+			// Ignore LGTM false positive - portdesc and port are limited range integers
+			// lgtm[cpp/cgi-xss]
+			printf("<td width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d:%d\">Port %d[%d] = %s</td>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, port, special, port, special, resultsstruct[PORTUNKNOWN].label );
 		}
 		else
 		{
-			printf("<td width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d\">Port %d = %s</td>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, \
-					port, port, resultsstruct[PORTUNKNOWN].label );
+			// Ignore LGTM false positive - portdesc and port are limited range integers
+			// lgtm[cpp/cgi-xss]
+			printf("<td width=\"%d%%\" title=\"%s\" style=\"background-color:%s\" id=\"port%d\">Port %d = %s</td>\n",COLUMNPCT,portlist[portindex].port_desc, resultsstruct[PORTUNKNOWN].colour, port, port, resultsstruct[PORTUNKNOWN].label );
 		}
 		position++;
 		if (MAXCOLS <= position || 1 == last) { printf("</tr>\n"); position=0; };
