@@ -33,6 +33,8 @@
 // 0.13			update copyright year
 // 0.14			swap comparison terms, where appropriate
 // 0.15			delete old comments, update copyright year
+// 0.16			add missing error checks for inet_ntop calls
+// 0.17			and snprintf for router too
 
 #include "ipscan.h"
 //
@@ -90,6 +92,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	int rc;
 	int error;
 	unsigned int sendsize;
+	const char * rccharptr;
 
 	struct timeval timeout;
 
@@ -149,11 +152,12 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	// Done with the address info now, so free the area
 	freeaddrinfo(res);
 
-	// Set default logged router address to "unset"
-	rc = snprintf(router, INET6_ADDRSTRLEN, "unset");
+	// Set default logged router address to dead::1 (valid format IPv6 address)
+	rc = snprintf(router, INET6_ADDRSTRLEN, "dead::1");
 	if (rc < 0 || rc >= INET6_ADDRSTRLEN)
 	{
 		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Failed to unset logged router address, rc was %d\n", rc);
+		memset(router, 0, INET6_ADDRSTRLEN);
 		retval = PORTINTERROR;
 	}
 
@@ -480,7 +484,13 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 			// Store the outer packet address in case we do have a valid response from a machine(router) other than
 			// the intended target
-			inet_ntop(AF_INET6, &(source.sin6_addr), router, INET6_ADDRSTRLEN);
+			rccharptr = inet_ntop(AF_INET6, &(source.sin6_addr), router, INET6_ADDRSTRLEN);
+			errsv = errno;
+			if (NULL == rccharptr)
+			{
+				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: inet_ntop() for router returned bad indication %d (%s)\n", errsv, strerror(errsv));
+				memset(router, 0, INET6_ADDRSTRLEN);
+			}
 
 			// Extract ICMPv6 type and code for checking and reporting
 			rxicmp6hdr_ptr = (struct icmp6_hdr *)rxpacket;
@@ -515,14 +525,32 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 					struct in6_addr orig_src = rx2ip6hdr_ptr->ip6_src;
 					unsigned int nextheader = rx2ip6hdr_ptr->ip6_nxt;
 
-					inet_ntop(AF_INET6, &orig_src, orig_src_addr, INET6_ADDRSTRLEN);
+					rccharptr = inet_ntop(AF_INET6, &orig_src, orig_src_addr, INET6_ADDRSTRLEN);
+					errsv = errno;
+					if (NULL == rccharptr)
+					{
+						IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: inet_ntop() for orig_src_addr returned bad indication %d (%s)\n", errsv, strerror(errsv));
+						memset(orig_src_addr, 0, INET6_ADDRSTRLEN);
+					}
 					// original source address would be our IPv6 address
 					// TODO - perhaps we should be checking this for completeness ...
 
-					inet_ntop(AF_INET6, &orig_dst, orig_dst_addr, INET6_ADDRSTRLEN);
+					rccharptr = inet_ntop(AF_INET6, &orig_dst, orig_dst_addr, INET6_ADDRSTRLEN);
+					errsv = errno;
+					if (NULL == rccharptr)
+					{
+						IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: inet_ntop() for orig_dst_addr returned bad indication %d (%s)\n", errsv, strerror(errsv));
+						memset(orig_dst_addr, 0, INET6_ADDRSTRLEN);
+					}
 					// original destination should match our transmitted destination address
 
-					inet_ntop(AF_INET6, &(destination.sin6_addr), tx_dst_addr, INET6_ADDRSTRLEN);
+					rccharptr = inet_ntop(AF_INET6, &(destination.sin6_addr), tx_dst_addr, INET6_ADDRSTRLEN);
+					errsv = errno;
+					if (NULL == rccharptr)
+					{
+						IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: inet_ntop() for tx_dst_addr returned bad indication %d (%s)\n", errsv, strerror(errsv));
+						memset(tx_dst_addr, 0, INET6_ADDRSTRLEN);
+					}
 
 					#ifdef PINGDEBUG
 					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: INNER packet details: src %s ; dst %s; nextheader %d\n", orig_src_addr, orig_dst_addr, nextheader);

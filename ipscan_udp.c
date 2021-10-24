@@ -48,6 +48,8 @@
 // 0.28			Update copyright dates
 // 0.29			swap comparison terms, where appropriate
 // 0.30			delete old comments, update copyright year
+// 0.31			Add memset clear for inet_ntop failure case
+// 0.32			Add logging for bad gettimeofday() calls
 
 #include "ipscan.h"
 //
@@ -138,7 +140,11 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	// Capture time of day and convert to NTP format
 	struct timeval tv;
-	gettimeofday(&tv, NULL);
+	rc = gettimeofday(&tv, NULL);
+	if (0 > rc)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad gettimeofday() call for NTP, returned %d with errno %d (%s)\n", rc, errno, strerror(errno));
+	}
 	const unsigned long long EPOCH = 2208988800ULL;
 	const unsigned long long NTP_SCALE_FRAC = 4294967296ULL;
 	long long unsigned int tv_secs  = (long long unsigned int)(tv.tv_sec) + EPOCH;
@@ -192,6 +198,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				if (NULL == rccharptr)
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: inet_ntop() returned an error (%s)\n", strerror(errno));
+					memset(localaddrstr, 0, INET6_ADDRSTRLEN);
 				}
 				else
 				{
@@ -1766,7 +1773,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	if (PORTUNKNOWN == retval)
 	{
-		rc=read(fd,&rxmessage,UDP_BUFFER_SIZE);
+		rc = read(fd,&rxmessage,UDP_BUFFER_SIZE);
 		if (rc < 0)
 		{
 			int errsv = errno ;

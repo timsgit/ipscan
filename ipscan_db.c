@@ -59,6 +59,7 @@
 // 0.38 - move primary key statements, update copyright year
 // 0.39 - add LGTM pragmas to prevent False Positive (FP) reporting of SQL injection vuln
 // 0.40 - remove LGTM pragmas since FP diagnosis accepted and alerts should go away soon
+// 0.41 - additional read_db_result() and dump_db() debug
 
 #include "ipscan.h"
 //
@@ -222,9 +223,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 		mysql_close(connection);
 	}
 
-	#ifdef DBDEBUG
-	if (0 != retval) IPSCAN_LOG( LOGPREFIX "write_db: returning with retval = %d\n",retval);
-	#endif
+	if (0 != retval) IPSCAN_LOG( LOGPREFIX "write_db: WARNING - returning with retval = %d\n",retval);
 	return (retval);
 }
 
@@ -241,7 +240,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 	int rc;
 	int rcport, rcres, rchost;
 	int retval = 0;
-	unsigned int num_fields;
+	unsigned int num_fields = 0;
+	uint64_t num_rows = 0;
 	int qrylen;
 	int port, res;
 	char hostind[INET6_ADDRSTRLEN+1];
@@ -275,14 +275,14 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			}
 			else
 			{
-				// int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session )
+				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
 					#ifdef DBDEBUG
-					IPSCAN_LOG( LOGPREFIX "dump_db: MySQL Query is : %s\n", query);
+					IPSCAN_LOG( LOGPREFIX "dump_db: MySQL Query is : \"%s\"\n", query);
 					#endif
 					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
@@ -295,16 +295,22 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							unsigned int nump = 0;
 							#endif
 
+							num_rows = mysql_num_rows(result);
+							if (0 == num_rows)
+							{
+								IPSCAN_LOG( LOGPREFIX "dump_db: WARNING: 0 rows returned, num_fields = %d, query = \"%s\"\n", num_fields, query);
+							}
+
 							printf("[ ");
 
 							while ((row = mysql_fetch_row(result)))
 							{
-								if (num_fields == 8) // database includes indirect host field
+								if (8 == num_fields) // database includes indirect host field
 								{
 									rcport = sscanf(row[5], "%d", &port);
 									rcres = sscanf(row[6], "%d", &res);
 									rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
-									if ( rcres == 1 && rchost == 1 && rcport == 1 )
+									if ( 1 == rcres && 1 == rchost && 1 == rcport )
 									{
 										int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
 										// Report everything to the client apart from the test-state
@@ -351,7 +357,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 						else
 						{
 							// Didn't get any results, so check if we should have got some
-							if (mysql_field_count(connection) == 0)
+							if (0 == mysql_field_count(connection))
 							{
 								IPSCAN_LOG( LOGPREFIX "dump_db: surprisingly mysql_field_count() expected to return 0 fields\n");
 							}
@@ -486,7 +492,8 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	int rc;
 	int rcres, dbres;
 	int retres = PORTUNKNOWN;
-	unsigned int num_fields;
+	unsigned int num_fields = 0;
+	uint64_t num_rows = 0;
 	int qrylen;
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
@@ -518,37 +525,42 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			}
 			else
 			{
-				// int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session )
-				// SELECT x FROM t1 WHERE a = b ORDER BY x;
+				// was SELECT x FROM t1 WHERE a = b ORDER BY x;
+				// SELECT x FROM t1 WHERE ( a = b ) ORDER BY x DESC;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id DESC", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, qrylen);
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
-						if (result)
+						if (NULL != result)
 						{
 							num_fields = mysql_num_fields(result);
+							num_rows = mysql_num_rows(result);
+							if (0 == num_rows)
+							{
+								IPSCAN_LOG( LOGPREFIX "read_db_result: WARNING: 0 rows returned, num_fields = %d, query = \"%s\"\n", num_fields, query);
+							}
 							while ((row = mysql_fetch_row(result)))
 							{
-								if (num_fields == 8) // database includes indirect host field
+								if (8 == num_fields) // database includes indirect host field
 								{
 									rcres = sscanf(row[6], "%d", &dbres);
-									if ( rcres == 1)
+									if (1 == rcres)
 									{
 										// Set the return result
 										retres = dbres;
 									}
 									else
 									{
-										IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Unexpected row scan results - rcres = %d\n", rcres);
+										IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Unexpected row scan results - sscanf() = %d\n", rcres);
 									}
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Unexpected row scan results - num_fields = %d\n", num_fields);
+									IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Unexpected row scan results - num_fields() = %d\n", num_fields);
 								}
 							}
 							mysql_free_result(result);
@@ -557,7 +569,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						{
 							IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: surprisingly mysql_store_result() returned NULL\n");
 							// Didn't get any results, so check if we should have got some
-							if (mysql_field_count(connection) == 0)
+							if (0 == mysql_field_count(connection))
 							{
 								IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: surprisingly mysql_field_count() expected to return 0 fields\n");
 							}
@@ -620,7 +632,8 @@ int tidy_up_db(uint64_t time_now)
 	#if (DBDEBUG == 1)
 	MYSQL_RES *result;
 	MYSQL_ROW row;
-	unsigned int num_fields;
+	unsigned int num_fields = 0;
+	uint64_t num_rows = 0;
 	int rcport, rcres, rchost, rcindhost;
 	int port, res;
 	char hostind[INET6_ADDRSTRLEN+1];
@@ -672,10 +685,11 @@ int tidy_up_db(uint64_t time_now)
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
-						if (result)
+						if (0 != result)
 						{
 							num_fields = mysql_num_fields(result);
-							IPSCAN_LOG( LOGPREFIX "tidy_up_db: about to dump rows WHERE ( createdate <= '%"PRIu64"' )", delete_before_time);
+							num_rows = mysql_num_rows(result);
+							IPSCAN_LOG( LOGPREFIX "tidy_up_db: about to dump %"PRIu64" rows WHERE ( createdate <= '%"PRIu64"' )", num_rows, delete_before_time);
 
 							int i, rcmsb, rclsb, rcdate, rcsess;
 							const char * rchostname;
@@ -689,7 +703,7 @@ int tidy_up_db(uint64_t time_now)
 
 							while ((row = mysql_fetch_row(result)))
 							{
-								if (num_fields == 8) // database includes indirect host field
+								if (8 == num_fields) // database includes indirect host field
 								{
 									// row[0] - id
 									rcmsb=sscanf(row[1],"%"SCNu64, &value);
@@ -721,7 +735,7 @@ int tidy_up_db(uint64_t time_now)
 									rcres = sscanf(row[6], "%d", &res);
 									rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 
-									if ( rcres == 1 && rcindhost == 1 && rcport == 1 && rcsess == 1 && NULL != rchostname)
+									if ( 1 == rcres && 1 == rcindhost && 1 == rcport && 1 == rcsess && NULL != rchostname)
 									{
 										int portnum = (port >> IPSCAN_PORT_SHIFT) & IPSCAN_PORT_MASK;
 										int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
@@ -953,8 +967,6 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 		mysql_close(connection);
 	}
 
-	#ifdef DBDEBUG
-	if (0 != retval) IPSCAN_LOG( LOGPREFIX "update_db: returning with retval = %d\n",retval);
-	#endif
+	if (0 != retval) IPSCAN_LOG( LOGPREFIX "update_db: WARNING - returning with retval = %d\n",retval);
 	return (retval);
 }

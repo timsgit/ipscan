@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.86"
+	#define IPSCAN_VERNUM "1.88"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -200,6 +200,9 @@
 	// 1.84 Delete unused code, further Javascript improvements and remove LGTM pragmas
 	// 1.85 define database delete wait-period separately
 	// 1.86 Add some LGTM pragmas to hide cross-site scripting false positives
+	// 1.87 Add some missing inet_ntop return-value checks, 
+	//	further database debug and remove LGTM CGI cross-site scripting pragmas
+	// 1.88 remove LGTM pragmas
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -272,7 +275,7 @@
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
 		#define CLIENTDEBUG 1
-		#define IPSCAN_LOGVERBOSITY 1
+		#define IPSCAN_LOGVERBOSITY 2
 	#endif
 	//
 	// database related debug:
@@ -402,6 +405,9 @@
 	// Maximum length of request-method string
 	// should be one of GET, HEADER, POST, OPTIONS, etc. so 16 sufficient
 	#define MAXREQMETHODLEN 16
+
+	// Maximum length of HTTP_USER_AGENT string
+	#define MAXUSERAGENTLEN 1024
 
 	// Magic to convert from #defined integers to strings (used to protect sscanf)
 	#define TOSTR1(i) #i

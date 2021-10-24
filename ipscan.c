@@ -78,6 +78,8 @@
 // 0.57 - update copyright year and move to client session/starttime generation
 // 0.58 - minor tweaks to delays before database record deletion at end of javascript test
 // 0.59 - added LGTM pragmas to ignore cross-site scripting false positives
+// 0.60 - validation added for both check_icmpv6_echoresponse() calls which overwrite indirecthost 
+// 0.61 - remove LGTM pragmas which ignored cross-site scripting false positives
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -217,11 +219,15 @@ int main(void)
 	// Only necessary if we're including ping support
 	#if (1 == IPSCAN_INCLUDE_PING)
 	int pingresult;
+	int ih_adjusted = 0;
 	// Storage for indirecthost address, in case required
-	char indirecthost[INET6_ADDRSTRLEN];
+	// Note that indirecthost value validation is performed twice below
+	// It may need changing if the declaration of this variable is adjusted
+	char indirecthost[INET6_ADDRSTRLEN+1];
+	char indirecthost2[INET6_ADDRSTRLEN+1];
 	#endif
 
-	char remoteaddrstring[INET6_ADDRSTRLEN];
+	char remoteaddrstring[INET6_ADDRSTRLEN+1];
 	char *remoteaddrvar;
 
 	unsigned int position = 0;
@@ -266,6 +272,12 @@ int main(void)
 	char *reqmethodvar;
 	char *querystringvar;
 	char querystring[ (MAXQUERYSTRLEN + 1) ];
+
+	// User Agent string is only reported for debug purposes
+	#if (1 <= IPSCAN_LOGVERBOSITY)
+	char *useragentvar;
+	char useragent[ (MAXUSERAGENTLEN + 1) ];
+	#endif
 
 
 	// buffer for reconstituted querystring
@@ -333,6 +345,67 @@ int main(void)
 	uint64_t session = get_session();
 	#endif
 
+	// Handle reporting of USER AGENT string
+	// Note that content cannot be trusted - so agressively limit the character set
+	#if (1 <= IPSCAN_LOGVERBOSITY)
+	useragentvar = getenv("HTTP_USER_AGENT");
+
+	// Pre-clear array since using sscanf with %Nc doesn't guarantee string will be 0 terminated
+	memset(useragent,0, sizeof(useragent));
+
+	if ( NULL == useragentvar )
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : HTTP_USER_AGENT variable lookup returned NULL.");
+	}
+	else if ( strnlen(useragentvar, (MAXUSERAGENTLEN+1)) > MAXUSERAGENTLEN )
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: HTTP_USER_AGENT variable string is longer than allocated buffer (%d > %d)\n", (int)strnlen(useragentvar, (MAXUSERAGENTLEN+1)), MAXUSERAGENTLEN);
+	}
+	else if ( sscanf(useragentvar,"%"TO_STR(MAXUSERAGENTLEN)"c",useragent) != EOF )
+	{
+		if (strnlen(useragent, MAXUSERAGENTLEN+1) > MAXUSERAGENTLEN)
+		{
+			useragent[0] = 0; // truncate string
+		}
+		else
+		{
+			for ( i = 0 ; i < strnlen(useragent, MAXUSERAGENTLEN+1) ; i++ )
+			{
+				// Clamp to printable ASCII range - but ensure 0 is not corrupted
+				if ( (useragent[i] > 0 && useragent[i] < 32) || useragent[i] > 126 ) useragent[i] = 32;
+				// and also protect against special characters which could be used for XSS
+				switch (useragent[i])
+				{
+					case '<':
+					case '>':
+					case ':':
+					case ';':
+					case '&':
+					case '\\':
+					case '/':
+					case '=':
+					case '*':
+					case ',':
+					case '^':
+					case '$':
+					case '|':
+						useragent[i] = ' ';
+					break;
+			
+					default:
+						// do nothing
+					break;
+				}
+			}
+		}
+		IPSCAN_LOG( LOGPREFIX "ipscan: HTTP_USER_AGENT = \"%s\"", useragent);
+	}
+	else
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: HTTP_USER_AGENT variable not reportable.");
+	}
+	#endif
+
 	// QUERY_STRING / REQUEST_METHOD
 	// URL is of the form: ipv6.cgi?name1=value1&name2=value2
 	// REQUEST_METHOD = GET
@@ -359,7 +432,7 @@ int main(void)
 		create_html_body_end();
 		return(EXIT_SUCCESS);
 	}
-	else if( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
+	else if ( sscanf(reqmethodvar,"%"TO_STR(MAXREQMETHODLEN)"s",requestmethod) != 1 )
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid request-method scan.");
 	}
@@ -373,12 +446,12 @@ int main(void)
 		for (i = 0; i < (unsigned int)strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
 		{
 			thischar=requestmethod[i];
-			requestmethod[i]=(char)(toupper(thischar) &0xFF);
+			requestmethod[i]=(char)(toupper(thischar) & 0xFF);
 		}
 
 		if (0 == strncmp("GET", requestmethod, 3))
 		{
-			if(NULL == querystringvar)
+			if (NULL == querystringvar)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: QUERY_STRING variable lookup returned NULL.\n");
 			}
@@ -396,7 +469,7 @@ int main(void)
 				create_html_body_end();
 				return(EXIT_SUCCESS);
 			}
-			else if( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
+			else if ( sscanf(querystringvar,"%"TO_STR(MAXQUERYSTRLEN)"s",querystring) != 1 )
 			{
 				#ifdef QUERYDEBUG
 				// No query string will get reported here ....
@@ -528,7 +601,7 @@ int main(void)
 
 	// Determine the clients' address
 	remoteaddrvar = getenv("REMOTE_ADDR");
-	if(NULL == remoteaddrvar)
+	if (NULL == remoteaddrvar)
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REMOTE_ADDR variable lookup returned NULL.\n");
 	}
@@ -546,7 +619,7 @@ int main(void)
 		create_html_body_end();
 		return(EXIT_SUCCESS);
 	}
-	else if( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
+	else if ( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid REMOTE_ADDR variable data.\n");
 	}
@@ -963,12 +1036,39 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %x:%x:%x:: beginning with termsaccepted = %d\n",\
 					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: at time %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
+			#endif
 
 			// Only included if ping is compiled in ...
-			#if (IPSCAN_INCLUDE_PING == 1)
+			#if (1 == IPSCAN_INCLUDE_PING)
 			// Ping the remote host and store the result ...
-			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)starttime, (uint64_t)session, indirecthost);
+			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)starttime, (uint64_t)session, &indirecthost[0] );
+
+			// Ensure the indirecthost returned is valid
+			// NOTE: this validation may require adjustment if the declaration of indirecthost changes
+			ih_adjusted = 0;
+			indirecthost[INET6_ADDRSTRLEN] = 0;
+			for ( i = 0 ; i < INET6_ADDRSTRLEN ; i++ ) indirecthost2[i] = indirecthost[i] ;
+			for ( i = 0 ; i < INET6_ADDRSTRLEN && indirecthost[i] > 0 ; i++ )
+			{
+				// Ensure only valid ASCII characters are included, but terminating '0' is retained
+				// 0..9 are 48-57, : is 58, A-F are 65-70, a-f are 97-102
+				if ( (indirecthost[i] > 0 && indirecthost[i] < 48) || (indirecthost[i] > 58 && indirecthost[i] < 65) \
+					|| (indirecthost[i] > 70 && indirecthost[i] < 97) ||  indirecthost[i] > 102 )
+				{
+					indirecthost[i] = 32;
+					ih_adjusted = 1;
+				}
+			}
+			if (0 != ih_adjusted)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 indirecthost was updated, exiting with i = %d and \"%s\"\n", i, indirecthost);
+				IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[0:7] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[0], indirecthost2[1], indirecthost2[2], indirecthost2[3], indirecthost2[4], indirecthost2[5], indirecthost2[6], indirecthost2[7] );
+				IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[8:15] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[8], indirecthost2[9], indirecthost2[10], indirecthost2[11], indirecthost2[12], indirecthost2[13], indirecthost2[14], indirecthost2[15] );
+
+			}
+
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 
 			#if (1 < IPSCAN_LOGVERBOSITY)
@@ -1083,7 +1183,7 @@ int main(void)
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
-				if (position ==0) printf("<tr>");
+				if (position == 0) printf("<tr>");
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
@@ -1205,7 +1305,7 @@ int main(void)
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
-				if (position ==0) printf("<tr>");
+				if (position == 0) printf("<tr>");
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
@@ -1215,16 +1315,14 @@ int main(void)
 					portsstats[result]++ ;
 					if (0 != special)
 					{
-						// False positive - port_desc is predefined text with integer
+						// False positive with LGTM - port_desc is predefined text with integer
 						// port and special are restricted-range integers
-						// lgtm[cpp/cgi-xss]
 						printf("<td title=\"%s\" style=\"background-color:%s\">Port %d[%d] = %s</td>", portlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label);
 					}
 					else
 					{
-						// False positive - port_desc is predefined text with integer
+						// False positive with LGTM - port_desc is predefined text with integer
 						// port is a restricted-range integer
-						// lgtm[cpp/cgi-xss]
 						printf("<td title=\"%s\" style=\"background-color:%s\">Port %d = %s</td>", portlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
 					}
 
@@ -1233,17 +1331,15 @@ int main(void)
 				{
 					if (0 != special)
 					{
-						// False positive - port_desc is predefined text with integer
+						// False positive with LGTM - port_desc is predefined text with integer
 						// port and special are restricted-range integers
-						// lgtm[cpp/cgi-xss]
 						printf("<td title=\"%s\" style=\"background-color:white\">Port %d[%d] = BAD</td>", portlist[portindex].port_desc, port, special);
 						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for TCP port %d:%d is %d\n", port, special, result);
 					}
 					else
 					{
-						// False positive - port_desc is predefined text with integer
+						// False positive with LGTM - port_desc is predefined text with integer
 						// port is a restricted-range integer
-						// lgtm[cpp/cgi-xss]
 						printf("<td title=\"%s\" style=\"background-color:white\">Port %d = BAD</td>", portlist[portindex].port_desc, port);
 						IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: Unknown result for TCP port %d is %d\n",port,result);
 					}
@@ -1524,15 +1620,41 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Client: %x:%x:%x:: beginning with termsaccepted = %d\n",\
 					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRId64", querysession %"PRId64"\n", querystarttime, querysession);
+			#endif
 
 			// Only include this section if ping is compiled in ...
 			#if (IPSCAN_INCLUDE_PING == 1)
-			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)querystarttime, (uint64_t)querysession, indirecthost);
+			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)querystarttime, (uint64_t)querysession, &indirecthost[0] );
+			// Ensure the indirecthost returned is valid
+                        // NOTE: this validation may require adjustment if the declaration of indirecthost changes
+			ih_adjusted = 0;
+                        indirecthost[INET6_ADDRSTRLEN] = 0;
+			for ( i = 0 ; i < INET6_ADDRSTRLEN ; i++ ) indirecthost2[i] = indirecthost[i] ;
+                        for ( i = 0 ; i < INET6_ADDRSTRLEN && indirecthost[i] > 0 ; i++ )
+                        {
+                                // Ensure only valid ASCII characters are included, but terminating '0' is retained
+                                // 0..9 are 48-57, : is 58, A-F are 65-70, a-f are 97-102
+                                if ( (indirecthost[i] > 0 && indirecthost[i] < 48) || (indirecthost[i] > 58 && indirecthost[i] < 65) \
+                                        || (indirecthost[i] > 70 && indirecthost[i] < 97) ||  indirecthost[i] > 102 )
+                                {
+                                        indirecthost[i] = 32;
+                                        ih_adjusted = 1;
+                                }
+                        }
+                        if (0 != ih_adjusted)
+                        {
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 indirecthost was updated, exiting with i = %d and \"%s\"\n", i, indirecthost);
+                                IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[0:7] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[0], indirecthost2[1], indirecthost2[2], indirecthost2[3], indirecthost2[4], indirecthost2[5], indirecthost2[6], indirecthost2[7] );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[8:15] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[8], indirecthost2[9], indirecthost2[10], indirecthost2[11], indirecthost2[12], indirecthost2[13], indirecthost2[14], indirecthost2[15] );
+
+                        }
+
 			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (1 < IPSCAN_LOGVERBOSITY)
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",remoteaddrstring,\
-					 pingresult, resultsstruct[result].label, indirecthost);
+					pingresult, resultsstruct[result].label, indirecthost);
 			#else
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client: %x:%x:%x::\n",\
 					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
