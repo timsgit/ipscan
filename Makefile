@@ -1,6 +1,6 @@
 #    IPscan - an HTTP-initiated IPv6 port scanner.
 #
-#    (C) Copyright 2011-2021 Tim Chappell.
+#    (C) Copyright 2011-2022 Tim Chappell.
 #
 #    This file is part of IPscan.
 #
@@ -38,6 +38,7 @@
 # 0.18 - update copyright year
 # 0.19 - add debug build capability, update copyright year
 # 0.20 - update copyright year
+# 0.21 - update copyright year
 
 # Support servers where SETUID is not available
 # Set this variable to 0 if you don't have permissions to call SETUID

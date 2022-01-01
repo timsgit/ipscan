@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2021 Tim Chappell.
+//    Copyright (C) 2011-2022 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -66,6 +66,7 @@
 // 0.46 - add cache-control private
 // 0.47 - add LGTM pragmas to ignore cross-site scripting false positives
 // 0.48 - remove LGTM pragmas once false positives resolved
+// 0.49 - add an additional note regarding normal TCP/UDP port tests
 
 #include "ipscan.h"
 
@@ -101,7 +102,7 @@ void create_html_common_header(void)
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\">\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
 	#endif
 	printf("<meta name=\"robots\" content=\"noindex, nofollow\">\n");
-	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2021 tim chappell.\">\n");
+	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2022 tim chappell.\">\n");
 }
 
 #ifdef IPSCAN_HTML5_ENABLED
@@ -119,7 +120,7 @@ void create_html5_common_header(void)
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\"/>\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
 	#endif
 	printf("<meta name=\"robots\" content=\"noindex, nofollow\"/>\n");
-	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2021 tim chappell.\">\n");
+	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2022 tim chappell.\">\n");
 	printf("<style>\n");
 	printf("body {\n");
 	printf("background-color: #f0f0f2;\n");
@@ -546,6 +547,9 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	#if (1 == IPSCAN_INCLUDE_PING)
 	printf("<p>NOTE: Results in the ICMPv6 ECHO REQUEST test marked as INDIRECT indicate an ICMPv6 error response was received from another host (e.g. a router or firewall) rather");
 	printf(" than the host under test. In this case the address of the responding host is also displayed.</p>\n");
+	printf("<p>NOTE2: TCP/UDP tests which elicit an active negative response (coloured YELLOW) may come from either the host under test OR another device in the path (e.g. a firewall/router). An indirect response to the ICMPv6 ECHO REQUEST test increases the likelihood that another device is likely to have responded to TCP/UDP tests.</p>\n");
+	#else
+	printf("<p>NOTE: TCP/UDP tests which elicit an active negative response (coloured YELLOW) may come from either the host under test OR another device in the path (e.g. a firewall/router).</p>\n");
 	#endif
 }
 

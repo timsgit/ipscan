@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2021 Tim Chappell.
+//    Copyright (C) 2011-2022 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -60,6 +60,7 @@
 // 0.39 - add LGTM pragmas to prevent False Positive (FP) reporting of SQL injection vuln
 // 0.40 - remove LGTM pragmas since FP diagnosis accepted and alerts should go away soon
 // 0.41 - additional read_db_result() and dump_db() debug
+// 0.42 - update copyright dates
 
 #include "ipscan.h"
 //

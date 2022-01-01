@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2021 Tim Chappell.
+//    Copyright (C) 2011-2022 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -35,6 +35,7 @@
 // 0.15			delete old comments, update copyright year
 // 0.16			add missing error checks for inet_ntop calls
 // 0.17			and snprintf for router too
+// 0.18			update copyright year
 
 #include "ipscan.h"
 //

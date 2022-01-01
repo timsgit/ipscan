@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2021 Tim Chappell.
+//    Copyright (C) 2011-2022 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -33,6 +33,7 @@
 // 0.13			extern updated
 // 0.14			update copyright date
 // 0.15			update copyright year
+// 0.16			update copyright year
 
 #include "ipscan.h"
 //
@@ -176,7 +177,6 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 				// attempt to connect
 				conn = connect(sock, aip->ai_addr, aip->ai_addrlen);
 				int errsv = errno ;
-
 				// cycle through the expected list of results
 				for (i = 0; PORTEOL != resultsstruct[i].returnval && PORTUNKNOWN == retval ; i++)
 				{

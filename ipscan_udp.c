@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2021 Tim Chappell.
+//    Copyright (C) 2011-2022 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -50,6 +50,7 @@
 // 0.30			delete old comments, update copyright year
 // 0.31			Add memset clear for inet_ntop failure case
 // 0.32			Add logging for bad gettimeofday() calls
+// 0.33			Update copyright year
 
 #include "ipscan.h"
 //
@@ -1726,7 +1727,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			txmessage[len++] = 0x0A;
 			txmessage[len++] = 0x0D;
 			txmessage[len++] = 0x0;
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2021 Tim Chappell. This message is destined for UDP port %d\n", port);
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2022 Tim Chappell. This message is destined for UDP port %d\n", port);
 			if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
@@ -1774,9 +1775,10 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	if (PORTUNKNOWN == retval)
 	{
 		rc = read(fd,&rxmessage,UDP_BUFFER_SIZE);
+		int errsv = errno ;
 		if (rc < 0)
 		{
-			int errsv = errno ;
+			// was int errsv = errno ;
 			#ifdef UDPDEBUG
 			if (0 != special)
 			{

@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2021 Tim Chappell.
+//    Copyright (C) 2011-2022 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.88"
+	#define IPSCAN_VERNUM "1.89"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -203,6 +203,7 @@
 	// 1.87 Add some missing inet_ntop return-value checks, 
 	//	further database debug and remove LGTM CGI cross-site scripting pragmas
 	// 1.88 remove LGTM pragmas
+	// 1.89 further User Agent validation
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -679,7 +680,7 @@
 		int connerrno;
 		char label[32];
 		char colour[32];
-		char description[256];
+		char description[384];
 	};
 
 	// Single definition of external : resultsstruct
