@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.89"
+	#define IPSCAN_VERNUM "1.91"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -204,6 +204,9 @@
 	//	further database debug and remove LGTM CGI cross-site scripting pragmas
 	// 1.88 remove LGTM pragmas
 	// 1.89 further User Agent validation
+	// 1.90 Adjustments to help text and addition of TCP/20005 (KCodes NetUSB)
+	//      CVE-2021-45608
+	// 1.91 Fix portlist size calculation and user-defined port value masking
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -274,10 +277,10 @@
 	// IMPORTANT NOTE: None of these debug options should be uncommented on internet-facing servers.
 	//
 	#if (DEBUG == 1)
-		// Common options for testing - do NOT use in production 
+		// Common options for testing - do NOT use in production
 		#define CLIENTDEBUG 1
 		#define IPSCAN_LOGVERBOSITY 2
-	#endif
+        #endif
 	//
 	// database related debug:
 	// #define DBDEBUG 1
@@ -299,6 +302,10 @@
 	//
 	// Results debug:
 	// #define RESULTSDEBUG 1
+	//
+	// Open port reporting:
+	// #define TCPDEBUGOPEN 1
+	// #define UDPDEBUGOPEN 1
 	//
 	// Client (remote) debug - signalling, etc.
 	// Primarily for troublesome Javascript clients.
@@ -335,13 +342,13 @@
 
 	// Maximum number of ports to be tested - this should exceed the sum of the default port list
 	// and the allowed user-defined ports
-	#define MAXPORTS 64
+	#define MAXPORTS ( DEFNUMPORTS + NUMUDPPORTS + NUMUSERDEFPORTS + 1 )
 
 	// Define the min/max valid port ranges. This could be used to restrict testing (e.g. >= 1024)
 	// as long as the default port list is updated as well
 	#define MINVALIDPORT 0
 	#define MAXVALIDPORT 65535
-	#define VALIDPORTMASK (65535)
+	#define VALIDPORTMASKU (65535U)
 
 	// Enable HTML5 for Javscript
 	#define IPSCAN_HTML5_ENABLED 1
@@ -552,9 +559,9 @@
 	// Port number (0-65535) stored in lowest 16 bits, 15-0
 	// Special case tests indicated by value in bits 17-16
 	// This allows multiple tests to be targetted at the same port
-	#define IPSCAN_PORT_WIDTH (16)
-	#define IPSCAN_SPECIAL_WIDTH (2)
-	#define IPSCAN_PROTO_WIDTH (4)
+	#define IPSCAN_PORT_WIDTH (16U)
+	#define IPSCAN_SPECIAL_WIDTH (2U)
+	#define IPSCAN_PROTO_WIDTH (4U)
 
 	#define IPSCAN_PORT_MASK ((1<<IPSCAN_PORT_WIDTH)-1)
 	#define IPSCAN_SPECIAL_MASK ((1<<IPSCAN_SPECIAL_WIDTH)-1)

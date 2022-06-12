@@ -67,6 +67,7 @@
 // 0.47 - add LGTM pragmas to ignore cross-site scripting false positives
 // 0.48 - remove LGTM pragmas once false positives resolved
 // 0.49 - add an additional note regarding normal TCP/UDP port tests
+// 0.50 - further clarifications regarding normal TCP/UDP port tests
 
 #include "ipscan.h"
 
@@ -547,7 +548,7 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	#if (1 == IPSCAN_INCLUDE_PING)
 	printf("<p>NOTE: Results in the ICMPv6 ECHO REQUEST test marked as INDIRECT indicate an ICMPv6 error response was received from another host (e.g. a router or firewall) rather");
 	printf(" than the host under test. In this case the address of the responding host is also displayed.</p>\n");
-	printf("<p>NOTE2: TCP/UDP tests which elicit an active negative response (coloured YELLOW) may come from either the host under test OR another device in the path (e.g. a firewall/router). An indirect response to the ICMPv6 ECHO REQUEST test increases the likelihood that another device is likely to have responded to TCP/UDP tests.</p>\n");
+	printf("<p>NOTE2: TCP/UDP tests which elicit an active negative response (coloured YELLOW) may come from either the host under test OR another device in the path (e.g. a firewall/router). An indirect response to the ICMPv6 ECHO REQUEST test increases the likelihood that another device may have responded to the TCP/UDP probes.</p>\n");
 	#else
 	printf("<p>NOTE: TCP/UDP tests which elicit an active negative response (coloured YELLOW) may come from either the host under test OR another device in the path (e.g. a firewall/router).</p>\n");
 	#endif

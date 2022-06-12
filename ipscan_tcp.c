@@ -273,6 +273,10 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		{
 			uint16_t port = portlist[portindex+i].port_num;
 			uint8_t special = portlist[portindex+i].special;
+			#ifdef TCPDEBUG
+			IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): DEBUG: portindex = %d, i = %d, port_num = %d, special = %d\n", portindex, i, portlist[portindex+i].port_num, portlist[portindex+i].special);
+			IPSCAN_LOG ( LOGPREFIX "check_tcp_ports_parll(): DEBUG: hostname = %s, port = %d, special = %d\n", hostname, port, special);
+			#endif
 			result = check_tcp_port(hostname, port, special);
 			// Put results into database
 			rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), result, unusedfield );

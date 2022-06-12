@@ -7,9 +7,9 @@ currently being supported with security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.89    | :white_check_mark: |
-| < 1.89  | :x:                |
+| 1.91    | :white_check_mark: |
+| < 1.91  | :x:                |
 
 ## Reporting a Vulnerability
 
-Please report vulnerabilities to: webmaster@chappell-family.com
+Please see: https://ipv6.chappell-family.com/.well-known/security.txt

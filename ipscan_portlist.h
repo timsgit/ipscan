@@ -40,6 +40,7 @@
 // 0.16 - update copyright year
 // 0.17 - add whois, TCP/43
 // 0.18 - update copyright year
+// 0.19 - add TCP/20005 (for KCodes NetUSB - see CVE-2021-45608)
 
 #include "ipscan.h"
 
@@ -114,6 +115,7 @@ struct portlist_struc defportlist[] =
 		{16993, 0, "Intel AMT SOAP/HTTPS"},\
 		{16994, 0, "Intel AMT Redir/TCP"},\
 		{16995, 0, "Intel AMT Redir/TLS"},\
+		{20005, 0, "Router KCodes NetUSB port, see CVE-2021-45608"},\
 		{32764, 0, "Router Backdoor"}\
 };
 

@@ -83,6 +83,8 @@
 // 0.62 - further User Agent string validation
 // 0.63 - change to response descriptions to make it clear that responses may come
 //        from the host under test or a.n.other device in the path (e.g. a firewall)
+// 0.64 - allow NAVAWAY as a reason for client_finished
+// 0.65 - correct masking of user-defined ports - thanks to Brian Gregory for spotting the issue
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -871,7 +873,7 @@ int main(void)
 			if (i < numqueries && 1 == query[i].valid)
 			{
 				// Check the port number is in the valid range
-				if (query[i].varval >=MINVALIDPORT && query[i].varval <= MAXVALIDPORT)
+				if (query[i].varval >= MINVALIDPORT && query[i].varval <= MAXVALIDPORT)
 				{
 					j = 0;
 					while (j < numports && portlist[j].port_num != query[i].varval) j++;
@@ -879,7 +881,7 @@ int main(void)
 					// add it to the port list
 					if (j == numports)
 					{
-						portlist[numports].port_num = (uint16_t)(query[i].varval & VALIDPORTMASK);
+						portlist[numports].port_num = (uint16_t)(query[i].varval & VALIDPORTMASKU);
 						portlist[numports].special = 0;
 						rc = snprintf(&portlist[numports].port_desc[0], PORTDESCSIZE, "User-specified: %d",(int)query[i].varval);
 						if (rc < 0 || rc >= PORTDESCSIZE)
@@ -986,6 +988,13 @@ int main(void)
 		#endif
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: reconstituted query string = %s\n", reconquery );
+		#endif
+		#ifdef QUERYDEBUG
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: portlist contents, numports = %d:\n", numports);
+		for ( j = 0 ; j < numports ; j++ )
+		{
+			IPSCAN_LOG (LOGPREFIX "ipscan: DEBUG : port_num = %d, special = %d\n", portlist[j].port_num, portlist[j].special);
+		}
 		#endif
 
 		//
@@ -1169,7 +1178,7 @@ int main(void)
 				port = udpportlist[portindex].port_num;
 				special = udpportlist[portindex].special;
 				last = (portindex == (NUMUDPPORTS-1)) ? 1 : 0 ;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: UDP port scan results table\n" );
@@ -1188,6 +1197,17 @@ int main(void)
 				else
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
+				}
+				#endif
+
+				#ifdef UDPDEBUGOPEN
+				if (0 != special && UDPOPEN == result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d:%d returned : UDPOPEN\n", port, special);
+				}
+				else if (0 == special && UDPOPEN == result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d returned : UDPOPEN\n", port);
 				}
 				#endif
 
@@ -1291,7 +1311,7 @@ int main(void)
 				port = portlist[portindex].port_num;
 				special = portlist[portindex].special;
 				last = (portindex == (numports-1)) ? 1 : 0 ;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: TCP port scan results table\n" );
@@ -1310,6 +1330,17 @@ int main(void)
 				else
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
+				}
+				#endif
+
+				#ifdef TCPDEBUGOPEN
+				if (0 != special && PORTOPEN == result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d:%d returned : PORTOPEN\n", port, special);
+				}
+				else if (0 == special && PORTOPEN == result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d returned : PORTOPEN\n", port);
 				}
 				#endif
 
@@ -1779,7 +1810,7 @@ int main(void)
 				port = udpportlist[portindex].port_num;
 				special = udpportlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession,\
-					(uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
+					(uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: UDP creating stats\n" );
@@ -1808,6 +1839,17 @@ int main(void)
 					}
 					portsstats[PORTUNKNOWN]++;
 				}
+
+				#ifdef UDPDEBUGOPEN
+				if (0 != special && UDPOPEN == result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: scan of UDP port %d:%d returned : UDPOPEN\n", port, special);
+				}
+				else if (0 == special && UDPOPEN == result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: scan of UDP port %d returned : UDPOPEN\n", port);
+				}
+				#endif
 			}
 			#endif
 
@@ -1815,7 +1857,7 @@ int main(void)
 			{
 				port = portlist[portindex].port_num;
 				special = portlist[portindex].special;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
+				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result() returned UNKNOWN: TCP creating stats\n" );
@@ -1844,6 +1886,17 @@ int main(void)
 					}
 					portsstats[PORTUNKNOWN]++;
 				}
+
+				#ifdef TCPDEBUGOPEN
+				if (0 != special && PORTOPEN == result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: scan of TCP port %d:%d returned : PORTOPEN\n", port, special);
+				}
+				else if (0 == special && PORTOPEN == result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: scan of TCP port %d returned : PORTOPEN\n", port);
+				}
+				#endif
 			}
 
 			#if (1 < IPSCAN_LOGVERBOSITY)
@@ -1952,6 +2005,7 @@ int main(void)
 
 				// Check whether the client has signalled the test is complete - various reasons
 				if (IPSCAN_TESTSTATE_COMPLETE_BIT == (result & IPSCAN_TESTSTATE_COMPLETE_BIT) \
+						|| (IPSCAN_TESTSTATE_NAVAWAY_BIT == (result & IPSCAN_TESTSTATE_NAVAWAY_BIT))
 						|| (IPSCAN_TESTSTATE_BADCOMPLETE_BIT == (result & IPSCAN_TESTSTATE_BADCOMPLETE_BIT)))
 				{
 					client_finished = 1;
