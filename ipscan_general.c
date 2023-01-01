@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2022 Tim Chappell.
+//    Copyright (C) 2011-2023 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -30,6 +30,8 @@
 // 0.10 - update copyright year
 // 0.11 - reorder entries to match definitions, add database error
 // 0.12 - update copyright year
+// 0.13 - moved to unsigned proto
+// 0.14 - update copyright year
 
 #include "ipscan.h"
 //
@@ -103,7 +105,7 @@ uint64_t get_session(void)
 //
 // -----------------------------------------------------------------------------
 //
-void proto_to_string(int proto, char * retstring)
+void proto_to_string(uint32_t proto, char * retstring)
 {
 	int rc = 0;
 	switch (proto)

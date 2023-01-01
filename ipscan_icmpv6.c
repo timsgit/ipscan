@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2022 Tim Chappell.
+//    Copyright (C) 2011-2023 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -36,6 +36,7 @@
 // 0.16			add missing error checks for inet_ntop calls
 // 0.17			and snprintf for router too
 // 0.18			update copyright year
+// 0.19			update copyright year
 
 #include "ipscan.h"
 //
@@ -80,7 +81,7 @@
 // Send an ICMPv6 ECHO-REQUEST and see whether we receive an ECHO-REPLY in response
 //
 
-int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router)
+uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router)
 {
 	struct addrinfo *res;
 	struct addrinfo hints;

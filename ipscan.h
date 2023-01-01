@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2022 Tim Chappell.
+//    Copyright (C) 2011-2023 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -55,7 +55,7 @@
 	#endif
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.91"
+	#define IPSCAN_VERNUM "1.93"
 
 	// Determine reported version string 
 	// and include a hint if parallel scanning (FAST) is enabled
@@ -207,6 +207,8 @@
 	// 1.90 Adjustments to help text and addition of TCP/20005 (KCodes NetUSB)
 	//      CVE-2021-45608
 	// 1.91 Fix portlist size calculation and user-defined port value masking
+	// 1.92 Move to consistent unsigned masks approach (for C, not generated Javscript)
+	// 1.93 Update copyright year
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -277,10 +279,10 @@
 	// IMPORTANT NOTE: None of these debug options should be uncommented on internet-facing servers.
 	//
 	#if (DEBUG == 1)
-		// Common options for testing - do NOT use in production
+		// Common options for testing - do NOT use in production 
 		#define CLIENTDEBUG 1
 		#define IPSCAN_LOGVERBOSITY 2
-        #endif
+	#endif
 	//
 	// database related debug:
 	// #define DBDEBUG 1
@@ -302,10 +304,6 @@
 	//
 	// Results debug:
 	// #define RESULTSDEBUG 1
-	//
-	// Open port reporting:
-	// #define TCPDEBUGOPEN 1
-	// #define UDPDEBUGOPEN 1
 	//
 	// Client (remote) debug - signalling, etc.
 	// Primarily for troublesome Javascript clients.
@@ -348,7 +346,7 @@
 	// as long as the default port list is updated as well
 	#define MINVALIDPORT 0
 	#define MAXVALIDPORT 65535
-	#define VALIDPORTMASKU (65535U)
+	#define VALIDPORTMASK ((unsigned)(65535))
 
 	// Enable HTML5 for Javscript
 	#define IPSCAN_HTML5_ENABLED 1
@@ -563,9 +561,9 @@
 	#define IPSCAN_SPECIAL_WIDTH (2U)
 	#define IPSCAN_PROTO_WIDTH (4U)
 
-	#define IPSCAN_PORT_MASK ((1<<IPSCAN_PORT_WIDTH)-1)
-	#define IPSCAN_SPECIAL_MASK ((1<<IPSCAN_SPECIAL_WIDTH)-1)
-	#define IPSCAN_PROTO_MASK ((1<<IPSCAN_PROTO_WIDTH)-1)
+	#define IPSCAN_PORT_MASK ((unsigned)((1<<IPSCAN_PORT_WIDTH)-1))
+	#define IPSCAN_SPECIAL_MASK ((unsigned)((1<<IPSCAN_SPECIAL_WIDTH)-1))
+	#define IPSCAN_PROTO_MASK ((unsigned)((1<<IPSCAN_PROTO_WIDTH)-1))
 
 	#define IPSCAN_PORT_SHIFT (0)
 	#define IPSCAN_SPECIAL_SHIFT (IPSCAN_PORT_SHIFT + IPSCAN_PORT_WIDTH)
@@ -604,7 +602,7 @@
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router
 	#define IPSCAN_INDIRECT_RESPONSE 256
-	// Mask to extract the response code
+	// Mask to extract the response code - used in created Javascript
 	#define IPSCAN_INDIRECT_MASK 255
 
 	// Completion indicators (passed in fetch querystring)

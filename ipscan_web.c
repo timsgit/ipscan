@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2022 Tim Chappell.
+//    Copyright (C) 2011-2023 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -68,6 +68,8 @@
 // 0.48 - remove LGTM pragmas once false positives resolved
 // 0.49 - add an additional note regarding normal TCP/UDP port tests
 // 0.50 - further clarifications regarding normal TCP/UDP port tests
+// 0.51 - move to unsigned shift right (should be of no consequence)
+// 0.52 - update copyright year
 
 #include "ipscan.h"
 
@@ -103,7 +105,7 @@ void create_html_common_header(void)
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\">\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
 	#endif
 	printf("<meta name=\"robots\" content=\"noindex, nofollow\">\n");
-	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2022 tim chappell.\">\n");
+	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2023 tim chappell.\">\n");
 }
 
 #ifdef IPSCAN_HTML5_ENABLED
@@ -121,7 +123,7 @@ void create_html5_common_header(void)
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\"/>\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
 	#endif
 	printf("<meta name=\"robots\" content=\"noindex, nofollow\"/>\n");
-	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2022 tim chappell.\">\n");
+	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2023 tim chappell.\">\n");
 	printf("<style>\n");
 	printf("body {\n");
 	printf("background-color: #f0f0f2;\n");
@@ -374,9 +376,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" elemid = \"pingstate\";");
 	// psp = protocol, special, port
 	printf(" psp = latestState[i];");
-	printf(" proto = ((psp >> %d) & %d);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
-	printf(" special = ((psp >> %d) & %d);", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
-	printf(" port = ((psp >> %d) & %d);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
+	// >>> is unsigned shift right
+	printf(" proto = ((psp >>> %d) & %d);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
+	printf(" special = ((psp >>> %d) & %d);", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
+	printf(" port = ((psp >>> %d) & %d);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
 	printf(" result = latestState[i+1];");
 	printf(" host = latestState[i+2];");
 

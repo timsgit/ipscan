@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2022 Tim Chappell.
+//    Copyright (C) 2011-2023 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -172,7 +172,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 					#endif
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
-						rc = mysql_real_query(connection, query, qrylen);
+						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 						if (0 == rc)
 						{
 							qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %u, %d, '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
@@ -181,7 +181,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 								#ifdef DBDEBUG
 								IPSCAN_LOG( LOGPREFIX "write_db: MySQL Query is : %s\n", query);
 								#endif
-								rc = mysql_real_query(connection, query, qrylen);
+								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 								if (0 == rc)
 								{
 									retval = 0;
@@ -244,7 +244,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 	unsigned int num_fields = 0;
 	uint64_t num_rows = 0;
 	int qrylen;
-	int port, res;
+	uint32_t port, res;
 	char hostind[INET6_ADDRSTRLEN+1];
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
@@ -285,7 +285,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "dump_db: MySQL Query is : \"%s\"\n", query);
 					#endif
-					rc = mysql_real_query(connection, query, qrylen);
+					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
@@ -313,7 +313,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 									rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 									if ( 1 == rcres && 1 == rchost && 1 == rcport )
 									{
-										int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
+										uint32_t proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
 										// Report everything to the client apart from the test-state
 										if (IPSCAN_PROTO_TESTSTATE != proto)
 										{
@@ -439,7 +439,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "delete_from_db: MySQL Query is : %s\n", query);
 					#endif
-					rc = mysql_real_query(connection, query, qrylen);
+					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
 						my_ulonglong affected_rows = mysql_affected_rows(connection);
@@ -532,7 +532,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id DESC", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
-					rc = mysql_real_query(connection, query, qrylen);
+					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
@@ -682,7 +682,7 @@ int tidy_up_db(uint64_t time_now)
 				{
 
 					IPSCAN_LOG( LOGPREFIX "tidy_up_db: MySQL SELECT query is : %s\n", query);
-					rc = mysql_real_query(connection, query, qrylen);
+					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
 						result = mysql_store_result(connection);
@@ -804,7 +804,7 @@ int tidy_up_db(uint64_t time_now)
 					#ifdef DBDEBUG
 					IPSCAN_LOG( LOGPREFIX "tidy_up_db: MySQL DELETE query is : %s\n", query);
 					#endif
-					rc = mysql_real_query(connection, query, qrylen);
+					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
 						my_ulonglong affected_rows = mysql_affected_rows(connection);
@@ -916,7 +916,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 					#endif
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
-						rc = mysql_real_query(connection, query, qrylen);
+						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 						if (0 == rc)
 						{
 							qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` set `portresult` = %d WHERE ( `hostmsb` = %"PRIu64" AND `hostlsb` = %"PRIu64" AND `createdate` = %"PRIu64" AND `session` = %"PRIu64" AND `portnum` = %u AND `indhost` = '%s' )" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port, indirecthost);
@@ -925,7 +925,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 								#ifdef DBDEBUG
 								IPSCAN_LOG( LOGPREFIX "update_db: MySQL Query is : %s\n", query);
 								#endif
-								rc = mysql_real_query(connection, query, qrylen);
+								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 								if (0 == rc)
 								{
 									retval = 0;

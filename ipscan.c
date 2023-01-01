@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2022 Tim Chappell.
+//    Copyright (C) 2011-2023 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -85,6 +85,7 @@
 //        from the host under test or a.n.other device in the path (e.g. a firewall)
 // 0.64 - allow NAVAWAY as a reason for client_finished
 // 0.65 - correct masking of user-defined ports - thanks to Brian Gregory for spotting the issue
+// 0.66 - update copyright year
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -881,7 +882,7 @@ int main(void)
 					// add it to the port list
 					if (j == numports)
 					{
-						portlist[numports].port_num = (uint16_t)(query[i].varval & VALIDPORTMASKU);
+						portlist[numports].port_num = (uint16_t)(query[i].varval & VALIDPORTMASK);
 						portlist[numports].special = 0;
 						rc = snprintf(&portlist[numports].port_desc[0], PORTDESCSIZE, "User-specified: %d",(int)query[i].varval);
 						if (rc < 0 || rc >= PORTDESCSIZE)
@@ -2005,8 +2006,8 @@ int main(void)
 
 				// Check whether the client has signalled the test is complete - various reasons
 				if (IPSCAN_TESTSTATE_COMPLETE_BIT == (result & IPSCAN_TESTSTATE_COMPLETE_BIT) \
-						|| (IPSCAN_TESTSTATE_NAVAWAY_BIT == (result & IPSCAN_TESTSTATE_NAVAWAY_BIT))
-						|| (IPSCAN_TESTSTATE_BADCOMPLETE_BIT == (result & IPSCAN_TESTSTATE_BADCOMPLETE_BIT)))
+				|| (IPSCAN_TESTSTATE_NAVAWAY_BIT == (result & IPSCAN_TESTSTATE_NAVAWAY_BIT))
+				|| (IPSCAN_TESTSTATE_BADCOMPLETE_BIT == (result & IPSCAN_TESTSTATE_BADCOMPLETE_BIT)))
 				{
 					client_finished = 1;
 				}
