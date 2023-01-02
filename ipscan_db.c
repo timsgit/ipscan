@@ -246,7 +246,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 	uint64_t num_rows = 0;
 	int qrylen;
 	uint32_t port, res;
-	char hostind[INET6_ADDRSTRLEN+1];
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
 	MYSQL_RES *result;
