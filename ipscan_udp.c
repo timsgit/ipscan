@@ -112,7 +112,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	char txmessage[UDP_BUFFER_SIZE+1],rxmessage[UDP_BUFFER_SIZE+1];
 	struct sockaddr_in6 remoteaddr;
 	struct timeval timeout;
-	char localaddrstr[INET6_ADDRSTRLEN+1];
 	struct sockaddr_in6 localaddr;
 
 	// Local address update indication
@@ -196,6 +195,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 			if ( family == AF_INET6 && strcasecmp(IPSCAN_INTERFACE_NAME, ifa->ifa_name) == 0 && la_update == 0 )
 			{
+				char localaddrstr[INET6_ADDRSTRLEN+1];
 				rccharptr = inet_ntop(AF_INET6, &((*((struct sockaddr_in6*)ifa->ifa_addr)).sin6_addr), localaddrstr, INET6_ADDRSTRLEN);
 				if (NULL == rccharptr)
 				{
