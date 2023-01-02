@@ -1667,7 +1667,7 @@ int main(void)
 			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)querystarttime, (uint64_t)querysession, &indirecthost[0] );
 			// Ensure the indirecthost returned is valid
                         // NOTE: this validation may require adjustment if the declaration of indirecthost changes
-			ih_adjusted = 0;
+			int ih_adjusted = 0;
                         indirecthost[INET6_ADDRSTRLEN] = 0;
 			for ( i = 0 ; i < INET6_ADDRSTRLEN ; i++ ) indirecthost2[i] = indirecthost[i] ;
                         for ( i = 0 ; i < INET6_ADDRSTRLEN && indirecthost[i] > 0 ; i++ )
