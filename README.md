@@ -178,5 +178,4 @@ Getting further help:
 =====================
 A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled clients at: <https://ipv6.chappell-family.com/ipv6tcptest/>. If you need further help then please email me at: <webmaster@chappell-family.com> or visit my IPscan wiki at: <https://wiki.chappell-family.com/wiki/index.php?title=IPv6>
 
-[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/timsgit/ipscan.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/timsgit/ipscan/context:cpp)
 ---

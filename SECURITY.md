@@ -12,4 +12,5 @@ currently being supported with security updates.
 
 ## Reporting a Vulnerability
 
-Please see: https://ipv6.chappell-family.com/.well-known/security.txt
+Please see: <https://ipv6.chappell-family.com/.well-known/security.txt>
+---
