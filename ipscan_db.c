@@ -779,7 +779,7 @@ int tidy_up_db(uint64_t time_now)
 				//
 				// Delete old (expired) results - DELETE FROM t1 WHERE ( createdate <= delete_before_time )
 				//
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= '%"PRIu64"' )", MYSQL_TBLNAME, delete_before_time);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= '%"PRIu64"' )", MYSQL_TBLNAME, delete_before_time);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
