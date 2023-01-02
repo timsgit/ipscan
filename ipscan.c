@@ -225,7 +225,6 @@ int main(void)
 	// Only necessary if we're including ping support
 	#if (1 == IPSCAN_INCLUDE_PING)
 	int pingresult;
-	int ih_adjusted = 0;
 	// Storage for indirecthost address, in case required
 	// Note that indirecthost value validation is performed twice below
 	// It may need changing if the declaration of this variable is adjusted
@@ -240,7 +239,6 @@ int main(void)
 
 	// Default to testing
 	int beginscan = 0;
-	int fetch = 0;
 
 	// the session starttime, used as an unique index for the database
 	time_t   starttime;
@@ -945,7 +943,7 @@ int main(void)
 
 		// Look for the session query string, set it to -1 if not present or invalid
 		i = 0;
-		querysession = -1;
+		int64_t querysession = -1;
 		while (i < numqueries && strncmp("session",query[i].varname,7)!= 0) i++;
 		if (i < numqueries && query[i].valid == 1)
 		{
@@ -966,7 +964,7 @@ int main(void)
 
 		// Look for the fetch query string
 		i = 0;
-		fetch = 0;
+		int fetch = 0;
 		while (i < numqueries && strncmp("fetch",query[i].varname,5)!= 0) i++;
 		if (i < numqueries && query[i].valid == 1)
 		{
@@ -1066,7 +1064,7 @@ int main(void)
 
 			// Ensure the indirecthost returned is valid
 			// NOTE: this validation may require adjustment if the declaration of indirecthost changes
-			ih_adjusted = 0;
+			int ih_adjusted = 0;
 			indirecthost[INET6_ADDRSTRLEN] = 0;
 			for ( i = 0 ; i < INET6_ADDRSTRLEN ; i++ ) indirecthost2[i] = indirecthost[i] ;
 			for ( i = 0 ; i < INET6_ADDRSTRLEN && indirecthost[i] > 0 ; i++ )

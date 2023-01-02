@@ -601,7 +601,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 // ----------------------------------------------------------------------------------------
 int tidy_up_db(uint64_t time_now)
 {
-	int rc;
 	int retval = 0;
 	MYSQL *connection;
 
@@ -634,7 +633,7 @@ int tidy_up_db(uint64_t time_now)
 		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
 		// in the my.cnf file which ensures that your program works, even if someone has set
 		// up MySQL in some nonstandard way.
-		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
+		int rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
 		if (0 == rc)
 		{
 
