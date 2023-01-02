@@ -52,6 +52,7 @@
 // 0.32			Add logging for bad gettimeofday() calls
 // 0.33			Update copyright year
 // 0.34			Update copyright year
+// 0.35			Improvements to reduce scope of multiple variables
 
 #include "ipscan.h"
 //
@@ -119,11 +120,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	int rc = 0;
 	unsigned int i = 0;
-	const char * rccharptr;
 	int fd = -1;
-
-	// Use different community strings for SNMPv1 (index 0) and SNMPv2c (index 1)
-	char community[2][16] = { "public", "private" };
 
 	// buffer for logging entries
 	#ifdef UDPDEBUG
@@ -195,7 +192,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			if ( family == AF_INET6 && strcasecmp(IPSCAN_INTERFACE_NAME, ifa->ifa_name) == 0 && la_update == 0 )
 			{
 				char localaddrstr[INET6_ADDRSTRLEN+1];
-				rccharptr = inet_ntop(AF_INET6, &((*((struct sockaddr_in6*)ifa->ifa_addr)).sin6_addr), localaddrstr, INET6_ADDRSTRLEN);
+				const char * rccharptr = inet_ntop(AF_INET6, &((*((struct sockaddr_in6*)ifa->ifa_addr)).sin6_addr), localaddrstr, INET6_ADDRSTRLEN);
 				if (NULL == rccharptr)
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: inet_ntop() returned an error (%s)\n", strerror(errno));
@@ -302,12 +299,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		// DNS query
 		case 53:
 		{
-			// Host name to query
-			char dnsquery1[] = "www6";
-			char dnsquery2[] = "chappell-family";
-			char dnsquery3[] = "co";
-			char dnsquery4[] = "uk";
-
 			/*
 				Header - 12 bytes
 				Contains fields that describe the type of message and provide important information about it.
@@ -347,6 +338,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			txmessage[len++]= 0;
 			// Question section
 
+			char dnsquery1[] = "www6";
 			txmessage[len++] = (char)strlen(dnsquery1);
 			// Need one extra octet for trailing 0, however this will be overwritten
 			// by the length of the next part of the host name in standard DNS format
@@ -365,6 +357,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
+				char dnsquery2[] = "chappell-family";
 				txmessage[len++]= (char)strlen(dnsquery2);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
@@ -382,6 +375,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
+				char dnsquery3[] = "co";
 				txmessage[len++]= (char)strlen(dnsquery3);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
@@ -399,6 +393,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
+				char dnsquery4[] = "uk";
 				txmessage[len++]= (char)strlen(dnsquery4);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
@@ -533,6 +528,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
 				char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
 				unsigned int miblen = 6;
+				// Use different community strings for SNMPv1 (index 0) and SNMPv2c (index 1)
+        			char community[2][16] = { "public", "private" };
 
 				// SNMP packet start
 				txmessage[len++] = 0x30;
