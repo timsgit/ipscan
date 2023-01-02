@@ -156,7 +156,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	// Local MAC address lookup and storage
 	struct ifaddrs *ifaddr, *ifa;
-	int family;
 	unsigned char localmacaddr[6];
 	memset( &localmacaddr, 0, sizeof(localmacaddr));
 	// Fill in a default MAC in case getifaddrs() is unsuccessful
@@ -191,7 +190,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		{
 			if (ifa->ifa_addr == NULL) continue;
 
-			family = ifa->ifa_addr->sa_family;
+			int family = ifa->ifa_addr->sa_family;
 
 			if ( family == AF_INET6 && strcasecmp(IPSCAN_INTERFACE_NAME, ifa->ifa_name) == 0 && la_update == 0 )
 			{
