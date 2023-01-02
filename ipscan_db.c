@@ -130,12 +130,9 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 	//
 	// INDHOST            VARCHAR(INET6_ADDRSTRLEN+1)
 
-	int rc;
-	int qrylen;
 	int retval = -1; // do not change this
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
-	MYSQL *mysqlrc;
 
 	connection = mysql_init(NULL);
 	if (NULL == connection)
@@ -148,11 +145,11 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
 		// in the my.cnf file which ensures that your program works, even if someone has set
 		// up MySQL in some nonstandard way.
-		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
+		int rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
 		if (0 == rc)
 		{
 
-			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "write_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
@@ -166,10 +163,10 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				{
 					#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
 					// Use memory engine - ensures sensitive data does not persist if MySQL is stopped/restarted
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					int qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#else
 					// Use the default engine - sensitive data may persist until next tidy_up_db() call
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					int qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' )",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 					#endif
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 					{
@@ -240,7 +237,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 {
 
 	int rc;
-	int rcport;
 	int retval = 0;
 	unsigned int num_fields = 0;
 	uint64_t num_rows = 0;
@@ -308,7 +304,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								if (8 == num_fields) // database includes indirect host field
 								{
 									char hostind[INET6_ADDRSTRLEN+1];
-									rcport = sscanf(row[5], "%d", &port);
+									int rcport = sscanf(row[5], "%d", &port);
 									int rcres = sscanf(row[6], "%d", &res);
 									int rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 									if ( 1 == rcres && 1 == rchost && 1 == rcport )
@@ -497,7 +493,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	int qrylen;
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
-	MYSQL *mysqlrc;
 	MYSQL_ROW row;
 
 	connection = mysql_init(NULL);
@@ -515,7 +510,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 		if (0 == rc)
 		{
 
-			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "read_db_result: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
@@ -630,7 +625,7 @@ int tidy_up_db(uint64_t time_now)
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 	unsigned int num_fields = 0;
-	int rcport, rcres, rchost, rcindhost;
+	int rcres, rchost;
 	int port, res;
 	char hostind[INET6_ADDRSTRLEN+1];
 	#endif
@@ -728,9 +723,9 @@ int tidy_up_db(uint64_t time_now)
 									}
 
 									rchostname = inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN);
-									rcport = sscanf(row[5], "%d", &port);
+									int rcport = sscanf(row[5], "%d", &port);
 									rcres = sscanf(row[6], "%d", &res);
-									rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
+									int rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 
 									if ( 1 == rcres && 1 == rcindhost && 1 == rcport && 1 == rcsess && NULL != rchostname)
 									{
