@@ -37,6 +37,7 @@
 // 0.17			and snprintf for router too
 // 0.18			update copyright year
 // 0.19			update copyright year
+// 0.20			add (potentially) missing length check
 
 #include "ipscan.h"
 //
@@ -149,8 +150,12 @@ uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t
 		return (PORTINTERROR);
 	}
 
-	// Copy the resulting address into our destination
-	memcpy(&destination, res->ai_addr, res->ai_addrlen);
+	// Copy the resulting address into our destination if there is sufficient room
+	memset(&destination, 0, sizeof(struct sockaddr_in6));
+	if (res->ai_addrlen <= sizeof(struct sockaddr_in6))
+	{
+		memcpy(&destination, res->ai_addr, res->ai_addrlen);
+	}
 	// Done with the address info now, so free the area
 	freeaddrinfo(res);
 
