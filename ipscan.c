@@ -334,10 +334,6 @@ int main(void)
 		portsstats[i] = 0;
 	}
 
-	// Process id related - this version is extracted from the querystring
-	// note: this is signed, whereas original value is a suitably truncated unsigned integer
-	int64_t querysession = 0;
-
 	// Log the current time and "session" with which to initiate scan and fetch results
 	// These should ensure that each test is globally unique when client IP address is also used.
 	starttime = time(NULL);
@@ -942,6 +938,9 @@ int main(void)
 		}
 
 		// Look for the session query string, set it to -1 if not present or invalid
+		// Session is process id related - this version is extracted from the querystring
+		// note: this is signed, whereas original value is a suitably truncated unsigned integer
+
 		i = 0;
 		int64_t querysession = -1;
 		while (i < numqueries && strncmp("session",query[i].varname,7)!= 0) i++;
