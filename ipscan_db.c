@@ -131,7 +131,6 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 	// INDHOST            VARCHAR(INET6_ADDRSTRLEN+1)
 
 	int retval = -1; // do not change this
-	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
 
 	connection = mysql_init(NULL);
@@ -161,6 +160,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				// retval defaults to -1, and is set to other values if an error condition occurs
 				if (retval < 0)
 				{
+					char query[MAXDBQUERYSIZE];
 					#if (IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE == 1)
 					// Use memory engine - ensures sensitive data does not persist if MySQL is stopped/restarted
 					int qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' ) ENGINE = MEMORY",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
@@ -236,15 +236,12 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session)
 {
 
-	int rc;
 	int retval = 0;
-	unsigned int num_fields = 0;
 	uint64_t num_rows = 0;
 	int qrylen;
 	uint32_t port, res;
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
-	MYSQL_RES *result;
 	MYSQL_ROW row;
 
 	connection = mysql_init(NULL);
@@ -258,7 +255,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
 		// in the my.cnf file which ensures that your program works, even if someone has set
 		// up MySQL in some nonstandard way.
-		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
+		int rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
 		if (0 == rc)
 		{
 
@@ -283,10 +280,10 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
-						result = mysql_store_result(connection);
+						MYSQL_RES * result = mysql_store_result(connection);
 						if (result)
 						{
-							num_fields = mysql_num_fields(result);
+							unsigned int num_fields = mysql_num_fields(result);
 							#if (IPSCAN_LOGVERBOSITY == 1)
 							unsigned int nump = 0;
 							#endif
@@ -396,10 +393,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 // ----------------------------------------------------------------------------------------
 int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session)
 {
-	int rc;
 	int retval = 0;
-	int qrylen;
-	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
 	MYSQL *mysqlrc;
 
@@ -414,7 +408,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
 		// in the my.cnf file which ensures that your program works, even if someone has set
 		// up MySQL in some nonstandard way.
-		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
+		int rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP,"ipscan");
 		if (0 == rc)
 		{
 
@@ -428,7 +422,8 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			else
 			{
 				// DELETE FROM t1 WHERE a = b ;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"')", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				char query[MAXDBQUERYSIZE];
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"')", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
@@ -489,9 +484,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	int rc;
 	int rcres, dbres;
 	int retres = PORTUNKNOWN;
-	unsigned int num_fields = 0;
 	int qrylen;
-	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
 	MYSQL_ROW row;
 
@@ -522,6 +515,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				// was SELECT x FROM t1 WHERE a = b ORDER BY x;
 				// SELECT x FROM t1 WHERE ( a = b ) ORDER BY x DESC;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port
+				char query[MAXDBQUERYSIZE];
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id DESC", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -531,7 +525,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						MYSQL_RES * result = mysql_store_result(connection);
 						if (NULL != result)
 						{
-							num_fields = mysql_num_fields(result);
+							unsigned int num_fields = mysql_num_fields(result);
 							uint64_t num_rows = mysql_num_rows(result);
 							if (0 == num_rows)
 							{
@@ -614,7 +608,6 @@ int tidy_up_db(uint64_t time_now)
 {
 	int rc;
 	int retval = 0;
-	int qrylen;
 	MYSQL *connection;
 
 	//
@@ -624,7 +617,6 @@ int tidy_up_db(uint64_t time_now)
 	#if (DBDEBUG == 1)
 	MYSQL_RES *result;
 	MYSQL_ROW row;
-	unsigned int num_fields = 0;
 	int port, res;
 	char hostind[INET6_ADDRSTRLEN+1];
 	#endif
@@ -667,7 +659,7 @@ int tidy_up_db(uint64_t time_now)
 				//
 				// Select and report old (expired) results - SELECT * FROM t1 WHERE ( createdate <= delete_before_time );
 				//
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( createdate <= '%"PRIu64"' )", MYSQL_TBLNAME, delete_before_time);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( createdate <= '%"PRIu64"' )", MYSQL_TBLNAME, delete_before_time);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
@@ -678,7 +670,7 @@ int tidy_up_db(uint64_t time_now)
 						result = mysql_store_result(connection);
 						if (0 != result)
 						{
-							num_fields = mysql_num_fields(result);
+							unsigned int num_fields = mysql_num_fields(result);
 							uint64_t num_rows = mysql_num_rows(result);
 							IPSCAN_LOG( LOGPREFIX "tidy_up_db: about to dump %"PRIu64" rows WHERE ( createdate <= '%"PRIu64"' )", num_rows, delete_before_time);
 
@@ -867,7 +859,6 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	int retval = -1; // do not change this
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
-	MYSQL *mysqlrc;
 
 	connection = mysql_init(NULL);
 	if (NULL == connection)
@@ -884,7 +875,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 		if (0 == rc)
 		{
 
-			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "update_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
