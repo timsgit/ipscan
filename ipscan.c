@@ -567,7 +567,7 @@ int main(void)
 						}
 					}
 					// Move past the '&' sign
-					while ('&' == querystring[queryindex] && MAXQUERYSTRLEN > queryindex && 0 == finished)
+					while (MAXQUERYSTRLEN > queryindex && 0 == finished && '&' == querystring[queryindex])
 					{
 						queryindex++;
 					}
