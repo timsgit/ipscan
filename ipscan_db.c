@@ -61,6 +61,7 @@
 // 0.40 - remove LGTM pragmas since FP diagnosis accepted and alerts should go away soon
 // 0.41 - additional read_db_result() and dump_db() debug
 // 0.42 - update copyright dates
+// 0.43 - reduce scope of multiple variables
 
 #include "ipscan.h"
 //
@@ -239,7 +240,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 {
 
 	int rc;
-	int rcport, rcres, rchost;
+	int rcport;
 	int retval = 0;
 	unsigned int num_fields = 0;
 	uint64_t num_rows = 0;
@@ -248,7 +249,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 	char hostind[INET6_ADDRSTRLEN+1];
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
-	MYSQL *mysqlrc;
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 
@@ -267,7 +267,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 		if (0 == rc)
 		{
 
-			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "dump_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
@@ -308,9 +308,10 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							{
 								if (8 == num_fields) // database includes indirect host field
 								{
+									char hostind[INET6_ADDRSTRLEN+1];
 									rcport = sscanf(row[5], "%d", &port);
-									rcres = sscanf(row[6], "%d", &res);
-									rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
+									int rcres = sscanf(row[6], "%d", &res);
+									int rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 									if ( 1 == rcres && 1 == rchost && 1 == rcport )
 									{
 										uint32_t proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
@@ -494,12 +495,10 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	int rcres, dbres;
 	int retres = PORTUNKNOWN;
 	unsigned int num_fields = 0;
-	uint64_t num_rows = 0;
 	int qrylen;
 	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
 	MYSQL *mysqlrc;
-	MYSQL_RES *result;
 	MYSQL_ROW row;
 
 	connection = mysql_init(NULL);
@@ -535,11 +534,11 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
-						result = mysql_store_result(connection);
+						MYSQL_RES * result = mysql_store_result(connection);
 						if (NULL != result)
 						{
 							num_fields = mysql_num_fields(result);
-							num_rows = mysql_num_rows(result);
+							uint64_t num_rows = mysql_num_rows(result);
 							if (0 == num_rows)
 							{
 								IPSCAN_LOG( LOGPREFIX "read_db_result: WARNING: 0 rows returned, num_fields = %d, query = \"%s\"\n", num_fields, query);
@@ -622,9 +621,7 @@ int tidy_up_db(uint64_t time_now)
 	int rc;
 	int retval = 0;
 	int qrylen;
-	char query[MAXDBQUERYSIZE];
 	MYSQL *connection;
-	MYSQL *mysqlrc;
 
 	//
 	// Only need these variables if we're going to report the records
@@ -634,7 +631,6 @@ int tidy_up_db(uint64_t time_now)
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 	unsigned int num_fields = 0;
-	uint64_t num_rows = 0;
 	int rcport, rcres, rchost, rcindhost;
 	int port, res;
 	char hostind[INET6_ADDRSTRLEN+1];
@@ -664,7 +660,7 @@ int tidy_up_db(uint64_t time_now)
 		if (0 == rc)
 		{
 
-			mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			MYSQL *mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "tidy_up_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
@@ -673,6 +669,7 @@ int tidy_up_db(uint64_t time_now)
 			}
 			else
 			{
+				char query[MAXDBQUERYSIZE];
 				#if (DBDEBUG == 1)
 				//
 				// Select and report old (expired) results - SELECT * FROM t1 WHERE ( createdate <= delete_before_time );
@@ -689,7 +686,7 @@ int tidy_up_db(uint64_t time_now)
 						if (0 != result)
 						{
 							num_fields = mysql_num_fields(result);
-							num_rows = mysql_num_rows(result);
+							uint64_t num_rows = mysql_num_rows(result);
 							IPSCAN_LOG( LOGPREFIX "tidy_up_db: about to dump %"PRIu64" rows WHERE ( createdate <= '%"PRIu64"' )", num_rows, delete_before_time);
 
 							int i, rcmsb, rclsb, rcdate, rcsess;
@@ -873,7 +870,6 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	//
 	// INDHOST            VARCHAR(INET6_ADDRSTRLEN+1)
 
-	int rc;
 	int qrylen;
 	int retval = -1; // do not change this
 	char query[MAXDBQUERYSIZE];
@@ -891,7 +887,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 		// By using mysql_options() the MySQL library reads the [client] and [ipscan] sections
 		// in the my.cnf file which ensures that your program works, even if someone has set
 		// up MySQL in some nonstandard way.
-		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
+		int rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
 		if (0 == rc)
 		{
 
