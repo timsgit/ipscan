@@ -625,7 +625,6 @@ int tidy_up_db(uint64_t time_now)
 	MYSQL_RES *result;
 	MYSQL_ROW row;
 	unsigned int num_fields = 0;
-	int rcres, rchost;
 	int port, res;
 	char hostind[INET6_ADDRSTRLEN+1];
 	#endif
@@ -724,7 +723,7 @@ int tidy_up_db(uint64_t time_now)
 
 									rchostname = inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN);
 									int rcport = sscanf(row[5], "%d", &port);
-									rcres = sscanf(row[6], "%d", &res);
+									int rcres = sscanf(row[6], "%d", &res);
 									int rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 
 									if ( 1 == rcres && 1 == rcindhost && 1 == rcport && 1 == rcsess && NULL != rchostname)
