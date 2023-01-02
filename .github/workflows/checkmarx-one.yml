@@ -23,7 +23,7 @@ on:
     - main
     - release/*
   schedule:
-  - cron: "0 4 * * 0"
+  - cron: "0 4 * * 1"
   
 permissions:
   contents: read
