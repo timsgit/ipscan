@@ -286,7 +286,8 @@ int main(void)
 
 
 	// buffer for reconstituted querystring
-	size_t reconquerysize = MAXQUERYSTRLEN;
+	// delete size_t reconquerysize = MAXQUERYSTRLEN;
+	int reconquerysize = MAXQUERYSTRLEN;
 	char reconquery[ (MAXQUERYSTRLEN + 1) ];
 	char *reconptr = &reconquery[0];
 
@@ -759,7 +760,7 @@ int main(void)
 		}
 
 		// Begin the reconstitution of the query string
-		rc = snprintf(reconptr, reconquerysize, "includeexisting=%d", (int)includeexisting);
+		rc = snprintf(reconptr, (size_t)reconquerysize, "includeexisting=%d", (int)includeexisting);
 		if (16 < rc && 19 > rc)
 		{
 			reconptr += rc;
@@ -795,7 +796,7 @@ int main(void)
 		}
 
 		// Continue the reconstitution of the query string
-		rc = snprintf(reconptr, reconquerysize, "&termsaccepted=%d", (int)termsaccepted);
+		rc = snprintf(reconptr, (size_t)reconquerysize, "&termsaccepted=%d", (int)termsaccepted);
 		if (16 == rc)
 		{
 			reconptr += rc;
@@ -887,7 +888,7 @@ int main(void)
 							IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: failed to write user-specified port description, does PORTDESCSIZE (%d) need increasing?\n", PORTDESCSIZE);
 						}
 						numports ++;
-						rc = snprintf(reconptr, reconquerysize, "&customport%d=%d", customport, (int)query[i].varval);
+						rc = snprintf(reconptr, (size_t)reconquerysize, "&customport%d=%d", customport, (int)query[i].varval);
 						// &customport (11); cpnum (1-5) ; = (1) ; portnum (1-5)
 						if (rc >= 14 && rc <= 22)
 						{

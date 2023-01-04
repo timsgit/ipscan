@@ -35,6 +35,7 @@
 // 0.15			update copyright year
 // 0.16			update copyright year
 // 0.17			update copyright year
+// 0.18			reduce scope of multiple variables
 
 #include "ipscan.h"
 //
@@ -91,9 +92,9 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 {
 	struct addrinfo *res, *aip;
 	struct addrinfo hints;
-	int sock = -1, timeo = -1, conn = -1, cl = -1;
+	// delete int sock = -1, timeo = -1, conn = -1, cl = -1;
 	int error;
-	int i;
+	// delete int i;
 	struct timeval timeout;
 	char portnum[8];
 
@@ -132,7 +133,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 			}
 
 			// Attempt to create a socket
-			sock = socket(aip->ai_family, aip->ai_socktype, aip->ai_protocol);
+			int sock = socket(aip->ai_family, aip->ai_socktype, aip->ai_protocol);
 			if (sock == -1)
 			{
 				int errsv = errno ;
@@ -147,7 +148,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
 				timeout.tv_usec = TIMEOUTMICROSECS;
-				timeo = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+				int timeo = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 				if (timeo < 0)
 				{
 					int errsv = errno ;
@@ -163,7 +164,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 				memset(&timeout, 0, sizeof(timeout));
 				timeout.tv_sec = TIMEOUTSECS;
 				timeout.tv_usec = TIMEOUTMICROSECS;
-				timeo = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+				int timeo = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 				if (timeo < 0)
 				{
 					int errsv = errno ;
@@ -176,10 +177,10 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 			if (PORTUNKNOWN == retval)
 			{
 				// attempt to connect
-				conn = connect(sock, aip->ai_addr, aip->ai_addrlen);
+				int conn = connect(sock, aip->ai_addr, aip->ai_addrlen);
 				int errsv = errno ;
 				// cycle through the expected list of results
-				for (i = 0; PORTEOL != resultsstruct[i].returnval && PORTUNKNOWN == retval ; i++)
+				for (int i = 0; PORTEOL != resultsstruct[i].returnval && PORTUNKNOWN == retval ; i++)
 				{
 
 					// Find a matching connect returncode and also errno, if appropriate
@@ -220,7 +221,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 					retval = PORTUNEXPECTED;
 				}
 
-				cl = close(sock);
+				int cl = close(sock);
 				if (cl == -1)
 				{
 					IPSCAN_LOG( LOGPREFIX "check_tcp_port: close unexpected failure : %d (%s)\n", errno, strerror(errno));
@@ -232,7 +233,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 				// Something bad has happened during setsockopts, but ensure we close an open socket anyway
 				if (-1 != sock)
 				{
-					cl = close(sock);
+					int cl = close(sock);
 					if (cl == -1)
 					{
 						IPSCAN_LOG( LOGPREFIX "check_tcp_port: close unexpected failure : %d (%s)\n", errno, strerror(errno));
@@ -254,7 +255,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist)
 {
 	int rc,result;
-	unsigned int i;
+	// delete unsigned int i;
 	pid_t childpid = fork();
 	if (childpid > 0)
 	{
@@ -270,7 +271,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		#endif
 		// child - actually do the work here - and then exit successfully
 		char unusedfield[8] = "unused\0";
-		for (i = 0 ; i < todo ; i++)
+		for (unsigned int i = 0 ; i < todo ; i++)
 		{
 			uint16_t port = portlist[portindex+i].port_num;
 			uint8_t special = portlist[portindex+i].special;
