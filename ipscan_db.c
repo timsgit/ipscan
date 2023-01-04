@@ -62,6 +62,7 @@
 // 0.41 - additional read_db_result() and dump_db() debug
 // 0.42 - update copyright dates
 // 0.43 - reduce scope of multiple variables
+// 0.44 - fix unsigned sscanf() mistake
 
 #include "ipscan.h"
 //
@@ -299,8 +300,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								if (8 == num_fields) // database includes indirect host field
 								{
 									char hostind[INET6_ADDRSTRLEN+1];
-									int rcport = sscanf(row[5], "%d", &port);
-									int rcres = sscanf(row[6], "%d", &res);
+									int rcport = sscanf(row[5], "%u", &port); // was %d 2023
+									int rcres = sscanf(row[6], "%u", &res); // was %d 2023
 									int rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 									if ( 1 == rcres && 1 == rchost && 1 == rcport )
 									{
