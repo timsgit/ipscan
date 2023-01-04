@@ -86,6 +86,7 @@
 // 0.64 - allow NAVAWAY as a reason for client_finished
 // 0.65 - correct masking of user-defined ports - thanks to Brian Gregory for spotting the issue
 // 0.66 - update copyright year
+// 0.67 - change scope of multiple variables
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -235,25 +236,25 @@ int main(void)
 	char remoteaddrstring[INET6_ADDRSTRLEN+1];
 	char *remoteaddrvar;
 
-	unsigned int position = 0;
+	// delete unsigned int position = 0;
 
 	// Default to testing
-	int beginscan = 0;
+	// delete int beginscan = 0;
 
 	// the session starttime, used as an unique index for the database
 	time_t   starttime;
 	// the query derived starttime
 	int64_t  querystarttime;
 
-	uint8_t special;
+	// delete uint8_t special;
 	uint16_t port;
-	uint16_t portindex;
+	// delete uint16_t portindex;
 
 	// Parallel scanning related
-	int numchildren;
-	int remaining;
+	// delete int numchildren;
+	// delete int remaining;
 	int childstatus;
-	unsigned int porti;
+	// delete unsigned int porti;
 
 	// Ports to be tested
 	uint16_t numports = 0;
@@ -265,7 +266,7 @@ int main(void)
 	int rc = 0;
 	unsigned int i = 0;
 	unsigned int shift = 0;
-	unsigned int j = 0;
+	// delete unsigned int j = 0;
 
 	// stats
 	unsigned int portsstats[ NUMRESULTTYPES ];
@@ -307,8 +308,8 @@ int main(void)
 	// value string - add two chars to cope with trailing \0
 	char valstring[ (MAXQUERYVALLEN + 2) ];
 
-	int includeexisting = 0;
-	int termsaccepted = 0;
+	// delete int includeexisting = 0;
+	// delete int termsaccepted = 0;
 
 	// IPv6 address related
 	unsigned char remotehost[sizeof(struct in6_addr)];
@@ -708,6 +709,7 @@ int main(void)
 
 	else
 	{
+		int includeexisting = 0;
 		#ifdef CLIENTDEBUG
 		#if (1 < IPSCAN_LOGVERBOSITY)
 		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address %x:%x:%x:: %d queries\n",\
@@ -737,6 +739,7 @@ int main(void)
 		}
 
 		// determine state of termsaccepted, if not present default to 0
+		int termsaccepted = 0;
 		i = 0;
 		while (i < numqueries && 0 != strncmp("termsaccepted",query[i].varname,13)) i++;
 		if (i < numqueries && 1 == query[i].valid)
@@ -780,7 +783,7 @@ int main(void)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: attempt to reconstitute query returned an unexpected length (%d, expecting 17 or 18)\n", rc);
 			// Create the header
-			HTML_HEADER();
+			HTML_HEADER(); 
 			// Now finish the header
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
@@ -849,14 +852,14 @@ int main(void)
 
 		int customport = 0;
 		char cpnum[17];
-		size_t cplen;
+		// delete size_t cplen;
 
 		// Counter holding the number of received customportN statements
 		unsigned int numcustomports = 0;
 
 		while (NUMUSERDEFPORTS > customport)
 		{
-			cplen = (size_t)snprintf(cpnum, 16, "customport%d", customport);
+			size_t cplen = (size_t)snprintf(cpnum, 16, "customport%d", customport);
 			i = 0;
 			while (i < numqueries && 0 != strncmp(cpnum,query[i].varname,cplen)) i++;
 
@@ -870,7 +873,7 @@ int main(void)
 				// Check the port number is in the valid range
 				if (query[i].varval >= MINVALIDPORT && query[i].varval <= MAXVALIDPORT)
 				{
-					j = 0;
+					unsigned int j  = 0;
 					while (j < numports && portlist[j].port_num != query[i].varval) j++;
 					// if this customport is not one of the ports already destined for checking then
 					// add it to the port list
@@ -954,7 +957,7 @@ int main(void)
 
 		// Look for the beginscan query string, return 0 if not present or incorrect value
 		i = 0;
-		beginscan = 0;
+		int beginscan = 0;
 		while (i < numqueries && strncmp("beginscan",query[i].varname,9)!= 0) i++;
 		if (i < numqueries && query[i].valid == 1)
 		{
@@ -1129,9 +1132,9 @@ int main(void)
 			#endif
 
 			// Scan the UDP ports in parallel
-			remaining = numudpports;
-			porti = 0;
-			numchildren = 0;
+			int remaining = numudpports;
+			unsigned int porti = 0;
+			int numchildren = 0;
 			rc = 0;
 			while (remaining > 0 || numchildren > 0)
 			{
@@ -1171,10 +1174,10 @@ int main(void)
 			printf("<p>Individual UDP port scan results:</p>\n");
 			// Start of UDP port scan results table
 			printf("<table border=\"1\">\n");
-			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
+			for (uint16_t portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
 				port = udpportlist[portindex].port_num;
-				special = udpportlist[portindex].special;
+				uint8_t special = udpportlist[portindex].special;
 				last = (portindex == (NUMUDPPORTS-1)) ? 1 : 0 ;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
 				if ( PORTUNKNOWN == result )
@@ -1210,6 +1213,7 @@ int main(void)
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
+				unsigned int position = 0;
 				if (position == 0) printf("<tr>");
 
 				// Find a matching returnval, or else flag it as unknown
@@ -1304,10 +1308,11 @@ int main(void)
 
 			// Start of TCP port scan results table
 			printf("<table border=\"1\">\n");
-			for (portindex= 0; portindex < numports ; portindex++)
+			unsigned int position = 0;
+			for (uint16_t portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex].port_num;
-				special = portlist[portindex].special;
+				uint8_t special = portlist[portindex].special;
 				last = (portindex == (numports-1)) ? 1 : 0 ;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
 				if ( PORTUNKNOWN == result )
@@ -1721,9 +1726,9 @@ int main(void)
 			#endif
 
 			// Scan the UDP ports in parallel
-			remaining = (int)numudpports;
-			porti = 0;
-			numchildren = 0;
+			int remaining = (int)numudpports;
+			unsigned int porti = 0;
+			int numchildren = 0;
 			while (remaining > 0 || numchildren > 0)
 			{
 				while (remaining > 0)
@@ -1803,10 +1808,10 @@ int main(void)
 			// Only included if UDP is compiled in ...
 			#if (IPSCAN_INCLUDE_UDP == 1)
 			// Generate the stats
-			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
+			for (uint16_t portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
 				port = udpportlist[portindex].port_num;
-				special = udpportlist[portindex].special;
+				uint8_t special = udpportlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession,\
 					(uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
 				if ( PORTUNKNOWN == result )
@@ -1851,10 +1856,10 @@ int main(void)
 			}
 			#endif
 
-			for (portindex= 0; portindex < numports ; portindex++)
+			for (uint16_t portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex].port_num;
-				special = portlist[portindex].special;
+				uint8_t special = portlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
 				if ( PORTUNKNOWN == result )
 				{
@@ -1918,7 +1923,7 @@ int main(void)
 
 			// Log the summary of results internally
 			i = 0;
-			position = 0;
+			unsigned int position = 0;
 			while (i < NUMRESULTTYPES)
 			{
 				if (position == 0)
