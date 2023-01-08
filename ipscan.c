@@ -1118,7 +1118,8 @@ int main(void)
 
 			portsstats[result]++ ;
 
-			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
+			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+					(uint32_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : write_db for ping result returned : %d\n", rc);
@@ -1549,7 +1550,7 @@ int main(void)
 				// Default for unused database entries
 				const char unusedfield[] = "unused";
 				rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					 (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+					 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
 				if (rc != 0)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE rewrite returned non-zero: %d\n", rc);
@@ -1602,7 +1603,7 @@ int main(void)
 			const char unusedfield[] = "unused";
 			// Write the new value back to the database
 			rc = update_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-				 (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+				 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
 			if (0 != rc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
@@ -1651,10 +1652,10 @@ int main(void)
 			#endif
 
 			// Default for unused database entries
-			char unusedfield[] = "unused";
+			const char unusedfield[] = "unused";
 			// Generate database entry for test state - indicate test running
 			rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					 (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
+					 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
@@ -1731,7 +1732,7 @@ int main(void)
 			#endif
 			portsstats[result]++ ;
 			rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
+					(uint32_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for ping result returned non-zero: %d\n", rc);

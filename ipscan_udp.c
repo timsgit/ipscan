@@ -91,7 +91,7 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost );
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost );
 
 // Others that FreeBSD highlighted
 #include <netinet/in.h>
@@ -1922,7 +1922,7 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		IPSCAN_LOG( LOGPREFIX "check_udp_ports_parll(): startindex %d and todo %d\n",portindex,todo);
 		#endif
 		// child - actually do the work here - and then exit successfully
-		char unusedfield[8] = "unused\0";
+		const char unusedfield[8] = "unused\0";
 		for (i = 0 ; i <todo ; i++)
 		{
 			uint16_t port = udpportlist[(unsigned int)(portindex+i)].port_num;

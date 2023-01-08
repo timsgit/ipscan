@@ -82,7 +82,7 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost );
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost );
 
 //
 // Check an individual TCP port
@@ -270,7 +270,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): startindex %d, todo %d\n",portindex,todo);
 		#endif
 		// child - actually do the work here - and then exit successfully
-		char unusedfield[8] = "unused\0";
+		const char unusedfield[8] = "unused\0";
 		for (unsigned int i = 0 ; i < todo ; i++)
 		{
 			uint16_t port = portlist[portindex+i].port_num;
