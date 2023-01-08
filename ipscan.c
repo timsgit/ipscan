@@ -86,6 +86,7 @@
 // 0.64 - allow NAVAWAY as a reason for client_finished
 // 0.65 - correct masking of user-defined ports - thanks to Brian Gregory for spotting the issue
 // 0.66 - update copyright year
+// 0.67 - change scope of multiple variables
 
 #include "ipscan.h"
 #include "ipscan_portlist.h"
@@ -217,10 +218,10 @@ int main(void)
 
 	int result;
 
-	#if (TEXTMODE != 1)
+	// delete #if (TEXTMODE != 1)
 	// Default for unused database entries
-	char unusedfield[] = "unused";
-	#endif
+	// delete char unusedfield[] = "unused";
+	// delete #endif
 
 	// Only necessary if we're including ping support
 	#if (1 == IPSCAN_INCLUDE_PING)
@@ -247,7 +248,7 @@ int main(void)
 
 	// delete uint8_t special;
 	uint16_t port;
-	delete uint16_t portindex;
+	// delete uint16_t portindex;
 
 	// Parallel scanning related
 	// delete int numchildren;
@@ -285,7 +286,8 @@ int main(void)
 
 
 	// buffer for reconstituted querystring
-	size_t reconquerysize = MAXQUERYSTRLEN;
+	// delete size_t reconquerysize = MAXQUERYSTRLEN;
+	// delete int reconquerysize = MAXQUERYSTRLEN;
 	char reconquery[ (MAXQUERYSTRLEN + 1) ];
 	char *reconptr = &reconquery[0];
 
@@ -758,7 +760,8 @@ int main(void)
 		}
 
 		// Begin the reconstitution of the query string
-		rc = snprintf(reconptr, reconquerysize, "includeexisting=%d", (int)includeexisting);
+		int reconquerysize = MAXQUERYSTRLEN;
+		rc = snprintf(reconptr, (size_t)reconquerysize, "includeexisting=%d", (int)includeexisting);
 		if (16 < rc && 19 > rc)
 		{
 			reconptr += rc;
@@ -794,7 +797,7 @@ int main(void)
 		}
 
 		// Continue the reconstitution of the query string
-		rc = snprintf(reconptr, reconquerysize, "&termsaccepted=%d", (int)termsaccepted);
+		rc = snprintf(reconptr, (size_t)reconquerysize, "&termsaccepted=%d", (int)termsaccepted);
 		if (16 == rc)
 		{
 			reconptr += rc;
@@ -886,7 +889,7 @@ int main(void)
 							IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: failed to write user-specified port description, does PORTDESCSIZE (%d) need increasing?\n", PORTDESCSIZE);
 						}
 						numports ++;
-						rc = snprintf(reconptr, reconquerysize, "&customport%d=%d", customport, (int)query[i].varval);
+						rc = snprintf(reconptr, (size_t)reconquerysize, "&customport%d=%d", customport, (int)query[i].varval);
 						// &customport (11); cpnum (1-5) ; = (1) ; portnum (1-5)
 						if (rc >= 14 && rc <= 22)
 						{
@@ -1173,7 +1176,7 @@ int main(void)
 			printf("<p>Individual UDP port scan results:</p>\n");
 			// Start of UDP port scan results table
 			printf("<table border=\"1\">\n");
-			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
+			for (uint16_t portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
 				port = udpportlist[portindex].port_num;
 				uint8_t special = udpportlist[portindex].special;
@@ -1307,7 +1310,8 @@ int main(void)
 
 			// Start of TCP port scan results table
 			printf("<table border=\"1\">\n");
-			for (portindex= 0; portindex < numports ; portindex++)
+			unsigned int position = 0;
+			for (uint16_t portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex].port_num;
 				uint8_t special = portlist[portindex].special;
@@ -1525,6 +1529,8 @@ int main(void)
 				// Set state to running but flag that database returned something unexpected
 				result = ( IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_DATABASE_ERROR_BIT );
 				IPSCAN_LOG( LOGPREFIX "ipscan: running state changed to indicate DATABASE error\n" );
+				// Default for unused database entries
+				char unusedfield[] = "unused";
 				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession,\
 					 (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
 				if (rc != 0)
@@ -1575,8 +1581,11 @@ int main(void)
 				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 				IPSCAN_LOG( LOGPREFIX "ipscan: running state changed to indicate OTHER error\n" );
 			}
+			// Default for unused database entries
+			char unusedfield[] = "unused";
 			// Write the new value back to the database
-			rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+			rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession,\
+				 (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
 			if (0 != rc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
@@ -1624,6 +1633,8 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: at querystarttime %"PRId64", querysession %"PRId64"\n", querystarttime, querysession);
 			#endif
 
+			// Default for unused database entries
+			char unusedfield[] = "unused";
 			// Generate database entry for test state - indicate test running
 			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession,\
 					 (0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
@@ -1724,9 +1735,9 @@ int main(void)
 			#endif
 
 			// Scan the UDP ports in parallel
-			remaining = (int)numudpports;
-			porti = 0;
-			numchildren = 0;
+			int remaining = (int)numudpports;
+			unsigned int porti = 0;
+			int numchildren = 0;
 			while (remaining > 0 || numchildren > 0)
 			{
 				while (remaining > 0)
@@ -1806,10 +1817,10 @@ int main(void)
 			// Only included if UDP is compiled in ...
 			#if (IPSCAN_INCLUDE_UDP == 1)
 			// Generate the stats
-			for (portindex= 0; portindex < NUMUDPPORTS ; portindex++)
+			for (uint16_t portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
 				port = udpportlist[portindex].port_num;
-				special = udpportlist[portindex].special;
+				uint8_t special = udpportlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession,\
 					(uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
 				if ( PORTUNKNOWN == result )
@@ -1854,10 +1865,10 @@ int main(void)
 			}
 			#endif
 
-			for (portindex= 0; portindex < numports ; portindex++)
+			for (uint16_t portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex].port_num;
-				special = portlist[portindex].special;
+				uint8_t special = portlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)querystarttime, (uint64_t)querysession, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
 				if ( PORTUNKNOWN == result )
 				{
@@ -1921,7 +1932,7 @@ int main(void)
 
 			// Log the summary of results internally
 			i = 0;
-			position = 0;
+			unsigned int position = 0;
 			while (i < NUMRESULTTYPES)
 			{
 				if (position == 0)
