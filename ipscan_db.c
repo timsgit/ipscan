@@ -110,7 +110,7 @@ void result_to_string(int result, char * retstring);
 //
 // ----------------------------------------------------------------------------------------
 
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost )
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost )
 {
 
 	// ID                 BIGINT UNSIGNED
@@ -828,7 +828,7 @@ int tidy_up_db(uint64_t time_now)
 //
 // ----------------------------------------------------------------------------------------
 
-int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, char *indirecthost )
+int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost )
 {
 
 	// ID                 BIGINT UNSIGNED
