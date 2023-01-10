@@ -393,7 +393,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
-				char dnsquery4[] = "uk";
+				const char dnsquery4[] = "uk";
 				txmessage[len++]= (char)strlen(dnsquery4);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
