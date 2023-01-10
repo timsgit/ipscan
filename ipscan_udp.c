@@ -338,7 +338,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			txmessage[len++]= 0;
 			// Question section
 
-			const char dnsquery1[] = "www6";
+			const char * dnsquery1[] = "www6";
 			txmessage[len++] = (char)strlen(dnsquery1);
 			// Need one extra octet for trailing 0, however this will be overwritten
 			// by the length of the next part of the host name in standard DNS format
@@ -357,7 +357,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
-				const char dnsquery2[] = "chappell-family";
+				const char * dnsquery2[] = "chappell-family";
 				txmessage[len++]= (char)strlen(dnsquery2);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
@@ -375,7 +375,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
-				const char dnsquery3[] = "co";
+				const char * dnsquery3[] = "co";
 				txmessage[len++]= (char)strlen(dnsquery3);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
@@ -393,7 +393,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
-				const char dnsquery4[] = "uk";
+				const char  * dnsquery4[] = "uk";
 				txmessage[len++]= (char)strlen(dnsquery4);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
