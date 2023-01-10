@@ -1760,7 +1760,7 @@ int main(void)
 			{
 				while (remaining > 0)
 				{
-					if (numchildren < MAXUDPCHILDREN && remaining > 0)
+					if (numchildren < MAXUDPCHILDREN) // delete && remaining > 0)
 					{
 						unsigned int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef UDPPARLLDEBUG
@@ -1773,7 +1773,7 @@ int main(void)
 						numchildren ++;
 						remaining = (int)(numudpports - porti);
 					}
-					if (numchildren == MAXUDPCHILDREN && remaining > 0)
+					if (numchildren == MAXUDPCHILDREN) // delete && remaining > 0)
 					{
 						int pid = wait(&childstatus);
 						numchildren--;
@@ -1805,7 +1805,7 @@ int main(void)
 			{
 				while (remaining > 0)
 				{
-					if (numchildren < MAXCHILDREN && remaining > 0)
+					if (numchildren < MAXCHILDREN) // delete && remaining > 0)
 					{
 						unsigned int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef PARLLDEBUG
@@ -1817,7 +1817,7 @@ int main(void)
 						numchildren ++;
 						remaining = (int)(numports - porti);
 					}
-					if (numchildren == MAXCHILDREN && remaining > 0)
+					if (numchildren == MAXCHILDREN) // delete && remaining > 0)
 					{
 						int pid = wait(&childstatus);
 						numchildren--;

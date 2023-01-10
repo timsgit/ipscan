@@ -338,7 +338,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			txmessage[len++]= 0;
 			// Question section
 
-			char dnsquery1[] = "www6";
+			const char dnsquery1[] = "www6";
 			txmessage[len++] = (char)strlen(dnsquery1);
 			// Need one extra octet for trailing 0, however this will be overwritten
 			// by the length of the next part of the host name in standard DNS format
@@ -357,7 +357,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
-				char dnsquery2[] = "chappell-family";
+				const char dnsquery2[] = "chappell-family";
 				txmessage[len++]= (char)strlen(dnsquery2);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
@@ -375,7 +375,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
-				char dnsquery3[] = "co";
+				const char dnsquery3[] = "co";
 				txmessage[len++]= (char)strlen(dnsquery3);
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
@@ -526,10 +526,10 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			{
 				// SNMPv1 or SNMPv2c get
 				// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
-				char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
+				const char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
 				unsigned int miblen = 6;
 				// Use different community strings for SNMPv1 (index 0) and SNMPv2c (index 1)
-        			char community[2][16] = { "public", "private" };
+        			const char community[2][16] = { "public", "private" };
 
 				// SNMP packet start
 				txmessage[len++] = 0x30;
@@ -1643,7 +1643,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				txmessage[len++] = 0x00; // Reserved for future use
 				txmessage[len++] = 0x00;
 
-				char mccmd[] = "version";
+				const char mccmd[] = "version";
 
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
