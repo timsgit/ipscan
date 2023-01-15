@@ -131,7 +131,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	// Holds length of transmitted UDP packet, which since they are representative packets,
 	//  depends on the port being tested
-	int len = 0;
+	unsigned int len = 0;
 
 	// set return value to a known default
 	int retval = PORTUNKNOWN;
@@ -312,8 +312,10 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			 */
 			len = 0;
 			// ID - identifier - 16 bit field
-			txmessage[len++]= 21;
-			txmessage[len++]= 6;
+			txmessage[len]= 21;
+			len++;
+			txmessage[len]= 6;
+			len++;
 			// QR - query/response flag - 0=query. 1 bit field
 			// OP - opcode - 0=query,2=status. 4 bit field
 			// AA - Authoritative Answer flag. 1 bit field
@@ -322,24 +324,35 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			// RA - recursion available. 1 bit field
 			// Z  - reserved. 3 bit field
 			// Rcode - result code - 0=no error, 4=not implemented
-			txmessage[len++]= 1; // 0=Standard Query, 1=Recursion, 16 for server status query
-			txmessage[len++]= 0;
+			txmessage[len]= 1; // 0=Standard Query, 1=Recursion, 16 for server status query
+			len++;
+			txmessage[len]= 0;
+			len++;
 			// QDCOUNT - question count - 16 bit field
-			txmessage[len++]= 0;
-			txmessage[len++]= 1;
+			txmessage[len]= 0;
+			len++;
+			txmessage[len]= 1;
+			len++;
 			// ANCOUNT - answer record count - 16 bit field
-			txmessage[len++]= 0;
-			txmessage[len++]= 0;
+			txmessage[len]= 0;
+			len++;
+			txmessage[len]= 0;
+			len++;
 			// NSCOUNT - authority record count (NS=name server) - 16 bit field
-			txmessage[len++]= 0;
-			txmessage[len++]= 0;
+			txmessage[len]= 0;
+			len++;
+			txmessage[len]= 0;
+			len++;
 			// ARCOUNT - 16 bit field
-			txmessage[len++]= 0;
-			txmessage[len++]= 0;
+			txmessage[len]= 0;
+			len++;
+			txmessage[len]= 0;
+			len++;
 			// Question section
 
 			const char * dnsquery1 = "www64";
-			txmessage[len++] = (char)strlen(dnsquery1);
+			txmessage[len] = (char)strlen(dnsquery1);
+			len++;
 			// Need one extra octet for trailing 0, however this will be overwritten
 			// by the length of the next part of the host name in standard DNS format
 			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery1);
@@ -358,7 +371,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			if (PORTUNKNOWN == retval)
 			{
 				const char * dnsquery2 = "chappell-family";
-				txmessage[len++]= (char)strlen(dnsquery2);
+				txmessage[len]= (char)strlen(dnsquery2);
+				len++;
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 				{
@@ -376,7 +390,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			if (PORTUNKNOWN == retval)
 			{
 				const char * dnsquery3 = "co";
-				txmessage[len++]= (char)strlen(dnsquery3);
+				txmessage[len]= (char)strlen(dnsquery3);
+				len++;
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 				{
@@ -394,7 +409,8 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			if (PORTUNKNOWN == retval)
 			{
 				const char  * dnsquery4 = "uk";
-				txmessage[len++]= (char)strlen(dnsquery4);
+				txmessage[len]= (char)strlen(dnsquery4);
+				len++;
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-len ))
 				{
@@ -412,14 +428,19 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			if (PORTUNKNOWN == retval)
 			{
 				// End of name
-				txmessage[len++]= 0;
+				txmessage[len]= 0;
+				len++;
 
 				// Question type - 1 = host address, 2=NS, 255 is request all
-				txmessage[len++] = 0;
-				txmessage[len++] = 255;
+				txmessage[len] = 0;
+				len++;
+				txmessage[len] = 255;
+				len++;
 				// Qclass - 1=INternet
-				txmessage[len++] = 0;
-				txmessage[len++] = 1;
+				txmessage[len] = 0;
+				len++;
+				txmessage[len] = 1;
+				len++;
 			}
 			break;
 		}
