@@ -2064,22 +2064,22 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			len++;
 			// Timestamp sent (seconds)
 	// delete MISRA 10.4
-			txmessage[len] = ((unsigned)tv_secs >> 24) & 0xff;
+			txmessage[len] = ((unsigned)tv_secs >> 24) & (unsigned)0xff;
 			len++;
-			txmessage[len] = ((unsigned)tv_secs >> 16) & 0xff;
+			txmessage[len] = ((unsigned)tv_secs >> 16) & (unsigned)0xff;
 			len++;
-			txmessage[len] = ((unsigned)tv_secs >>  8) & 0xff;
+			txmessage[len] = ((unsigned)tv_secs >>  8) & (unsigned)0xff;
 			len++;
-			txmessage[len] = ((unsigned)tv_secs      ) & 0xff;
+			txmessage[len] = ((unsigned)tv_secs      ) & (unsigned)0xff;
 			len++;
 			// Timestamp sent (microseconds)
-			txmessage[len] = ((unsigned)tv_usecs >> 24) & 0xff;
+			txmessage[len] = ((unsigned)tv_usecs >> 24) & (unsigned)0xff;
 			len++;
-			txmessage[len] = ((unsigned)tv_usecs >> 16) & 0xff;
+			txmessage[len] = ((unsigned)tv_usecs >> 16) & (unsigned)0xff;
 			len++;
-			txmessage[len] = ((unsigned)tv_usecs >>  8) & 0xff;
+			txmessage[len] = ((unsigned)tv_usecs >>  8) & (unsigned)0xff;
 			len++;
-			txmessage[len] = ((unsigned)tv_usecs      ) & 0xff;
+			txmessage[len] = ((unsigned)tv_usecs      ) & (unsigned)0xff;
 			len++;
 			// Timestamp received (seconds)
 			txmessage[len] = 0;
