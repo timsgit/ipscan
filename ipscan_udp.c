@@ -2063,22 +2063,23 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			txmessage[len] = 1;
 			len++;
 			// Timestamp sent (seconds)
-			txmessage[len] = (tv_secs >> 24) & 0xff;
+	// delete MISRA 10.4
+			txmessage[len] = ((unsigned)tv_secs >> 24) & 0xff;
 			len++;
-			txmessage[len] = (tv_secs >> 16) & 0xff;
+			txmessage[len] = ((unsigned)tv_secs >> 16) & 0xff;
 			len++;
-			txmessage[len] = (tv_secs >>  8) & 0xff;
+			txmessage[len] = ((unsigned)tv_secs >>  8) & 0xff;
 			len++;
-			txmessage[len] = tv_secs         & 0xff;
+			txmessage[len] = ((unsigned)tv_secs      ) & 0xff;
 			len++;
 			// Timestamp sent (microseconds)
-			txmessage[len] = (tv_usecs >> 24) & 0xff;
+			txmessage[len] = ((unsigned)tv_usecs >> 24) & 0xff;
 			len++;
-			txmessage[len] = (tv_usecs >> 16) & 0xff;
+			txmessage[len] = ((unsigned)tv_usecs >> 16) & 0xff;
 			len++;
-			txmessage[len] = (tv_usecs >>  8) & 0xff;
+			txmessage[len] = ((unsigned)tv_usecs >>  8) & 0xff;
 			len++;
-			txmessage[len] = tv_usecs         & 0xff;
+			txmessage[len] = ((unsigned)tv_usecs      ) & 0xff;
 			len++;
 			// Timestamp received (seconds)
 			txmessage[len] = 0;
