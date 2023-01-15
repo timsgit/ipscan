@@ -391,7 +391,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 
 	printf(" for (j = 0; j < retVals.length; j += 1)");
 	printf(" {");
-	printf(" if (retVals[j] == (result & %u)) {", IPSCAN_INDIRECT_MASK);
+	printf(" if (retVals[j] == (result & %d)) {", IPSCAN_INDIRECT_MASK);
 
 	printf(" switch(proto) {");
 
