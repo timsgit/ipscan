@@ -448,6 +448,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 		case 69:
 		{
+			len = 0;
 			/* TFTP
 				TFTP supports five types of packets, all of which have been mentioned
 				   above:
@@ -479,7 +480,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			if (length < 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for tftp, returned %d\n", length);
-				len = 0;
 				retval = PORTINTERROR;
 			}
 			else
@@ -493,6 +493,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 		case 123:
 		{
+			len = 0;
 			/* NTP
 			 * from RFC4330
 								1                   2                   3
@@ -547,7 +548,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		case 161:
 		{
 			len = 0;
-
 			if (0 == special || 1 == special)
 			{
 				// SNMPv1 or SNMPv2c get
@@ -815,93 +815,165 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		case 500:
 		case 4500:
 		{
-			// ISAKMP
 			len = 0;
+			// ISAKMP
 			// Initiator cookie (8 bytes)
-			txmessage[len++] = 0xde;
-			txmessage[len++] = 0xad;
-			txmessage[len++] = 0xfa;
-			txmessage[len++] = 0xce;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 1;
+			txmessage[len] = 0xde;
+			len++;
+			txmessage[len] = 0xad;
+			len++;
+			txmessage[len] = 0xfa;
+			len++;
+			txmessage[len] = 0xce;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 1;
+			len++;
 			// Responder cookie (8 bytes)
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
 			// Next payload 0=None, 2=proposal, 4=key exchange, 33=SA
-			txmessage[len++] = 33;
+			txmessage[len] = 33;
+			len++;
 			// Version Major/Minor 2.0
-			txmessage[len++] = 32;
+			txmessage[len] = 32;
+			len++;
 			// Exchange type 4=aggressive, 34=IKE_SA_INIT
-			txmessage[len++] = 34;
+			txmessage[len] = 34;
+			len++;
 			// Flags 8=initiator
-			txmessage[len++] = 8;
+			txmessage[len] = 8;
+			len++;
 
 			// Message ID (4 bytes)
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
 			// Length (4 bytes)
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0x01;
-			txmessage[len++] = 0x2c; // includes key exchange payload
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0x01;
+			len++;
+			txmessage[len] = 0x2c; // includes key exchange payload
+			len++;
 
 			// SA=33
 			// Next payload 0=None, 2=proposal, 4=key exchange, 33=SA, 34=KeyEx
-			txmessage[len++] = 34;
-			txmessage[len++] = 0; // Not critical
-			txmessage[len++] = 0; // Length 44
-			txmessage[len++] = 44;
+			txmessage[len] = 34;
+			len++;
+			txmessage[len] = 0; // Not critical
+			len++;
+			txmessage[len] = 0; // Length 44
+			len++;
+			txmessage[len] = 44;
+			len++;
 
-			txmessage[len++] = 0x00; // No next payload
-			txmessage[len++] = 0x00; // Not critical
-			txmessage[len++] = 0x00; // Length 40
-			txmessage[len++] = 0x28;
-			txmessage[len++] = 0x01; // Proposal 1
-			txmessage[len++] = 0x01; // IKE
-			txmessage[len++] = 0x00; // SPI size 0
-			txmessage[len++] = 0x04; // Number of transforms
-			txmessage[len++] = 0x03; // Payload type is transform
-			txmessage[len++] = 0x00; // Not critical
-			txmessage[len++] = 0x00; // Length 8
-			txmessage[len++] = 0x08;
-			txmessage[len++] = 0x01; // ENCRYPTION Algorithm
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // 3=3DES
-			txmessage[len++] = 0x03;
-			txmessage[len++] = 0x03; // Payload type is transform
-			txmessage[len++] = 0x00; // Not critical
-			txmessage[len++] = 0x00; // Length 8
-			txmessage[len++] = 0x08;
-			txmessage[len++] = 0x03; // INTEGRITY Algorithm
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // 2=AUTH_HMAC_SHA1_96
-			txmessage[len++] = 0x02;
-			txmessage[len++] = 0x03; // Payload type is transform
-			txmessage[len++] = 0x00; // Not critical
-			txmessage[len++] = 0x00; // Length 8
-			txmessage[len++] = 0x08;
-			txmessage[len++] = 0x02; // PRF Algorithm
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // 2=PRF_HMAC_SHA1
-			txmessage[len++] = 0x02;
-			txmessage[len++] = 0x00; // Next Payload type is NONE
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // Length 8
-			txmessage[len++] = 0x08;
-			txmessage[len++] = 0x04; // 4=Diffie-Hellman Group
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // 1024-bit MODP group
-			txmessage[len++] = 0x02;
+			txmessage[len] = 0x00; // No next payload
+			len++;
+			txmessage[len] = 0x00; // Not critical
+			len++;
+			txmessage[len] = 0x00; // Length 40
+			len++;
+			txmessage[len] = 0x28;
+			len++;
+			txmessage[len] = 0x01; // Proposal 1
+			len++;
+			txmessage[len] = 0x01; // IKE
+			len++;
+			txmessage[len] = 0x00; // SPI size 0
+			len++;
+			txmessage[len] = 0x04; // Number of transforms
+			len++;
+			txmessage[len] = 0x03; // Payload type is transform
+			len++;
+			txmessage[len] = 0x00; // Not critical
+			len++;
+			txmessage[len] = 0x00; // Length 8
+			len++;
+			txmessage[len] = 0x08;
+			len++;
+			txmessage[len] = 0x01; // ENCRYPTION Algorithm
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00; // 3=3DES
+			len++;
+			txmessage[len] = 0x03;
+			len++;
+			txmessage[len] = 0x03; // Payload type is transform
+			len++;
+			txmessage[len] = 0x00; // Not critical
+			len++;
+			txmessage[len] = 0x00; // Length 8
+			len++;
+			txmessage[len] = 0x08;
+			len++;
+			txmessage[len] = 0x03; // INTEGRITY Algorithm
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00; // 2=AUTH_HMAC_SHA1_96
+			len++;
+			txmessage[len] = 0x02;
+			len++;
+			txmessage[len] = 0x03; // Payload type is transform
+			len++;
+			txmessage[len] = 0x00; // Not critical
+			len++;
+			txmessage[len] = 0x00; // Length 8
+			len++;
+			txmessage[len] = 0x08;
+			len++;
+			txmessage[len] = 0x02; // PRF Algorithm
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00; // 2=PRF_HMAC_SHA1
+			len++;
+			txmessage[len] = 0x02;
+			len++;
+			txmessage[len] = 0x00; // Next Payload type is NONE
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00; // Length 8
+			len++;
+			txmessage[len] = 0x08;
+			len++;
+			txmessage[len] = 0x04; // 4=Diffie-Hellman Group
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00; // 1024-bit MODP group
+			len++;
+			txmessage[len] = 0x02;
+			len++;
 
 			// Key Exchange payload
 			//      		   	  1                   2                   3
@@ -915,246 +987,474 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 			//
 
-			txmessage[len++] = 0x28; // Next Payload type is None (40)
-			txmessage[len++] = 0x00; // Not critical
-			txmessage[len++] = 0x00; // Length 136
-			txmessage[len++] = 0x88;
-			txmessage[len++] = 0x00; // DH group 1024-bit MODP (2)
-			txmessage[len++] = 0x02;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x2d; // Key Exchange data (128 octets)
-			txmessage[len++] = 0x54;
-			txmessage[len++] = 0x91;
-			txmessage[len++] = 0xfa;
-			txmessage[len++] = 0x0c;
-			txmessage[len++] = 0xd4;
-			txmessage[len++] = 0xd4;
-			txmessage[len++] = 0xcc;
-			txmessage[len++] = 0x77;
-			txmessage[len++] = 0xf8;
-			txmessage[len++] = 0xce;
-			txmessage[len++] = 0x08;
-			txmessage[len++] = 0x98;
-			txmessage[len++] = 0x45;
-			txmessage[len++] = 0x40;
-			txmessage[len++] = 0xb7;
-			txmessage[len++] = 0xc6;
-			txmessage[len++] = 0x8c;
-			txmessage[len++] = 0x08;
-			txmessage[len++] = 0x93;
-			txmessage[len++] = 0x2c;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0xf7;
-			txmessage[len++] = 0xc1;
-			txmessage[len++] = 0x5b;
-			txmessage[len++] = 0xf1;
-			txmessage[len++] = 0x04;
-			txmessage[len++] = 0xb0;
-			txmessage[len++] = 0x94;
-			txmessage[len++] = 0x02;
-			txmessage[len++] = 0x1a;
-			txmessage[len++] = 0xf9;
-			txmessage[len++] = 0x95;
-			txmessage[len++] = 0x29;
-			txmessage[len++] = 0x6c;
-			txmessage[len++] = 0x4a;
-			txmessage[len++] = 0x26;
-			txmessage[len++] = 0x12;
-			txmessage[len++] = 0x18;
-			txmessage[len++] = 0x75;
-			txmessage[len++] = 0x21;
-			txmessage[len++] = 0x0e;
-			txmessage[len++] = 0x02;
-			txmessage[len++] = 0x06;
-			txmessage[len++] = 0x11;
-			txmessage[len++] = 0x49;
-			txmessage[len++] = 0xc1;
-			txmessage[len++] = 0xa0;
-			txmessage[len++] = 0xc5;
-			txmessage[len++] = 0x82;
-			txmessage[len++] = 0xe1;
-			txmessage[len++] = 0x11;
-			txmessage[len++] = 0x30;
-			txmessage[len++] = 0xab;
-			txmessage[len++] = 0xc4;
-			txmessage[len++] = 0x31;
-			txmessage[len++] = 0xde;
-			txmessage[len++] = 0x49;
-			txmessage[len++] = 0x7d;
-			txmessage[len++] = 0xd3;
-			txmessage[len++] = 0xe6;
-			txmessage[len++] = 0xfb;
-			txmessage[len++] = 0x42;
-			txmessage[len++] = 0x08;
-			txmessage[len++] = 0xfd;
-			txmessage[len++] = 0x72;
-			txmessage[len++] = 0x74;
-			txmessage[len++] = 0xbf;
-			txmessage[len++] = 0x34;
-			txmessage[len++] = 0x60;
-			txmessage[len++] = 0xdc;
-			txmessage[len++] = 0x98;
-			txmessage[len++] = 0x97;
-			txmessage[len++] = 0xd3;
-			txmessage[len++] = 0xb5;
-			txmessage[len++] = 0x5b;
-			txmessage[len++] = 0x82;
-			txmessage[len++] = 0xec;
-			txmessage[len++] = 0x77;
-			txmessage[len++] = 0x0d;
-			txmessage[len++] = 0xae;
-			txmessage[len++] = 0xca;
-			txmessage[len++] = 0x39;
-			txmessage[len++] = 0xfd;
-			txmessage[len++] = 0x9a;
-			txmessage[len++] = 0x08;
-			txmessage[len++] = 0x8f;
-			txmessage[len++] = 0x5a;
-			txmessage[len++] = 0x73;
-			txmessage[len++] = 0xa1;
-			txmessage[len++] = 0xfd;
-			txmessage[len++] = 0x60;
-			txmessage[len++] = 0x98;
-			txmessage[len++] = 0xa8;
-			txmessage[len++] = 0xc8;
-			txmessage[len++] = 0xdf;
-			txmessage[len++] = 0x16;
-			txmessage[len++] = 0x3d;
-			txmessage[len++] = 0x55;
-			txmessage[len++] = 0xff;
-			txmessage[len++] = 0x6d;
-			txmessage[len++] = 0xe0;
-			txmessage[len++] = 0x94;
-			txmessage[len++] = 0xd7;
-			txmessage[len++] = 0x93;
-			txmessage[len++] = 0xa6;
-			txmessage[len++] = 0x82;
-			txmessage[len++] = 0x1f;
-			txmessage[len++] = 0xce;
-			txmessage[len++] = 0x07;
-			txmessage[len++] = 0x0a;
-			txmessage[len++] = 0x17;
-			txmessage[len++] = 0xf4;
-			txmessage[len++] = 0x87;
-			txmessage[len++] = 0x0b;
-			txmessage[len++] = 0xc7;
-			txmessage[len++] = 0x90;
-			txmessage[len++] = 0xa2;
-			txmessage[len++] = 0x47;
-			txmessage[len++] = 0x51;
-			txmessage[len++] = 0xca;
-			txmessage[len++] = 0x2c;
-			txmessage[len++] = 0xe8;
-			txmessage[len++] = 0x33;
-			txmessage[len++] = 0x3a;
-			txmessage[len++] = 0x4d;
-			txmessage[len++] = 0x5f;
-			txmessage[len++] = 0xae;
+			txmessage[len] = 0x28; // Next Payload type is None (40)
+			len++;
+			txmessage[len] = 0x00; // Not critical
+			len++;
+			txmessage[len] = 0x00; // Length 136
+			len++;
+			txmessage[len] = 0x88;
+			len++;
+			txmessage[len] = 0x00; // DH group 1024-bit MODP (2)
+			len++;
+			txmessage[len] = 0x02;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x2d; // Key Exchange data (128 octets)
+			len++;
+			txmessage[len] = 0x54;
+			len++;
+			txmessage[len] = 0x91;
+			len++;
+			txmessage[len] = 0xfa;
+			len++;
+			txmessage[len] = 0x0c;
+			len++;
+			txmessage[len] = 0xd4;
+			len++;
+			txmessage[len] = 0xd4;
+			len++;
+			txmessage[len] = 0xcc;
+			len++;
+			txmessage[len] = 0x77;
+			len++;
+			txmessage[len] = 0xf8;
+			len++;
+			txmessage[len] = 0xce;
+			len++;
+			txmessage[len] = 0x08;
+			len++;
+			txmessage[len] = 0x98;
+			len++;
+			txmessage[len] = 0x45;
+			len++;
+			txmessage[len] = 0x40;
+			len++;
+			txmessage[len] = 0xb7;
+			len++;
+			txmessage[len] = 0xc6;
+			len++;
+			txmessage[len] = 0x8c;
+			len++;
+			txmessage[len] = 0x08;
+			len++;
+			txmessage[len] = 0x93;
+			len++;
+			txmessage[len] = 0x2c;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0xf7;
+			len++;
+			txmessage[len] = 0xc1;
+			len++;
+			txmessage[len] = 0x5b;
+			len++;
+			txmessage[len] = 0xf1;
+			len++;
+			txmessage[len] = 0x04;
+			len++;
+			txmessage[len] = 0xb0;
+			len++;
+			txmessage[len] = 0x94;
+			len++;
+			txmessage[len] = 0x02;
+			len++;
+			txmessage[len] = 0x1a;
+			len++;
+			txmessage[len] = 0xf9;
+			len++;
+			txmessage[len] = 0x95;
+			len++;
+			txmessage[len] = 0x29;
+			len++;
+			txmessage[len] = 0x6c;
+			len++;
+			txmessage[len] = 0x4a;
+			len++;
+			txmessage[len] = 0x26;
+			len++;
+			txmessage[len] = 0x12;
+			len++;
+			txmessage[len] = 0x18;
+			len++;
+			txmessage[len] = 0x75;
+			len++;
+			txmessage[len] = 0x21;
+			len++;
+			txmessage[len] = 0x0e;
+			len++;
+			txmessage[len] = 0x02;
+			len++;
+			txmessage[len] = 0x06;
+			len++;
+			txmessage[len] = 0x11;
+			len++;
+			txmessage[len] = 0x49;
+			len++;
+			txmessage[len] = 0xc1;
+			len++;
+			txmessage[len] = 0xa0;
+			len++;
+			txmessage[len] = 0xc5;
+			len++;
+			txmessage[len] = 0x82;
+			len++;
+			txmessage[len] = 0xe1;
+			len++;
+			txmessage[len] = 0x11;
+			len++;
+			txmessage[len] = 0x30;
+			len++;
+			txmessage[len] = 0xab;
+			len++;
+			txmessage[len] = 0xc4;
+			len++;
+			txmessage[len] = 0x31;
+			len++;
+			txmessage[len] = 0xde;
+			len++;
+			txmessage[len] = 0x49;
+			len++;
+			txmessage[len] = 0x7d;
+			len++;
+			txmessage[len] = 0xd3;
+			len++;
+			txmessage[len] = 0xe6;
+			len++;
+			txmessage[len] = 0xfb;
+			len++;
+			txmessage[len] = 0x42;
+			len++;
+			txmessage[len] = 0x08;
+			len++;
+			txmessage[len] = 0xfd;
+			len++;
+			txmessage[len] = 0x72;
+			len++;
+			txmessage[len] = 0x74;
+			len++;
+			txmessage[len] = 0xbf;
+			len++;
+			txmessage[len] = 0x34;
+			len++;
+			txmessage[len] = 0x60;
+			len++;
+			txmessage[len] = 0xdc;
+			len++;
+			txmessage[len] = 0x98;
+			len++;
+			txmessage[len] = 0x97;
+			len++;
+			txmessage[len] = 0xd3;
+			len++;
+			txmessage[len] = 0xb5;
+			len++;
+			txmessage[len] = 0x5b;
+			len++;
+			txmessage[len] = 0x82;
+			len++;
+			txmessage[len] = 0xec;
+			len++;
+			txmessage[len] = 0x77;
+			len++;
+			txmessage[len] = 0x0d;
+			len++;
+			txmessage[len] = 0xae;
+			len++;
+			txmessage[len] = 0xca;
+			len++;
+			txmessage[len] = 0x39;
+			len++;
+			txmessage[len] = 0xfd;
+			len++;
+			txmessage[len] = 0x9a;
+			len++;
+			txmessage[len] = 0x08;
+			len++;
+			txmessage[len] = 0x8f;
+			len++;
+			txmessage[len] = 0x5a;
+			len++;
+			txmessage[len] = 0x73;
+			len++;
+			txmessage[len] = 0xa1;
+			len++;
+			txmessage[len] = 0xfd;
+			len++;
+			txmessage[len] = 0x60;
+			len++;
+			txmessage[len] = 0x98;
+			len++;
+			txmessage[len] = 0xa8;
+			len++;
+			txmessage[len] = 0xc8;
+			len++;
+			txmessage[len] = 0xdf;
+			len++;
+			txmessage[len] = 0x16;
+			len++;
+			txmessage[len] = 0x3d;
+			len++;
+			txmessage[len] = 0x55;
+			len++;
+			txmessage[len] = 0xff;
+			len++;
+			txmessage[len] = 0x6d;
+			len++;
+			txmessage[len] = 0xe0;
+			len++;
+			txmessage[len] = 0x94;
+			len++;
+			txmessage[len] = 0xd7;
+			len++;
+			txmessage[len] = 0x93;
+			len++;
+			txmessage[len] = 0xa6;
+			len++;
+			txmessage[len] = 0x82;
+			len++;
+			txmessage[len] = 0x1f;
+			len++;
+			txmessage[len] = 0xce;
+			len++;
+			txmessage[len] = 0x07;
+			len++;
+			txmessage[len] = 0x0a;
+			len++;
+			txmessage[len] = 0x17;
+			len++;
+			txmessage[len] = 0xf4;
+			len++;
+			txmessage[len] = 0x87;
+			len++;
+			txmessage[len] = 0x0b;
+			len++;
+			txmessage[len] = 0xc7;
+			len++;
+			txmessage[len] = 0x90;
+			len++;
+			txmessage[len] = 0xa2;
+			len++;
+			txmessage[len] = 0x47;
+			len++;
+			txmessage[len] = 0x51;
+			len++;
+			txmessage[len] = 0xca;
+			len++;
+			txmessage[len] = 0x2c;
+			len++;
+			txmessage[len] = 0xe8;
+			len++;
+			txmessage[len] = 0x33;
+			len++;
+			txmessage[len] = 0x3a;
+			len++;
+			txmessage[len] = 0x4d;
+			len++;
+			txmessage[len] = 0x5f;
+			len++;
+			txmessage[len] = 0xae;
+			len++;
 
 			// Payload is Nonce
-			txmessage[len++] = 0x29; // Next payload is Notify (41)
-			txmessage[len++] = 0x00; // Not critical
-			txmessage[len++] = 0x00; // Length 36
-			txmessage[len++] = 0x24; // Nonce data
-			txmessage[len++] = 0xfb;
-			txmessage[len++] = 0xe5;
-			txmessage[len++] = 0x90;
-			txmessage[len++] = 0x3f;
-			txmessage[len++] = 0xc9;
-			txmessage[len++] = 0xdf;
-			txmessage[len++] = 0x47;
-			txmessage[len++] = 0x09;
-			txmessage[len++] = 0xe5;
-			txmessage[len++] = 0xd4;
-			txmessage[len++] = 0xab;
-			txmessage[len++] = 0x0a;
-			txmessage[len++] = 0xa6;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0xb3;
-			txmessage[len++] = 0xbe;
-			txmessage[len++] = 0x36;
-			txmessage[len++] = 0xeb;
-			txmessage[len++] = 0x35;
-			txmessage[len++] = 0xa6;
-			txmessage[len++] = 0xf5;
-			txmessage[len++] = 0x54;
-			txmessage[len++] = 0x47;
-			txmessage[len++] = 0xfe;
-			txmessage[len++] = 0xda;
-			txmessage[len++] = 0xb9;
-			txmessage[len++] = 0x0d;
-			txmessage[len++] = 0x67;
-			txmessage[len++] = 0x66;
-			txmessage[len++] = 0x9f;
-			txmessage[len++] = 0xab;
-			txmessage[len++] = 0x96;
+			txmessage[len] = 0x29; // Next payload is Notify (41)
+			len++;
+			txmessage[len] = 0x00; // Not critical
+			len++;
+			txmessage[len] = 0x00; // Length 36
+			len++;
+			txmessage[len] = 0x24; // Nonce data
+			len++;
+			txmessage[len] = 0xfb;
+			len++;
+			txmessage[len] = 0xe5;
+			len++;
+			txmessage[len] = 0x90;
+			len++;
+			txmessage[len] = 0x3f;
+			len++;
+			txmessage[len] = 0xc9;
+			len++;
+			txmessage[len] = 0xdf;
+			len++;
+			txmessage[len] = 0x47;
+			len++;
+			txmessage[len] = 0x09;
+			len++;
+			txmessage[len] = 0xe5;
+			len++;
+			txmessage[len] = 0xd4;
+			len++;
+			txmessage[len] = 0xab;
+			len++;
+			txmessage[len] = 0x0a;
+			len++;
+			txmessage[len] = 0xa6;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0xb3;
+			len++;
+			txmessage[len] = 0xbe;
+			len++;
+			txmessage[len] = 0x36;
+			len++;
+			txmessage[len] = 0xeb;
+			len++;
+			txmessage[len] = 0x35;
+			len++;
+			txmessage[len] = 0xa6;
+			len++;
+			txmessage[len] = 0xf5;
+			len++;
+			txmessage[len] = 0x54;
+			len++;
+			txmessage[len] = 0x47;
+			len++;
+			txmessage[len] = 0xfe;
+			len++;
+			txmessage[len] = 0xda;
+			len++;
+			txmessage[len] = 0xb9;
+			len++;
+			txmessage[len] = 0x0d;
+			len++;
+			txmessage[len] = 0x67;
+			len++;
+			txmessage[len] = 0x66;
+			len++;
+			txmessage[len] = 0x9f;
+			len++;
+			txmessage[len] = 0xab;
+			len++;
+			txmessage[len] = 0x96;
+			len++;
 
 			// Payload is Notify
-			txmessage[len++] = 0x29; // Next payload is also notify
-			txmessage[len++] = 0x00; // Not critical
-			txmessage[len++] = 0x00; // Length 28
-			txmessage[len++] = 0x1c;
-			txmessage[len++] = 0x00; // Protocol ID is RESERVED (0)
-			txmessage[len++] = 0x00; // SPI size is 0
-			txmessage[len++] = 0x40; // NAT_DETECTION_SOURCE_IP (16388)
-			txmessage[len++] = 0x04;
+			txmessage[len] = 0x29; // Next payload is also notify
+			len++;
+			txmessage[len] = 0x00; // Not critical
+			len++;
+			txmessage[len] = 0x00; // Length 28
+			len++;
+			txmessage[len] = 0x1c;
+			len++;
+			txmessage[len] = 0x00; // Protocol ID is RESERVED (0)
+			len++;
+			txmessage[len] = 0x00; // SPI size is 0
+			len++;
+			txmessage[len] = 0x40; // NAT_DETECTION_SOURCE_IP (16388)
+			len++;
+			txmessage[len] = 0x04;
+			len++;
 			// data is SHA1(SPIs, source IP address, source port)
 			// however, we're just looking for a response, not a valid
 			// packet
-			txmessage[len++] = 0xc6; // Notification data
-			txmessage[len++] = 0x93;
-			txmessage[len++] = 0x14;
-			txmessage[len++] = 0x61;
-			txmessage[len++] = 0x31;
-			txmessage[len++] = 0xa7;
-			txmessage[len++] = 0x7f;
-			txmessage[len++] = 0xe9;
-			txmessage[len++] = 0x93;
-			txmessage[len++] = 0x47;
-			txmessage[len++] = 0x26;
-			txmessage[len++] = 0xe5;
-			txmessage[len++] = 0x23;
-			txmessage[len++] = 0x17;
-			txmessage[len++] = 0xd4;
-			txmessage[len++] = 0xec;
-			txmessage[len++] = 0x5f;
-			txmessage[len++] = 0x64;
-			txmessage[len++] = 0x45;
-			txmessage[len++] = 0xf1;
+			txmessage[len] = 0xc6; // Notification data
+			len++;
+			txmessage[len] = 0x93;
+			len++;
+			txmessage[len] = 0x14;
+			len++;
+			txmessage[len] = 0x61;
+			len++;
+			txmessage[len] = 0x31;
+			len++;
+			txmessage[len] = 0xa7;
+			len++;
+			txmessage[len] = 0x7f;
+			len++;
+			txmessage[len] = 0xe9;
+			len++;
+			txmessage[len] = 0x93;
+			len++;
+			txmessage[len] = 0x47;
+			len++;
+			txmessage[len] = 0x26;
+			len++;
+			txmessage[len] = 0xe5;
+			len++;
+			txmessage[len] = 0x23;
+			len++;
+			txmessage[len] = 0x17;
+			len++;
+			txmessage[len] = 0xd4;
+			len++;
+			txmessage[len] = 0xec;
+			len++;
+			txmessage[len] = 0x5f;
+			len++;
+			txmessage[len] = 0x64;
+			len++;
+			txmessage[len] = 0x45;
+			len++;
+			txmessage[len] = 0xf1;
+			len++;
 
 			// Payload is Notify
-			txmessage[len++] = 0x00; // Next payload is NONE
-			txmessage[len++] = 0x00; // Not critical
-			txmessage[len++] = 0x00; // :ength 28
-			txmessage[len++] = 0x1c;
-			txmessage[len++] = 0x00; // Protocol ID is RESERVED(0)
-			txmessage[len++] = 0x00; // SPI size = 0
-			txmessage[len++] = 0x40; // NAT_DETECTION_DESTIANTION_IP (16389)
-			txmessage[len++] = 0x05;
+			txmessage[len] = 0x00; // Next payload is NONE
+			len++;
+			txmessage[len] = 0x00; // Not critical
+			len++;
+			txmessage[len] = 0x00; // :ength 28
+			len++;
+			txmessage[len] = 0x1c;
+			len++;
+			txmessage[len] = 0x00; // Protocol ID is RESERVED(0)
+			len++;
+			txmessage[len] = 0x00; // SPI size = 0
+			len++;
+			txmessage[len] = 0x40; // NAT_DETECTION_DESTIANTION_IP (16389)
+			len++;
+			txmessage[len] = 0x05;
+			len++;
 			// data is SHA1(SPIs, source IP address, source port)
 			// however, we're just looking for a response, not a valid
 			// packet
-			txmessage[len++] = 0xf9; // Notification data
-			txmessage[len++] = 0x33;
-			txmessage[len++] = 0xa1;
-			txmessage[len++] = 0x9a;
-			txmessage[len++] = 0x65;
-			txmessage[len++] = 0x1a;
-			txmessage[len++] = 0xc3;
-			txmessage[len++] = 0x73;
-			txmessage[len++] = 0x8b;
-			txmessage[len++] = 0xb7;
-			txmessage[len++] = 0xf6;
-			txmessage[len++] = 0x04;
-			txmessage[len++] = 0x43;
-			txmessage[len++] = 0x6f;
-			txmessage[len++] = 0x80;
-			txmessage[len++] = 0x12;
-			txmessage[len++] = 0x69;
-			txmessage[len++] = 0x3e;
-			txmessage[len++] = 0x6a;
-			txmessage[len++] = 0x2a;
+			txmessage[len] = 0xf9; // Notification data
+			len++;
+			txmessage[len] = 0x33;
+			len++;
+			txmessage[len] = 0xa1;
+			len++;
+			txmessage[len] = 0x9a;
+			len++;
+			txmessage[len] = 0x65;
+			len++;
+			txmessage[len] = 0x1a;
+			len++;
+			txmessage[len] = 0xc3;
+			len++;
+			txmessage[len] = 0x73;
+			len++;
+			txmessage[len] = 0x8b;
+			len++;
+			txmessage[len] = 0xb7;
+			len++;
+			txmessage[len] = 0xf6;
+			len++;
+			txmessage[len] = 0x04;
+			len++;
+			txmessage[len] = 0x43;
+			len++;
+			txmessage[len] = 0x6f;
+			len++;
+			txmessage[len] = 0x80;
+			len++;
+			txmessage[len] = 0x12;
+			len++;
+			txmessage[len] = 0x69;
+			len++;
+			txmessage[len] = 0x3e;
+			len++;
+			txmessage[len] = 0x6a;
+			len++;
+			txmessage[len] = 0x2a;
+			len++;
 
 			break;
 		}
@@ -1163,35 +1463,60 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		case 521:
 		{
 			len = 0;
-			txmessage[len++] = 0x01; // Command is REQUEST
-			txmessage[len++] = 0x01; // Version 1
-			txmessage[len++] = 0x00; // Reserved
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // ::
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // Route Tag
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // Prefix length
-			txmessage[len++] = 0x10; // Metric
+			txmessage[len] = 0x01; // Command is REQUEST
+			len++;
+			txmessage[len] = 0x01; // Version 1
+			len++;
+			txmessage[len] = 0x00; // Reserved
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00; // ::
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00; // Route Tag
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00; // Prefix length
+			len++;
+			txmessage[len] = 0x10; // Metric
+			len++;
 			break;
 		}
 
 		case 547:
 		{
+			len = 0;
 			// DHCPv6 defined in https://tools.ietf.org/html/rfc3315
 			//       0                   1                   2                   3
 			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -1204,12 +1529,14 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//      |                                                               |
 			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 			//
-			len = 0;
-			txmessage[len++] = 0x01; // msg-type = 0x01 (Solicit)
-			txmessage[len++] = 0xde; // transaction-id
-			txmessage[len++] = 0xad;
-			txmessage[len++] = 0xfa;
-
+			txmessage[len] = 0x01; // msg-type = 0x01 (Solicit)
+			len++;
+			txmessage[len] = 0xde; // transaction-id
+			len++;
+			txmessage[len] = 0xad;
+			len++;
+			txmessage[len] = 0xfa;
+			len++;
 			//       0                   1                   2                   3
 			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -1221,11 +1548,15 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//      .                                                               .
 			//      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-			txmessage[len++] = 0x00; // Option 1 is Client Identifier
-			txmessage[len++] = 0x01;
+			txmessage[len] = 0x00; // Option 1 is Client Identifier
+			len++;
+			txmessage[len] = 0x01;
+			len++;
 
-			txmessage[len++] = 0x00; // Length field
-			txmessage[len++] = 0x0e;
+			txmessage[len] = 0x00; // Length field
+			len++;
+			txmessage[len] = 0x0e;
+			len++;
 
 
 			// The following diagram illustrates the format of a DUID-LLT:
@@ -1243,19 +1574,31 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 			//
 
-			txmessage[len++] = 0x00; // DUID-LLT
-			txmessage[len++] = 0x01;
+			txmessage[len] = 0x00; // DUID-LLT
+			len++;
+			txmessage[len] = 0x01;
+			len++;
 
-			txmessage[len++] = 0x00; // Hardware type: Ethernet
-			txmessage[len++] = 0x01;
+			txmessage[len] = 0x00; // Hardware type: Ethernet
+			len++;
+			txmessage[len] = 0x01;
+			len++;
 
-			txmessage[len++] = 0x00; // Time
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x01;
+			txmessage[len] = 0x00; // Time
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x01;
+			len++;
 
 			// Copy in the local MAC address as the Link-layer address
-			for (i = 0; i < 6 ; i++) txmessage[len++] = localmacaddr[i];
+			for (i = 0; i < 6 ; i++)
+			{
+				txmessage[len] = localmacaddr[i];
+				len++;
+			}
 
 			//  0                   1                   2                   3
 			//     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -1268,11 +1611,15 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//      option-len    0.
 			//
 
-			txmessage[len++] = 0x00; // Reconfigure Accept option
-			txmessage[len++] = 0x14;
+			txmessage[len] = 0x00; // Reconfigure Accept option
+			len++;
+			txmessage[len] = 0x14;
+			len++;
 
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 
 			// The format of the IA_NA option is:
 			//
@@ -1317,26 +1664,42 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			//      IA_NA-options        Options associated with this IA_NA.
 
-			txmessage[len++] = 0x00; // Identity Association for Non-temporary Address (IA_NA) option
-			txmessage[len++] = 0x03;
+			txmessage[len] = 0x00; // Identity Association for Non-temporary Address (IA_NA) option
+			len++;
+			txmessage[len] = 0x03;
+			len++;
 
-			txmessage[len++] = 0x00; // Length (options length = 0)
-			txmessage[len++] = 0x0c;
+			txmessage[len] = 0x00; // Length (options length = 0)
+			len++;
+			txmessage[len] = 0x0c;
+			len++;
 
-			txmessage[len++] = 0x00; // IAID
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00; // IAID
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 
-			txmessage[len++] = 0x00; // T1
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00; // T1
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 
-			txmessage[len++] = 0x00; // T2
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00; // T2
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 
 			//       0                   1                   2                   3
 			//       0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -1355,14 +1718,20 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//                    hundredths of a second (10^-2 seconds).
 
 
-			txmessage[len++] = 0x00; // Elapsed Time Option
-			txmessage[len++] = 0x08;
+			txmessage[len] = 0x00; // Elapsed Time Option
+			len++;
+			txmessage[len] = 0x08;
+			len++;
 
-			txmessage[len++] = 0x00; // Length
-			txmessage[len++] = 0x02;
+			txmessage[len] = 0x00; // Length
+			len++;
+			txmessage[len] = 0x02;
+			len++;
 
-			txmessage[len++] = 0x00; // We just started ..
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00; // We just started ..
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 
 			//   The Option Request option is used to identify a list of options in a
 			//   message between a client and a server.  The format of the Option
@@ -1385,17 +1754,25 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//      requested-option-code-n The option code for an option requested by
 			//      the client.
 
-			txmessage[len++] = 0x00; // Option Request Option Option
-			txmessage[len++] = 0x06;
+			txmessage[len] = 0x00; // Option Request Option Option
+			len++;
+			txmessage[len] = 0x06;
+			len++;
 
-			txmessage[len++] = 0x00; // Option length
-			txmessage[len++] = 0x04;
+			txmessage[len] = 0x00; // Option length
+			len++;
+			txmessage[len] = 0x04;
+			len++;
 
-			txmessage[len++] = 0x00; // Recursive DNS server
-			txmessage[len++] = 0x17;
+			txmessage[len] = 0x00; // Recursive DNS server
+			len++;
+			txmessage[len] = 0x17;
+			len++;
 
-			txmessage[len++] = 0x00; // Domain Search List
-			txmessage[len++] = 0x18;
+			txmessage[len] = 0x00; // Domain Search List
+			len++;
+			txmessage[len] = 0x18;
+			len++;
 
 			// From RFC 3633
 			// The IA_PD option is used to carry a prefix delegation identity
@@ -1443,26 +1820,42 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			//   IA_PD-options:    Options associated with this IA_PD.
 
-			txmessage[len++] = 0x00; // IA_PD Option
-			txmessage[len++] = 0x19;
+			txmessage[len] = 0x00; // IA_PD Option
+			len++;
+			txmessage[len] = 0x19;
+			len++;
 
-			txmessage[len++] = 0x00; // Length
-			txmessage[len++] = 0x29;
+			txmessage[len] = 0x00; // Length
+			len++;
+			txmessage[len] = 0x29;
+			len++;
 
-			txmessage[len++] = 0x00; // IAID
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00; // IAID
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 
-			txmessage[len++] = 0x00; // T1
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00; // T1
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 
-			txmessage[len++] = 0x00; // T2
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00; // T2
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 
 			//   The IA_PD Prefix option is used to specify IPv6 address prefixes
 			//   associated with an IA_PD.  The IA_PD Prefix option must be
@@ -1511,40 +1904,69 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			//   IAprefix-options: Options associated with this prefix
 
-			txmessage[len++] = 0x00; // IA Prefix option
-			txmessage[len++] = 0x1a;
+			txmessage[len] = 0x00; // IA Prefix option
+			len++;
+			txmessage[len] = 0x1a;
+			len++;
 
-			txmessage[len++] = 0x00; // Length (no additional options)
-			txmessage[len++] = 0x19;
+			txmessage[len] = 0x00; // Length (no additional options)
+			len++;
+			txmessage[len] = 0x19;
+			len++;
 
-			txmessage[len++] = 0x00; // Preferred lifetime - 21600 seconds (6 hours)
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x54;
-			txmessage[len++] = 0x60;
+			txmessage[len] = 0x00; // Preferred lifetime - 21600 seconds (6 hours)
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x54;
+			len++;
+			txmessage[len] = 0x60;
+			len++;
 
-			txmessage[len++] = 0x00; // Valid lifetime - 86400 seconds (24 hours)
-			txmessage[len++] = 0x01;
-			txmessage[len++] = 0x51;
-			txmessage[len++] = 0x80;
+			txmessage[len] = 0x00; // Valid lifetime - 86400 seconds (24 hours)
+			len++;
+			txmessage[len] = 0x01;
+			len++;
+			txmessage[len] = 0x51;
+			len++;
+			txmessage[len] = 0x80;
+			len++;
 
-			txmessage[len++] = 0x40; // 64-bit prefix length
+			txmessage[len] = 0x40; // 64-bit prefix length
+			len++;
 
-			txmessage[len++] = 0x00; // Prefix ::
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
+			txmessage[len] = 0x00; // Prefix ::
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
+			txmessage[len] = 0x00;
+			len++;
 			break;
 		}
 
@@ -1601,49 +2023,81 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//		      |                                                               |
 			//		      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 			// Version
-			txmessage[len++] = 0;
-			txmessage[len++] = 1; // Version 1
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 1; // Version 1
+			len++;
 			// Global flags
-			txmessage[len++] = 0;
-			txmessage[len++] = 1; // Global Flags 1=Validate FEC Stack
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 1; // Global Flags 1=Validate FEC Stack
+			len++;
 			// Message type
-			txmessage[len++] = 1; // Message type 1=echo request
+			txmessage[len] = 1; // Message type 1=echo request
+			len++;
 			// Reply mode
-			txmessage[len++] = 2; // Reply Mode (1=don't;2=ip udp;3=ip udp + router alert; 4 = app level control channel)
+			txmessage[len] = 2; // Reply Mode (1=don't;2=ip udp;3=ip udp + router alert; 4 = app level control channel)
+			len++;
 			// Return code
-			txmessage[len++] = 0; // Filled in by responder
+			txmessage[len] = 0; // Filled in by responder
+			len++;
 			// Return subcode
-			txmessage[len++] = 0; // Filled in by responder
+			txmessage[len] = 0; // Filled in by responder
+			len++;
 			// Sender's Handle
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
 			// Sequence Number
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 1;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 1;
+			len++;
 			// Timestamp sent (seconds)
-			txmessage[len++] = (tv_secs >> 24) & 0xff;
-			txmessage[len++] = (tv_secs >> 16) & 0xff;
-			txmessage[len++] = (tv_secs >>  8) & 0xff;
-			txmessage[len++] = tv_secs         & 0xff;
+			txmessage[len] = (tv_secs >> 24) & 0xff;
+			len++;
+			txmessage[len] = (tv_secs >> 16) & 0xff;
+			len++;
+			txmessage[len] = (tv_secs >>  8) & 0xff;
+			len++;
+			txmessage[len] = tv_secs         & 0xff;
+			len++;
 			// Timestamp sent (microseconds)
-			txmessage[len++] = (tv_usecs >> 24) & 0xff;
-			txmessage[len++] = (tv_usecs >> 16) & 0xff;
-			txmessage[len++] = (tv_usecs >>  8) & 0xff;
-			txmessage[len++] = tv_usecs         & 0xff;
+			txmessage[len] = (tv_usecs >> 24) & 0xff;
+			len++;
+			txmessage[len] = (tv_usecs >> 16) & 0xff;
+			len++;
+			txmessage[len] = (tv_usecs >>  8) & 0xff;
+			len++;
+			txmessage[len] = tv_usecs         & 0xff;
+			len++;
 			// Timestamp received (seconds)
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
 			// Timestamp received (microseconds)
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
 			//
 			// TLVs
 			//
@@ -1684,10 +2138,14 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//			              10                  Reply TOS Byte
 			//
 			// Always include a FEC TLV
-			txmessage[len++] = 0;
-			txmessage[len++] = 1; // Target FEC Stack (from types listed above)
-			txmessage[len++] = 0;
-			txmessage[len++] = 24; // length of LDP IPv6 prefix that follows
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 1; // Target FEC Stack (from types listed above)
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 24; // length of LDP IPv6 prefix that follows
+			len++;
 			//
 			// A Target FEC Stack is a list of sub-TLVs.  The number of elements is
 			//   determined by looking at the sub-TLV length fields.
@@ -1707,10 +2165,14 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//          11          16+            "FEC 129" Pseudowire
 			//          12            5            BGP labeled IPv4 prefix
 			//
-			txmessage[len++] = 0;
-			txmessage[len++] = 2; // Sub-type LDP IPv6 prefix
-			txmessage[len++] = 0;
-			txmessage[len++] = 17; // LDP IPv6 prefix TLV length as listed above
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 2; // Sub-type LDP IPv6 prefix
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 17; // LDP IPv6 prefix TLV length as listed above
+			len++;
 			//
 			//			The Label Distribution Protocol (LDP) IPv6 FEC
 			//			sub-TLV has the following format:
@@ -1730,12 +2192,17 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			// copy the server's local address into the FEC entry
 			for (i = 0; i < 16; i++)
 			{
-				txmessage[len++] = localaddr.sin6_addr.s6_addr[i] & 0xff;
+				txmessage[len] = localaddr.sin6_addr.s6_addr[i] & 0xff;
+				len++;
 			}
-			txmessage[len++] = 128; // single host is /128
-			txmessage[len++] = 0;   // 0-padding
-			txmessage[len++] = 0;
-			txmessage[len++] = 0;
+			txmessage[len] = 128; // single host is /128
+			len++;
+			txmessage[len] = 0;   // 0-padding
+			len++;
+			txmessage[len] = 0;
+			len++;
+			txmessage[len] = 0;
+			len++;
 
 			break;
 		}
@@ -1755,14 +2222,22 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// 6-7 Reserved for future use; must be 0
 				// <cmd>\r\n
 
-				txmessage[len++] = 0x00; // Request ID
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x00; // Sequence ID
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // Number of datagrams
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x00; // Reserved for future use
-				txmessage[len++] = 0x00;
+				txmessage[len] = 0x00; // Request ID
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x00; // Sequence ID
+				len++;
+				txmessage[len] = 0x00;
+				len++;
+				txmessage[len] = 0x00; // Number of datagrams
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x00; // Reserved for future use
+				len++;
+				txmessage[len] = 0x00;
+				len++;
 
 				const char mccmd[] = "version";
 
@@ -1779,14 +2254,22 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			}
 			else
 			{
-				txmessage[len++] = 0x00; // Request ID
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x00; // Sequence ID
-				txmessage[len++] = 0x00;
-				txmessage[len++] = 0x00; // Number of datagrams
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x00; // Reserved for future use
-				txmessage[len++] = 0x00;
+				txmessage[len] = 0x00; // Request ID
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x00; // Sequence ID
+				len++;
+				txmessage[len] = 0x00;
+				len++;
+				txmessage[len] = 0x00; // Number of datagrams
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x00; // Reserved for future use
+				len++;
+				txmessage[len] = 0x00;
+				len++;
 				// Binary mode
 				// https://github.com/couchbase/memcached/blob/master/docs/BinaryProtocol.md#0x0b-version
 				//
@@ -1807,30 +2290,54 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				//  20| 0x00          | 0x00          | 0x00          | 0x00          |
 				//    +---------------+---------------+---------------+---------------+
 				//
-				txmessage[len++] = 0x80; //	request
-				txmessage[len++] = 0x0b; //	opcode - Version
-				txmessage[len++] = 0; //	keylength
-				txmessage[len++] = 0; //	keylength
-				txmessage[len++] = 0; //	extras length -must be 0, else "multipart not supported"
-				txmessage[len++] = 1; //	data type    - must be 1, else "multipart not supported"
-				txmessage[len++] = 0; //	reserved
-				txmessage[len++] = 0; //	reserved
-				txmessage[len++] = 0; //	total body length
-				txmessage[len++] = 0; //	total body length
-				txmessage[len++] = 0; //	total body length
-				txmessage[len++] = 0; //	total body length
-				txmessage[len++] = 0x21; //	opaque
-				txmessage[len++] = 0x03; //	opaque
-				txmessage[len++] = 0x14; //	opaque
-				txmessage[len++] = 0x08; //	opaque
-				txmessage[len++] = 0; //	cas
-				txmessage[len++] = 0; //	cas
-				txmessage[len++] = 0; //	cas
-				txmessage[len++] = 0; //	cas
-				txmessage[len++] = 0; //	cas
-				txmessage[len++] = 0; //	cas
-				txmessage[len++] = 0; //	cas
-				txmessage[len++] = 0; //	cas
+				txmessage[len] = 0x80; //	request
+				len++;
+				txmessage[len] = 0x0b; //	opcode - Version
+				len++;
+				txmessage[len] = 0; //	keylength
+				len++;
+				txmessage[len] = 0; //	keylength
+				len++;
+				txmessage[len] = 0; //	extras length -must be 0, else "multipart not supported"
+				len++;
+				txmessage[len] = 1; //	data type    - must be 1, else "multipart not supported"
+				len++;
+				txmessage[len] = 0; //	reserved
+				len++;
+				txmessage[len] = 0; //	reserved
+				len++;
+				txmessage[len] = 0; //	total body length
+				len++;
+				txmessage[len] = 0; //	total body length
+				len++;
+				txmessage[len] = 0; //	total body length
+				len++;
+				txmessage[len] = 0; //	total body length
+				len++;
+				txmessage[len] = 0x21; //	opaque
+				len++;
+				txmessage[len] = 0x03; //	opaque
+				len++;
+				txmessage[len] = 0x14; //	opaque
+				len++;
+				txmessage[len] = 0x08; //	opaque
+				len++;
+				txmessage[len] = 0; //	cas
+				len++;
+				txmessage[len] = 0; //	cas
+				len++;
+				txmessage[len] = 0; //	cas
+				len++;
+				txmessage[len] = 0; //	cas
+				len++;
+				txmessage[len] = 0; //	cas
+				len++;
+				txmessage[len] = 0; //	cas
+				len++;
+				txmessage[len] = 0; //	cas
+				len++;
+				txmessage[len] = 0; //	cas
+				len++;
 			}
 			break;
 		}
@@ -1841,10 +2348,14 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			IPSCAN_LOG( LOGPREFIX "check_udp_port: generating an unspecified message for UDP port %d\n", port);
 			len = 0;
 			// Generate an unspecified message
-			txmessage[len++] = 0x0A;
-			txmessage[len++] = 0x0A;
-			txmessage[len++] = 0x0D;
-			txmessage[len++] = 0x0;
+			txmessage[len] = 0x0A;
+			len++;
+			txmessage[len] = 0x0A;
+			len++;
+			txmessage[len] = 0x0D;
+			len++;
+			txmessage[len] = 0x0;
+			len++;
 			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2022 Tim Chappell. This message is destined for UDP port %d\n", port);
 			if (rc < 0 || rc >= (UDP_BUFFER_SIZE-(int)len))
 			{
