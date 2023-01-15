@@ -510,12 +510,13 @@ int main(void)
 				{
 					int varnameindex = 0;
 					query[numqueries].valid = 0;
-					while ( 32 <= querystring[queryindex] && 127 > querystring[queryindex] && '=' != querystring[queryindex] \
-							&& '&' != querystring[queryindex] && MAXQUERYSTRLEN > queryindex && MAXQUERYNAMELEN > varnameindex && 0 == finished)
+					while (MAXQUERYSTRLEN > queryindex && MAXQUERYNAMELEN > varnameindex && 0 == finished \
+						       	&& 32 <= querystring[queryindex] && 127 > querystring[queryindex] \
+							&& '=' != querystring[queryindex] && '&' != querystring[queryindex])
 					{
 						query[numqueries].varname[varnameindex] = querystring[queryindex];
-						varnameindex ++;
-						queryindex ++;
+						varnameindex++;
+						queryindex++;
 					}
 					if (MAXQUERYNAMELEN <= varnameindex)
 					{
@@ -524,17 +525,18 @@ int main(void)
 					}
 					query[numqueries].varname[varnameindex]=0; // Add termination
 
-					finished = (32 > querystring[queryindex] || 126 < querystring[queryindex] || MAXQUERYSTRLEN <= queryindex) ? 1 : 0;
+					finished = (MAXQUERYSTRLEN <= queryindex || 32 > querystring[queryindex] || 126 < querystring[queryindex]) ? 1 : 0;
 					if (0 == finished && '=' == querystring[queryindex])
 					{
 						// Jump over '='
-						while ('=' == querystring[queryindex] && MAXQUERYSTRLEN > queryindex)
+						while (MAXQUERYSTRLEN > queryindex && '=' == querystring[queryindex])
 						{
 							queryindex++;
 						}
 						int valueindex = 0;
-						while ( 32 <= querystring[queryindex] && 127 > querystring[queryindex] && '=' != querystring[queryindex] \
-								&& '&' != querystring[queryindex] && MAXQUERYVALLEN > valueindex && MAXQUERYSTRLEN > queryindex)
+						while ( MAXQUERYVALLEN > valueindex && MAXQUERYSTRLEN > queryindex && 32 <= querystring[queryindex]\
+							       	&& 127 > querystring[queryindex] && '=' != querystring[queryindex]\
+								&& '&' != querystring[queryindex])
 						{
 							valstring[valueindex] = querystring[queryindex];
 							queryindex++;
@@ -574,7 +576,7 @@ int main(void)
 					{
 						queryindex++;
 					}
-					finished = (querystring[queryindex] < 32 || queryindex >= MAXQUERYSTRLEN) ? 1 : 0;
+					finished = (queryindex >= MAXQUERYSTRLEN || querystring[queryindex] < 32) ? 1 : 0;
 				}
 				#ifdef QUERYDEBUG
 				IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %d\n", numqueries);

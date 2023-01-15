@@ -509,7 +509,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 void create_results_key_table(char * hostname, time_t timestamp)
 {
 	int i;
-	char tstring[64];
 	struct tm timestampbdt; // broken dowm time
 	struct tm * tsptr = NULL;
 	tsptr = localtime_r(&timestamp, &timestampbdt);
@@ -517,6 +516,7 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	printf("<p style=\"font-weight:bold\">");
 	if (NULL != tsptr)
 	{
+		char tstring[64];
 		if (0 != strftime(tstring, sizeof(tstring),"%a,%%20%d%%20%b%%20%Y%%20%T%%20%z", &timestampbdt))
 		{
 			printf("Special protocol tests, signified by [x] after a port number, test for known protocol weaknesses. ");
