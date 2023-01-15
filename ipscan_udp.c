@@ -131,7 +131,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	// Holds length of transmitted UDP packet, which since they are representative packets,
 	//  depends on the port being tested
-	unsigned int len = 0;
+	int len = 0;
 
 	// set return value to a known default
 	int retval = PORTUNKNOWN;
