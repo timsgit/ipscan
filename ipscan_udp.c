@@ -131,7 +131,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	// Holds length of transmitted UDP packet, which since they are representative packets,
 	//  depends on the port being tested
-	int len = 0;
+	unsigned int len = 0;
 
 	// set return value to a known default
 	int retval = PORTUNKNOWN;
@@ -474,12 +474,16 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				    the protocol.                                                   */
 
 			// Create a pseudo-random filename based on the current pid
-			len = snprintf(&txmessage[0], UDP_BUFFER_SIZE, "%c%c%s%d%coctet%c",0,1,"/filename_tjc_",getpid(),0,0);
-			if (len < 0)
+			int length = snprintf(&txmessage[0], UDP_BUFFER_SIZE, "%c%c%s%d%coctet%c",0,1,"/filename_tjc_",getpid(),0,0);
+			if (length < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for tftp, returned %d\n", len);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for tftp, returned %d\n", length);
 				len = 0;
 				retval = PORTINTERROR;
+			}
+			else
+			{
+				len = (unsigned int)length;
 			}
 			break;
 		}
@@ -553,15 +557,22 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
         			const char community[2][16] = { "public", "private" };
 
 				// SNMP packet start
-				txmessage[len++] = 0x30;
-				txmessage[len++] = (char)(29 + strlen(community[special]) + miblen);
+				txmessage[len] = 0x30;
+				len++;
+				txmessage[len] = (char)(29 + strlen(community[special]) + miblen);
+				len++;
 				// SNMP version 1
-				txmessage[len++] = 0x02; //int
-				txmessage[len++] = 0x01; //length of 1
-				txmessage[len++] = (special & 0xff); // 0 = SNMPv1, 1 = SNMPv2c
+				txmessage[len] = 0x02; //int
+				len++;
+				txmessage[len] = 0x01; //length of 1
+				len++;
+				txmessage[len] = (special & 0xff); // 0 = SNMPv1, 1 = SNMPv2c
+				len++;
 				// Community name
-				txmessage[len++] = 0x04; //string
-				txmessage[len++] = (char)strlen(community[special]);
+				txmessage[len] = 0x04; //string
+				len++;
+				txmessage[len] = (char)strlen(community[special]);
+				len++;
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", community[special]);
 				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-len))
 				{
@@ -576,43 +587,68 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// MIB - check there's enough room before adding
 				if (PORTUNKNOWN == retval && (len < (int)(UDP_BUFFER_SIZE-24-miblen)) )
 				{
-					txmessage[len++] = 0xA0; // SNMP GET request
-					txmessage[len++] = (char)(22 + miblen); //0x1c
+					txmessage[len] = 0xA0; // SNMP GET request
+					len++;
+					txmessage[len] = (char)(22 + miblen); //0x1c
+					len++;
 
-					txmessage[len++] = 0x02; // Request ID
-					txmessage[len++] = 0x04; // 4 octets length
-					txmessage[len++] = 0x21; // "Random" value
-					txmessage[len++] = 0x06;
-					txmessage[len++] = 0x01;
-					txmessage[len++] = 0x08;
+					txmessage[len] = 0x02; // Request ID
+					len++;
+					txmessage[len] = 0x04; // 4 octets length
+					len++;
+					txmessage[len] = 0x21; // "Random" value
+					len++;
+					txmessage[len] = 0x06;
+					len++;
+					txmessage[len] = 0x01;
+					len++;
+					txmessage[len] = 0x08;
+					len++;
 
 					// Error status (0=noError)
-					txmessage[len++] = 0x02; //int
-					txmessage[len++] = 0x01; //length of 1
-					txmessage[len++] = 0x00; // SNMP error status
+					txmessage[len] = 0x02; //int
+					len++;
+					txmessage[len] = 0x01; //length of 1
+					len++;
+					txmessage[len] = 0x00; // SNMP error status
+					len++;
 					// Error index (0)
-					txmessage[len++] = 0x02; //int
-					txmessage[len++] = 0x01; //length of 1
-					txmessage[len++] = 0x00; // SNMP error index
+					txmessage[len] = 0x02; //int
+					len++;
+					txmessage[len] = 0x01; //length of 1
+					len++;
+					txmessage[len] = 0x00; // SNMP error index
+					len++;
 					// Variable bindings
-					txmessage[len++] = 0x30; //var-bind sequence
-					txmessage[len++] = (char)(8 + miblen);
+					txmessage[len] = 0x30; //var-bind sequence
+					len++;
+					txmessage[len] = (char)(8 + miblen);
+					len++;
 
-					txmessage[len++] = 0x30; //var-bind
-					txmessage[len++] = (char)(miblen +6 );
+					txmessage[len] = 0x30; //var-bind
+					len++;
+					txmessage[len] = (char)(miblen +6 );
+					len++;
 
-					txmessage[len++] = 0x06; // Object
-					txmessage[len++] = (char)(miblen + 2); // MIB length
+					txmessage[len] = 0x06; // Object
+					len++;
+					txmessage[len] = (char)(miblen + 2); // MIB length
+					len++;
 
-					txmessage[len++] = 0x2b;
-					txmessage[len++] = 0x06;
+					txmessage[len] = 0x2b;
+					len++;
+					txmessage[len] = 0x06;
+					len++;
 					// Insert the OID
 					for (i = 0; i <miblen; i++)
 					{
-						txmessage[len++] = mib[i];
+						txmessage[len] = mib[i];
+						len++;
 					}
-					txmessage[len++] = 0x05; // Null object
-					txmessage[len++] = 0x00; // length of 0
+					txmessage[len] = 0x05; // Null object
+					len++;
+					txmessage[len] = 0x00; // length of 0
+					len++;
 				}
 				else if (PORTUNKNOWN == retval && (len >= (int)(UDP_BUFFER_SIZE-24-miblen)))
 				{
@@ -623,92 +659,150 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			else if (2 == special)
 			{
 				// SNMPv3 engine discovery
-				txmessage[len++] = 0x30;
-				txmessage[len++] = 0x38;
+				txmessage[len] = 0x30;
+				len++;
+				txmessage[len] = 0x38;
+				len++;
 
 				// SNMP version 3
-				txmessage[len++] = 0x02; // int
-				txmessage[len++] = 0x01; // length of 1
-				txmessage[len++] = 0x03; // SNMP v3
+				txmessage[len] = 0x02; // int
+				len++;
+				txmessage[len] = 0x01; // length of 1
+				len++;
+				txmessage[len] = 0x03; // SNMP v3
+				len++;
 
 				// msgGlobalData
-				txmessage[len++] = 0x30;
-				txmessage[len++] = 0x0e;
+				txmessage[len] = 0x30;
+				len++;
+				txmessage[len] = 0x0e;
+				len++;
 
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x02; // msgID
+				txmessage[len] = 0x02;
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x02; // msgID
+				len++;
 
-				txmessage[len++] = 0x02; //
-				txmessage[len++] = 0x03; //
-				txmessage[len++] = 0x00; // Max message size (less than 64K)
-				txmessage[len++] = 0xff; //
-				txmessage[len++] = 0xe3; //
+				txmessage[len] = 0x02; //
+				len++;
+				txmessage[len] = 0x03; //
+				len++;
+				txmessage[len] = 0x00; // Max message size (less than 64K)
+				len++;
+				txmessage[len] = 0xff; //
+				len++;
+				txmessage[len] = 0xe3; //
+				len++;
 
-				txmessage[len++] = 0x04;
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x04; // flags (reportable, not encrypted, not authenticated)
+				txmessage[len] = 0x04;
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x04; // flags (reportable, not encrypted, not authenticated)
+				len++;
 
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x03; // msgSecurityModel is USM (3)
+				txmessage[len] = 0x02;
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x03; // msgSecurityModel is USM (3)
+				len++;
 
 				// end of GlobalData
 
-				txmessage[len++] = 0x04;
-				txmessage[len++] = 0x10; //
+				txmessage[len] = 0x04;
+				len++;
+				txmessage[len] = 0x10; //
+				len++;
 
-				txmessage[len++] = 0x30; //
-				txmessage[len++] = 0x0e; // length to end of this varbind
+				txmessage[len] = 0x30; //
+				len++;
+				txmessage[len] = 0x0e; // length to end of this varbind
+				len++;
 
-				txmessage[len++] = 0x04; //
-				txmessage[len++] = 0x00; // EngineID
+				txmessage[len] = 0x04; //
+				len++;
+				txmessage[len] = 0x00; // EngineID
+				len++;
 
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x00; // EngineBoots
+				txmessage[len] = 0x02;
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x00; // EngineBoots
+				len++;
 
-				txmessage[len++] = 0x02;
-				txmessage[len++] = 0x01;
-				txmessage[len++] = 0x00; // EngineTime
+				txmessage[len] = 0x02;
+				len++;
+				txmessage[len] = 0x01;
+				len++;
+				txmessage[len] = 0x00; // EngineTime
+				len++;
 
-				txmessage[len++] = 0x04; // UserName
-				txmessage[len++] = 0x00;
+				txmessage[len] = 0x04; // UserName
+				len++;
+				txmessage[len] = 0x00;
+				len++;
 
-				txmessage[len++] = 0x04; // Authentication Parameters
-				txmessage[len++] = 0x00;
+				txmessage[len] = 0x04; // Authentication Parameters
+				len++;
+				txmessage[len] = 0x00;
+				len++;
 
-				txmessage[len++] = 0x04; // Privacy Parameters
-				txmessage[len++] = 0x00;
+				txmessage[len] = 0x04; // Privacy Parameters
+				len++;
+				txmessage[len] = 0x00;
+				len++;
 
 				// msgData
-				txmessage[len++] = 0x30; //
-				txmessage[len++] = 0x11; //
+				txmessage[len] = 0x30; //
+				len++;
+				txmessage[len] = 0x11; //
+				len++;
 
-				txmessage[len++] = 0x04; //  Context Engine ID (missing)
-				txmessage[len++] = 0x00; //
+				txmessage[len] = 0x04; //  Context Engine ID (missing)
+				len++;
+				txmessage[len] = 0x00; //
+				len++;
 
-				txmessage[len++] = 0x04; //  Context Name (missing)
-				txmessage[len++] = 0x00; //
+				txmessage[len] = 0x04; //  Context Name (missing)
+				len++;
+				txmessage[len] = 0x00; //
+				len++;
 
-				txmessage[len++] = 0xa0; //  Get Request
-				txmessage[len++] = 0x0b; //
+				txmessage[len] = 0xa0; //  Get Request
+				len++;
+				txmessage[len] = 0x0b; //
+				len++;
 
-				txmessage[len++] = 0x02; // Request ID (is 0x14)
-				txmessage[len++] = 0x01; //
-				txmessage[len++] = 0x14; //
+				txmessage[len] = 0x02; // Request ID (is 0x14)
+				len++;
+				txmessage[len] = 0x01; //
+				len++;
+				txmessage[len] = 0x14; //
+				len++;
 
 				// Error status (0=noError)
-				txmessage[len++] = 0x02; //int
-				txmessage[len++] = 0x01; //length of 1
-				txmessage[len++] = 0x00; // SNMP error status
+				txmessage[len] = 0x02; //int
+				len++;
+				txmessage[len] = 0x01; //length of 1
+				len++;
+				txmessage[len] = 0x00; // SNMP error status
+				len++;
 				// Error index (0)
-				txmessage[len++] = 0x02; //int
-				txmessage[len++] = 0x01; //length of 1
-				txmessage[len++] = 0x00; // SNMP error index
+				txmessage[len] = 0x02; //int
+				len++;
+				txmessage[len] = 0x01; //length of 1
+				len++;
+				txmessage[len] = 0x00; // SNMP error index
+				len++;
 				// Variable bindings (none)
-				txmessage[len++] = 0x30; //var-bind sequence
-				txmessage[len++] = 0x00;
+				txmessage[len] = 0x30; //var-bind sequence
+				len++;
+				txmessage[len] = 0x00;
+				len++;
 
 				// End of msgData
 			}
