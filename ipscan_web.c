@@ -377,9 +377,9 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// psp = protocol, special, port
 	printf(" psp = latestState[i];");
 	// >>> is unsigned shift right
-	printf(" proto = ((psp >>> %d) & %u);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
+	printf(" proto = ((psp >>> %u) & %u);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
 	printf(" special = ((psp >>> %u) & %u);", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
-	printf(" port = ((psp >>> %d) & %u);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
+	printf(" port = ((psp >>> %u) & %u);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
 	printf(" result = latestState[i+1];");
 	printf(" host = latestState[i+2];");
 
