@@ -226,11 +226,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" document.getElementById(\"scanstate\").title = 0;");
 	printf(" myBlink = setInterval(function(){blink(); }, 1000);");
 	printf(" let curTimeStamp = new Date().now();");
-	// Handle the case where browser tab has remained active but unused for a long time period
-//	printf(" if (Math.abs(curTimeStamp - myTimeStamp) > %d)", IPSCAN_CLIENT_MAX_TIME_SECS);
-//	printf(" {");
-//	printf(" let myTimeStamp = new Date().now();"); // was const
-//	printf(" };");
 	printf(" const startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
 	printf(" myXmlHttpReqObj = makeHttpObject();");
 	printf(" myXmlHttpErrObj = makeHttpObject();");
