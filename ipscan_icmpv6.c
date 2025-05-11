@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2023 Tim Chappell.
+//    Copyright (C) 2011-2025 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -38,6 +38,10 @@
 // 0.18			update copyright year
 // 0.19			update copyright year
 // 0.20			add (potentially) missing length check
+
+//
+#define IPSCAN_ICMPV6_VER "0.20"
+//
 
 #include "ipscan.h"
 //
@@ -77,6 +81,14 @@
 
 // Define offset into ICMPv6 packet where user-defined data resides
 #define ICMP6DATAOFFSET sizeof(struct icmp6_hdr)
+
+//
+// report version
+//
+const char* ipscan_icmpv6_ver(void)
+{
+    return IPSCAN_ICMPV6_VER;
+}
 
 //
 // Send an ICMPv6 ECHO-REQUEST and see whether we receive an ECHO-REPLY in response

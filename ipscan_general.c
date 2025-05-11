@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2023 Tim Chappell.
+//    Copyright (C) 2011-2025 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -32,6 +32,14 @@
 // 0.12 - update copyright year
 // 0.13 - moved to unsigned proto
 // 0.14 - update copyright year
+// 0.15 - add report_useragent_strings()
+// 0.16 - hide leading and trailing spaces
+// 0.17 - added flag values
+// 0.18 - added report_ipscan_versions()
+
+//
+#define IPSCAN_GENERAL_VER "0.18"
+//
 
 #include "ipscan.h"
 //
@@ -64,6 +72,13 @@
 #include <syslog.h>
 #endif
 
+//
+// report version
+//
+const char* ipscan_general_ver(void)
+{
+    return IPSCAN_GENERAL_VER;
+}
 //
 // -----------------------------------------------------------------------------
 //
@@ -172,6 +187,10 @@ void fetch_to_string(int fetchnum, char * retstring)
 	else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
 	{
 		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "BAD JSON ERR");
+	}  
+	else if (IPSCAN_DB_ERROR == fetchnum)
+	{
+		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "DATABASE ERR");
 	}  
 	else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 	{
@@ -289,86 +308,96 @@ char * state_to_string(int statenum, char * retstringptr, int retstringfree)
 void result_to_string(int result, char * retstring)
 {
 	int rc;
-
-	if (PORTOPEN == result)
+	char hosttype[16];
+	if (IPSCAN_INDIRECT_RESPONSE <= result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "OPEN");
-	}
-	else if (PORTABORT == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ABORT");
-	}
-	else if (PORTREFUSED == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "REFUSED");
-	}
-	else if (PORTCRESET == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "CRESET");
-	}
-	else if (PORTNRESET == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "NRESET");
-	}
-	else if (PORTINPROGRESS == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "IN-PROGRESS");
-	}
-	else if (PORTPROHIBITED == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PROHIBITED");
-	}
-	else if (PORTUNREACHABLE == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNREACHABLE");
-	}
-	else if (PORTNOROUTE == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "NO ROUTE");
-	}
-	else if (PORTPKTTOOBIG == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PKT TOO BIG");
-	}
-	else if (PORTPARAMPROB == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "PARAM PROBLEM");
-	}
-	else if (ECHONOREPLY == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ECHO NO-REPLY");
-	}
-	else if (ECHOREPLY == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "ECHO REPLY");
-	}
-	else if (UDPOPEN == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UDP OPEN");
-	}
-	else if (UDPSTEALTH == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UDP STEALTH");
-	}
-	else if (PORTUNEXPECTED == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNEXPECTED");
-	}
-	else if (PORTUNKNOWN == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "UNKNOWN");
-	}
-	else if (PORTINTERROR == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "INTERNAL ERROR");
-	}
-	else if (PORTEOL == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s", "<EOL>");
+		result -= IPSCAN_INDIRECT_RESPONSE;
+		strncpy(hosttype, "indirect:", 15);
 	}
 	else
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s:%d", "<MISSING>", result);
+		strncpy(hosttype, "", 15);
+	}
+
+	if (PORTOPEN == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "OPEN");
+	}
+	else if (PORTABORT == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ABORT");
+	}
+	else if (PORTREFUSED == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "REFUSED");
+	}
+	else if (PORTCRESET == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "CRESET");
+	}
+	else if (PORTNRESET == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "NRESET");
+	}
+	else if (PORTINPROGRESS == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "IN-PROGRESS");
+	}
+	else if (PORTPROHIBITED == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PROHIBITED");
+	}
+	else if (PORTUNREACHABLE == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UNREACHABLE");
+	}
+	else if (PORTNOROUTE == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "NO ROUTE");
+	}
+	else if (PORTPKTTOOBIG == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PKT TOO BIG");
+	}
+	else if (PORTPARAMPROB == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PARAM PROBLEM");
+	}
+	else if (ECHONOREPLY == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ECHO NO-REPLY");
+	}
+	else if (ECHOREPLY == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ECHO REPLY");
+	}
+	else if (UDPOPEN == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UDP OPEN");
+	}
+	else if (UDPSTEALTH == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UDP STEALTH");
+	}
+	else if (PORTUNEXPECTED == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UNEXPECTED");
+	}
+	else if (PORTUNKNOWN == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UNKNOWN");
+	}
+	else if (PORTINTERROR == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "INTERNAL ERROR");
+	}
+	else if (PORTEOL == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "<EOL>");
+	}
+	else
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s-%s:%d", "<MISSING>", hosttype, result);
 	}
 	// Report error - does IPSCAN_RESULT_STRING_MAX need increasing?
 	if (rc < 0 || rc >= IPSCAN_RESULT_STRING_MAX)
@@ -378,6 +407,121 @@ void result_to_string(int result, char * retstring)
 
 	return;
 }
+
 //
 // -----------------------------------------------------------------------------
 //
+void report_agent_string(char * agentstringvar, const char *varname, unsigned int error1ignore0)
+{
+	// Note that none of this content can be trusted - so agressively limit the character set
+	char agentstring[ (MAXUSERAGENTLEN + 1) ];
+	unsigned int i = 0;
+	// Pre-clear array since using sscanf with %Nc doesn't guarantee string will be 0 terminated
+	memset(agentstring, 0, sizeof(agentstring));
+
+ 	if ( NULL == agentstringvar )
+        {
+		if (1 == error1ignore0)
+		{
+                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : %s variable lookup returned NULL.\n", varname);
+		}
+        }
+        else if ( strnlen(agentstringvar, (MAXUSERAGENTLEN+1)) > MAXUSERAGENTLEN )
+        {
+                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: %s variable string is longer than allocated buffer (%d > %d)\n", varname,\
+								 (int)strnlen(agentstringvar, (MAXUSERAGENTLEN+1)), MAXUSERAGENTLEN);
+        }
+	else if ( sscanf(agentstringvar,"%"TO_STR(MAXUSERAGENTLEN)"c",agentstring) != EOF )
+	{
+		if (strnlen(agentstring, MAXUSERAGENTLEN+1) > MAXUSERAGENTLEN)
+		{
+			agentstring[0] = 0; // truncate string
+		}
+		else
+		{
+			for ( i = 0 ; i < strnlen(agentstring, MAXUSERAGENTLEN+1) ; i++ )
+			{
+				// Clamp to printable ASCII range - but ensure 0 is not corrupted
+				if ( (agentstring[i] > 0 && agentstring[i] < 32) || agentstring[i] > 126 ) agentstring[i] = 32;
+				// and also protect against special characters which could be used for XSS
+				switch (agentstring[i])
+				{
+					case '<':
+					case '>':
+					case ':':
+					case ';':
+					case '&':
+					case '\\':
+					case '\"':
+					case '/':
+					case '=':
+					case '*':
+					case ',':
+					case '^':
+					case '$':
+					case '|':
+					case '%':
+					case '{':
+					case '}':
+					case '!':
+					case '[':
+					case ']':
+					case '?':
+						agentstring[i] = ' ';
+					break;
+			
+					default:
+						// do nothing
+					break;
+				}
+			}
+		}
+		size_t left = 0;
+		size_t right = strnlen(agentstring,MAXUSERAGENTLEN+1);
+		if (MAXUSERAGENTLEN < right)
+		{
+			// no end-of-string '0' found, so insert one
+			agentstring[MAXUSERAGENTLEN] = 0;
+			right = strnlen(agentstring,MAXUSERAGENTLEN+1);
+		}
+		// skip left-leading spaces
+		while (agentstring[left]==' ' && left < right && left < MAXUSERAGENTLEN)
+		{
+			left++;
+		}
+		// truncate right-trailing spaces and zeroes
+		while ((agentstring[right]==' ' || agentstring[right]==0) && right > left && right > 0)
+		{ 
+			agentstring[right] = 0;
+			right--;
+		}
+		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: %s = '%s'\n", varname, &agentstring[left]);
+	}
+	else
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: %s variable not reportable.\n", varname);
+	}
+}
+
+//
+// -----------------------------------------------------------------------------
+//
+void report_useragent_strings(char *uavar, char *secchuavar, char *secchuaarchvar, char *secchuaarchplatvar)
+{
+	// Note that content cannot be trusted - so agressively limit the character set
+	report_agent_string(uavar, "HTTP_USER_AGENT", 1);
+	report_agent_string(secchuavar, "HTTP_SEC_CH_UA", 0);
+	report_agent_string(secchuaarchvar, "HTTP_SEC_CH_UA_ARCH", 0);
+	report_agent_string(secchuaarchplatvar, "HTTP_SEC_CH_UA_PLATFORM", 0);
+}
+
+//
+// -----------------------------------------------------------------------------
+//
+void report_ipscan_versions(const char *mainver, const char *generalver, const char *tcpver, const char *udpver, const char *icmpv6ver, const char *dbver,\
+	 const char *webver, const char *hver, const char *plver)
+{
+	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: IPSCAN_MAIN_VER      = %-4s, IPSCAN_GENERAL_VER = %-4s, IPSCAN_WEB_VER    = %-4s, IPSCAN_H_VER  = %-4s\n", mainver, generalver, webver, hver);
+	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: IPSCAN_TCP_VER       = %-4s, IPSCAN_UDP_VER     = %-4s, IPSCAN_ICMPV6_VER = %-4s, IPSCAN_DB_VER = %-4s\n", tcpver, udpver, icmpv6ver, dbver);
+	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: IPSCAN_PORTLIST_VER  = %-4s\n", plver);
+}

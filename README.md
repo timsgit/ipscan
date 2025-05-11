@@ -1,7 +1,7 @@
 # IPscan
 ### An HTTP-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 
-Copyright (C) 2011-2023 Tim Chappell.
+Copyright (C) 2011-2025 Tim Chappell.
 
 This file is part of IPscan.
 
@@ -22,7 +22,7 @@ along with IPscan. If not, see <http://www.gnu.org/licenses/>.
 
 IPscan requires access to a MySQL, or MariaDB, database and the associated client development libraries 
 (libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. The database
-is used to temporarily hold scan results until shortly after the test completes. 
+is used to *temporarily* hold scan results until shortly after the test completes. 
 IPscan is known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 7, Fedora 16, 
 Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and Raspbian and run alongside 
 Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 

@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2023 Tim Chappell.
+//    Copyright (C) 2011-2025 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -36,6 +36,10 @@
 // 0.16			update copyright year
 // 0.17			update copyright year
 // 0.18			reduce scope of multiple variables
+
+//
+#define IPSCAN_TCP_VER "0.18"
+//
 
 #include "ipscan.h"
 //
@@ -83,6 +87,14 @@
 // Prototype declarations
 //
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost );
+
+//
+// report version
+//
+const char* ipscan_tcp_ver(void)
+{
+    return IPSCAN_TCP_VER;
+}
 
 //
 // Check an individual TCP port

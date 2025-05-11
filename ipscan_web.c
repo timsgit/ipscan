@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2023 Tim Chappell.
+//    Copyright (C) 2011-2025 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -70,6 +70,15 @@
 // 0.50 - further clarifications regarding normal TCP/UDP port tests
 // 0.51 - move to unsigned shift right (should be of no consequence)
 // 0.52 - update copyright year
+// 0.53 - change colour of text and buttons to blue (better readability), results still use red
+// 0.54 - make robots reponse an optional include
+// 0.55 - add a missing clearInterval()
+// 0.56 - correct time into seconds since epoch rather than ms
+// 0.57 - HTML and javascript improvements/modernisations - use const, let
+// 0.58 - javascript changes to handle reporting of current state (hover over scan status cell)
+// 0.59 - change timeout calculation to give larger window
+
+#define IPSCAN_WEB_VER "0.59"
 
 #include "ipscan.h"
 
@@ -89,23 +98,37 @@
 #include <syslog.h>
 #endif
 
+//
+// report version
+//
+const char* ipscan_web_ver(void)
+{
+    return IPSCAN_WEB_VER;
+}
+
+//
+// ---------------------------------
+//
+
 void create_html_common_header(void)
 {
-	printf("%s%c%c\n","content-type:text/html;charset=iso-8859-1",13,10);
+	printf("%s%c%c\n","content-type:text/html;charset=utf-8",13,10);
 	printf("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">\n");
 	printf("<html lang=\"en\">\n");
 	printf("<head>\n");
 	// Force later IE browsers to mimic IE7 as detailed in http://msdn.microsoft.com/library/cc288325.aspx
 	printf("<meta http-equiv=\"x-ua-compatible\" content=\"ie=emulateie7\">\n");
-	printf("<meta http-equiv=\"content-type\" content=\"text/html;charset=iso-8859-1\">\n");
+	printf("<meta http-equiv=\"content-type\" content=\"text/html;charset=utf-8\">\n");
 	printf("<meta name=\"author\" content=\"tim chappell\">\n");
 	printf("<meta http-equiv=\"cache-control\" content=\"no-store, private, no-cache, must-revalidate, max-age=0\">\n");
 	printf("<meta http-equiv=\"pragma\" content=\"no-cache\">\n");
 	#ifdef IPSCAN_ICON_ENABLED
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\">\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
 	#endif
+	#ifdef IPSCAN_NOROBOTS_INCLUDE
 	printf("<meta name=\"robots\" content=\"noindex, nofollow\">\n");
-	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2023 tim chappell.\">\n");
+	#endif
+	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2025 tim chappell.\">\n");
 }
 
 #ifdef IPSCAN_HTML5_ENABLED
@@ -122,8 +145,10 @@ void create_html5_common_header(void)
 	#ifdef IPSCAN_ICON_ENABLED
 	printf("<link rel=\"icon\" type=\"%s\" href=\"%s\"/>\n", IPSCAN_ICON_TYPE, IPSCAN_ICON_HREF);
 	#endif
+	#ifdef IPSCAN_NOROBOTS_INCLUDE
 	printf("<meta name=\"robots\" content=\"noindex, nofollow\"/>\n");
-	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2023 tim chappell.\">\n");
+	#endif
+	printf("<meta name=\"copyright\" content=\"copyright (c) 2011-2025 tim chappell.\">\n");
 	printf("<style>\n");
 	printf("body {\n");
 	printf("background-color: #f0f0f2;\n");
@@ -170,23 +195,51 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("<script type = \"text/javascript\" language=\"javascript\">\n");
 	printf("<!--  to hide script contents from old browsers\n");
-	// Handler to emulate Date.now() for IE8 and earlier
-	printf("Date.prototype.now = function() { return ( typeof(Date.now) == \"function\" ? Date.now() : new Date().getTime()); };");
-	// Globals
-	printf(" var myInterval = 0;");
-	printf(" var myBlink = 0;");
-	printf(" var myHTTPTimeout;");
-	printf(" var myXmlHttpReqObj;");
-	printf(" var fetches = 0;");
-	printf(" var lastUpdate = 0;\n");
+	printf("function main()");
+	printf(" {");
+	printf(" \"use strict\";"); 
+	// Handler to emulate Date.now() for IE8 and earlier - but in all cases return seconds not milliseconds
+	printf(" Date.prototype.now = function() { return Math.floor(( typeof(Date.now) == \"function\" ? Date.now() : new Date().getTime())/1000); };");
 
+	// Globals
+	printf(" let myInterval = 0;");
+	printf(" let myBlink = 0;");
+	printf(" let myHTTPTimeout;");
+	printf(" let myXmlHttpReqObj;");
+	printf(" let myXmlHttpErrObj;");
+	printf(" let fetches = 0;");
+	printf(" let statusresult = 0;");
+	printf(" let lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
+
+	// Use Date().now() as our timestamp to ensure all runs are unique
 	// myTimeStamp becomes the starttime query parameter
-	// mySession becomes the session query parameter - multiple runs on same browser should be unique
-	printf("var myTimeStamp = new Date().now();");
-	printf("var mySession = getSessionNumber();");
+	printf(" const myTimeStamp = new Date().now();"); // was let
+	// Also create a random-ish session number
+	// mySession becomes the session query parameter - multiple runs on the same browser should each be unique
+	printf(" const mySession = getSessionNumber();"); // was let
+
+	// Main initialisation ... It sets the scanstate to RUNNING to give the user confidence that things are happening.
+	// then the initial GET is performed to request that the server begins the scan.
+	// finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
+	printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING.\";");
+	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
+	printf(" document.getElementById(\"scanstate\").title = 0;");
+	printf(" myBlink = setInterval(function(){blink(); }, 1000);");
+	printf(" let curTimeStamp = new Date().now();");
+	// Handle the case where browser tab has remained active but unused for a long time period
+//	printf(" if (Math.abs(curTimeStamp - myTimeStamp) > %d)", IPSCAN_CLIENT_MAX_TIME_SECS);
+//	printf(" {");
+//	printf(" let myTimeStamp = new Date().now();"); // was const
+//	printf(" };");
+	printf(" const startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
+	printf(" myXmlHttpReqObj = makeHttpObject();");
+	printf(" myXmlHttpErrObj = makeHttpObject();");
+	printf(" myXmlHttpReqObj.open(\"GET\", startURL, true);");
+	printf(" myXmlHttpReqObj.send(\"\");");
+	printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
 
 	// create a prefilled array containing the potential states returned for each port
-	printf("var retVals = [");
+	printf("const retVals = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (0 == i) printf("%d",resultsstruct[i].returnval); else printf(", %d",resultsstruct[i].returnval);
@@ -194,7 +247,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("];\n");
 
 	// create a prefilled array containing the text label (shorthand) describing each of the potential states returned for each port
-	printf("var labels = [");
+	printf("const labels = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (0 == i) printf("\"%s\"",resultsstruct[i].label); else printf(", \"%s\"",resultsstruct[i].label);
@@ -202,7 +255,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("];\n");
 
 	// create a prefilled array containing the colour to be applied to each of the potential states returned for each port
-	printf("var colours = [");
+	printf("const colours = [");
 	for (i=0; PORTEOL != resultsstruct[i].returnval; i++)
 	{
 		if (0 == i) printf("\"%s\"",resultsstruct[i].colour); else printf(", \"%s\"",resultsstruct[i].colour);
@@ -234,95 +287,126 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" } ");
 	printf("}\n");
 
-	// function to report HTTP transfer timed out
+	// function to report a HTTP transfer timed out
 	printf("function HTTPTimedOut()");
 	printf(" {");
-	printf(" var timeoutURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
+	printf(" const timeoutURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
-	printf(" myXmlHttpReqObj.open(\"GET\", timeoutURL, true);");
-	printf(" myXmlHttpReqObj.send(\"\");");
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+	printf(" myXmlHttpErrObj.open(\"GET\", timeoutURL, true);");
+	printf(" myXmlHttpErrObj.send(\"\");");
 	printf(" }\n");
 
 	// function to report test never finished
 	printf("function HTTPUnfinished()");
 	printf(" {");
-	printf(" var unfinishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
-	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
-	printf(" myXmlHttpReqObj.open(\"GET\", unfinishURL, true);");
-	printf(" myXmlHttpReqObj.send(\"\");");
+	printf(" const unfinishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
+//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+	printf(" myXmlHttpErrObj.open(\"GET\", unfinishURL, true);");
+	printf(" myXmlHttpErrObj.send(\"\");");
 	printf(" }\n");
 
 	// function to report test finished successfully
 	printf("function HTTPFinished()");
 	printf(" {");
 	//If we get to here then we've managed to fetch all the results and the test is complete
-	printf(" var finishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
+	printf(" const finishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
 	// Send indication that fetch is complete and results can be deleted.
-	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
-	printf(" myXmlHttpReqObj.open(\"GET\", finishURL, true);");
-	printf(" myXmlHttpReqObj.send(\"\");");
+//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+	printf(" myXmlHttpErrObj.open(\"GET\", finishURL, true);");
+	printf(" myXmlHttpErrObj.send(\"\");");
 	printf(" }\n");
 
 	// function to report HTTP transfer completed with unexpected state
 	printf("function HTTPUnexpected(myReadyState,myStatus)");
 	printf(" {");
-	printf(" var errorString = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
-	printf(" var unexpectedURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(errorString);", reconquery, IPSCAN_UNEXPECTED_CHANGE);
+	printf(" const errorString = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
+	printf(" const unexpectedURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(errorString);", reconquery, IPSCAN_UNEXPECTED_CHANGE);
 	// HTTP GET completed, but with an unexpected HTTP status code (i.e. not 200 OK)
-	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
-	printf(" myXmlHttpReqObj.open(\"GET\", unexpectedURL, true);");
-	printf(" myXmlHttpReqObj.send(\"\");");
+//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+	printf(" myXmlHttpErrObj.open(\"GET\", unexpectedURL, true);");
+	printf(" myXmlHttpErrObj.send(\"\");");
 	printf(" }\n");
 
 	// function to report bad JSON parse
         printf("function badJSONParse(es)");
         printf(" {");
-        printf(" var exceptionString = \"EXCEPTION:\" + es;");
-        printf(" var badJSONParseURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(exceptionString);", reconquery, IPSCAN_BAD_JSON_ERROR);
-        printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
-        printf(" myXmlHttpReqObj.open(\"GET\", badJSONParseURL, true);");
-        printf(" myXmlHttpReqObj.send(\"\");");
+        printf(" const exceptionString = \"EXCEPTION:\" + es;");
+        printf(" const badJSONParseURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(exceptionString);", reconquery, IPSCAN_BAD_JSON_ERROR);
+//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+        printf(" myXmlHttpErrObj.open(\"GET\", badJSONParseURL, true);");
+        printf(" myXmlHttpErrObj.send(\"\");");
         printf(" }\n");
 
 	// function to report User chose to navigate away from the test, before completion
 	printf("function HTTPNavAway()");
 	printf(" {");
-	printf(" var navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
+	printf(" const navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
+//4 was commented out
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
-	printf(" myXmlHttpReqObj.open(\"GET\", navAwayURL, true);");
-	printf(" myXmlHttpReqObj.send(\"\");");
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+	printf(" myXmlHttpErrObj.open(\"GET\", navAwayURL, true);");
+	printf(" myXmlHttpErrObj.send(\"\");");
+	printf(" }\n");
+
+	// function to report database error received
+	printf("function HTTPDBError()");
+	printf(" {");
+	printf(" const dbErrorURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_DB_ERROR);
+//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+	printf(" myXmlHttpErrObj.open(\"GET\", dbErrorURL, true);");
+	printf(" myXmlHttpErrObj.send(\"\");");
 	printf(" }\n");
 
 	// Page Exit Handler
-	printf("var pageExitHandler = function(pe)");
+	printf("const pageExitHandler = function(peh)");
 	printf(" {");
-	printf(" pe.preventDefault();"); // Firefox requires this
-	printf(" var message = \"Do you wish to end the IPv6 port scan prematurely?\";");
 	printf(" HTTPNavAway();");
+	printf(" peh.preventDefault();"); // Firefox requires this
+	printf(" const message = \"Do you wish to end the IPv6 port scan prematurely?\";");
 	// For Chrome and some legacy browsers
-	printf(" pe.returnValue = message;");
+	printf(" peh.returnValue = message;");
 	// For modern browsers
 	printf(" return message;");
 	printf(" };\n");
 
-	// function to create a random-ish session value
-	printf("function getSessionNumber() ");
+	// Having defined it above then install the page exit handler
+	printf(" window.onbeforeunload = pageExitHandler;\n");
+
+	// function to create a random-ish (worst case) session value
+	printf("function getSessionNumber()");
 	printf(" {");
+	printf(" let sessres = new Uint32Array(2);");
     	printf(" if(window.crypto && window.crypto.getRandomValues)"); 
     	printf(" {");
-      	printf(" var sessres = new Uint32Array(1);");
       	printf(" window.crypto.getRandomValues(sessres);");
-      	printf(" return ( sessres[0].toString() );");
+	// Make a big (64-bit) session number from the two 32-bit random values
+	printf(" let bigsession = BigInt((sessres[1] & 0x7fffffff));");// reduce to 31 bits so sign bit unused
+	printf(" bigsession = (bigsession << 32n);");
+	printf(" bigsession = bigsession + BigInt(sessres[0]);");
+	// BigInts are actually signed so rely on asUintN to return a suitable truncated unsigned number
+	printf(" const unsigntrunc = BigInt.asUintN(64, bigsession);");
+      	printf(" return ( unsigntrunc.toString() );");
     	printf(" }");
     	printf(" else if(window.msCrypto && window.msCrypto.getRandomValues)"); 
     	printf(" {");
-      	printf(" var sessres2 = new Uint32Array(1);");
-      	printf(" window.msCrypto.getRandomValues(sessres2);");
-      	printf(" return ( sessres2[0].toString() );");
+      	printf(" window.msCrypto.getRandomValues(sessres);");
+	// Make a big (64-bit) session number from two 32-bit random values
+	printf(" let bigsession = BigInt((sessres[1] & 0x7fffffff));");// reduce to 31 bits so sign bit unused
+	printf(" bigsession = (bigsession << 32n);");
+	printf(" bigsession = bigsession + BigInt(sessres[0]);");
+	// BigInts are actually signed so rely on asUintN to return a suitable truncated unsigned number
+	printf(" const unsigntrunc = BigInt.asUintN(64, bigsession);");
+      	printf(" return ( unsigntrunc.toString() );");
     	printf(" }");
-    	printf(" else");
+    	printf(" else"); // default to produce something if browser doesn't support crypt facility
     	printf(" {");
       	printf(" return ( (Math.floor(Math.random() * (Math.pow(2,31) - 1))).toString() );");
     	printf(" }");
@@ -333,7 +417,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	printf("function myStateChange(request)");
 	printf(" {");
-	printf(" var i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
+	printf(" let i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
 	printf(" if (request.readyState == 4 && request.status == 200)");
 	printf(" {");
 	printf(" clearTimeout(myHTTPTimeout);");
@@ -354,12 +438,12 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	#if (IPSCAN_INCLUDE_PING ==1)
 	// if we've received a complete set of results for the ports under test then stop the periodic tasks
-	// we expect (numudpports+PING+numports)*3+3 (final 3 are end of JSON array dummies) results
-	printf(" if (latestState.length >= %d)", 3+((numudpports+1+numports)*3) );
+	// we expect (numudpports+PING+numports)*3+(3+3) (final 6 are the running state and the end-of-JSON array dummies) results
+	printf(" if (latestState.length >= %d)", (3+3+((numudpports+1+numports)*3)) );
 	#else
 	// if we've received a complete set of results for the ports under test then stop the periodic tasks
-	// we expect (numudpports+numports)*3+3 (final 3 are end of JSON array dummies) results
-	printf(" if (latestState.length >= %d)", 3+((numudpports+numports)*3) );
+	// we expect (numudpports+numports)*3+(3+3) (final 6 are the running state and end-of-JSON array dummies) results
+	printf(" if (latestState.length >= %d)", (3+3+((numudpports+numports)*3)) );
 	#endif
 	printf(" {");
 	printf(" clearInterval(myInterval);");
@@ -369,6 +453,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	// go around the latest received state and update display as required
 	//
+	printf(" let statusresult = 0;");
 	printf(" for (i = 0; i < (latestState.length - 3); i += 3)");
 	printf(" {");
 	printf(" textupdate = \"%s\";", resultsstruct[PORTUNKNOWN].label);
@@ -377,42 +462,74 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// psp = protocol, special, port
 	printf(" psp = latestState[i];");
 	// >>> is unsigned shift right
-	printf(" proto = ((psp >>> %u) & %u);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
-	printf(" special = ((psp >>> %u) & %u);", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
-	printf(" port = ((psp >>> %u) & %u);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
+	printf(" proto = ((psp >>> %d) & %d);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
+	printf(" special = ((psp >>> %d) & %d);", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
+	printf(" port = ((psp >>> %d) & %d);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
 	printf(" result = latestState[i+1];");
 	printf(" host = latestState[i+2];");
 
 	printf(" if (proto == %d) { elemid = \"udpport\" + port; }", IPSCAN_PROTO_UDP);
 	printf(" else if (proto == %d) { elemid = \"pingstate\"; }", IPSCAN_PROTO_ICMPV6);
-	printf(" else { elemid = \"port\" + port; }");
+	printf(" else if (proto == %d) { elemid = \"port\" + port; }", IPSCAN_PROTO_TCP);
 
 	printf(" if (0 != special) { elemid += \":\" + special; }");
 
 	printf(" for (j = 0; j < retVals.length; j += 1)");
 	printf(" {");
-	printf(" if (retVals[j] == (result & %d)) {", IPSCAN_INDIRECT_MASK);
+	printf(" if (retVals[j] == (result & %d))", IPSCAN_INDIRECT_MASK);
+	printf(" {");
 
-	printf(" switch(proto) {");
+	printf(" switch(proto)");
+	printf(" {");
 
 	printf(" case %d:", IPSCAN_PROTO_ICMPV6); // ICMPv6
 	printf(" if (result >= %d)", IPSCAN_INDIRECT_RESPONSE);
-	printf(" { textupdate = \"INDIRECT-\" + labels[j] + \" (from \" + host + \")\"; } else { textupdate = labels[j]; }");
-	printf(" break;");
-
-	printf(" case %d:", IPSCAN_PROTO_UDP); // UDP
-	printf(" if (result >= %d) {", IPSCAN_INDIRECT_RESPONSE);
-	printf(" if (0 != special) { textupdate = \"Port \" + port + \"[\" + special + \"]\" + \" = INDIRECT-\" + labels[j] + \" (from \" + host + \")\"; } ");
-	printf(" else { textupdate = \"Port \" + port + \" = INDIRECT-\" + labels[j] + \" (from \" + host + \")\"; }");
-	printf(" } else {");
-	printf(" if (0 != special) { textupdate = \"Port \" + port + \"[\" + special + \"]\" + \" = \" + labels[j]; } else { textupdate = \"Port \" + port + \" = \" + labels[j]; }");
+	printf(" {");
+	printf(" textupdate = \"INDIRECT-\" + labels[j] + \" (from \" + host + \")\";");
+	printf(" }");
+	printf(" else");
+	printf(" {");
+	printf(" textupdate = labels[j];");
 	printf(" }");
 	printf(" break;");
 
-	printf(" default:"); // TCP
-	printf(" if (0 != special) { textupdate = \"Port \" + port + \"[\" + special + \"]\" + labels[j]; } else { textupdate = \"Port \" + port + \" = \" + labels[j]; }");
+	printf(" case %d:", IPSCAN_PROTO_UDP); // UDP
+	printf(" if (result >= %d)", IPSCAN_INDIRECT_RESPONSE);
+	printf(" {");
+	printf(" if (0 != special)");
+	printf(" {");
+	printf(" textupdate = \"Port \" + port + \"[\" + special + \"]\" + \" = INDIRECT-\" + labels[j] + \" (from \" + host + \")\";");
+	printf(" }");
+	printf(" else");
+	printf(" {");
+	printf(" textupdate = \"Port \" + port + \" = INDIRECT-\" + labels[j] + \" (from \" + host + \")\";");
+	printf(" }");
+	printf(" }");
+	printf(" else");
+	printf(" {");
+	printf(" if (0 != special)");
+	printf(" {");
+	printf(" textupdate = \"Port \" + port + \"[\" + special + \"]\" + \" = \" + labels[j];");
+	printf(" }");
+	printf(" else");
+	printf(" {");
+	printf(" textupdate = \"Port \" + port + \" = \" + labels[j];");
+	printf(" }");
+	printf(" }");
 	printf(" break;");
 
+	printf(" case %d:", IPSCAN_PROTO_TCP); // TCP
+	printf(" if (0 != special)");
+	printf(" {");
+	printf(" textupdate = \"Port \" + port + \"[\" + special + \"]\" + labels[j];");
+	printf(" }");
+	printf(" else");
+	printf(" {");
+	printf(" textupdate = \"Port \" + port + \" = \" + labels[j];");
+	printf(" }");
+	printf(" break;");
+
+	printf(" default:");
 	printf(" }"); // end of switch(proto)
 
 	// Colour setting
@@ -421,22 +538,42 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" }"); // end of innerfor (j) loop
 
 	// update the selected text on the page ....
+	printf(" if (proto == %d)", IPSCAN_PROTO_TESTSTATE);
+	printf(" {");
+	//
+	// if protocol is IPSCAN_PROTO_TESTSTATE then update scan status hover-over text 
+	// for the scan status table cell. Also log the result for later use
+	//
+	printf(" document.getElementById(\"scanstate\").title = result;");
+	printf(" let statusresult = result;");
+	printf(" }");
+	printf(" else"); // otherwise update standard port scan results
+	printf(" {");
 	printf(" document.getElementById(elemid).innerHTML = textupdate;");
 	printf(" document.getElementById(elemid).style.backgroundColor = colourupdate;");
-	printf(" }"); // end of main for (i) loop
+	printf(" }");
+
+	printf(" }"); // end of the main for (i) loop
+
+	// check statusresult - if there's a database error then signal this to the server
+	printf(" if ((statusresult & %d) == %d)", IPSCAN_TESTSTATE_DATABASE_ERROR_BIT, IPSCAN_TESTSTATE_DATABASE_ERROR_BIT);
+	printf(" {");
+	printf(" HTTPDBError();");
+	printf(" let statusresult = 0;");
+	printf(" }");
 
 	#if (IPSCAN_INCLUDE_PING == 1)
 	// if we have finished then update the page to reflect the fact
-	printf(" if (latestState.length >= %d)",3+((numudpports+numports+1)*3) );
+	printf(" if (latestState.length >= %d)",(3+3+((numudpports+numports+1)*3)) );
 	#else
 	// if we have finished then update the page to reflect the fact (no ping result in this case)
-	printf(" if (latestState.length >= %d)",3+((numudpports+numports)*3) );
+	printf(" if (latestState.length >= %d)",(3+3+((numudpports+numports)*3)) );
 	#endif
 	printf(" {");
 	printf(" document.getElementById(\"scanstate\").innerHTML = \"COMPLETE.\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
 	// Disable the Page Exit handler
-	printf(" window.onbeforeunload = null;\n");
+	printf(" window.onbeforeunload = null;");
 	printf(" }"); // end of if (complete set of results received)
 
 	printf(" }"); // end of main if (more than 3 elements in array)
@@ -445,61 +582,46 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// The following piece of code is evaluated irrespective of the HTTP return code
 	#if (IPSCAN_INCLUDE_PING ==1)
 	// handle failure to complete the scan in the allocated number of updates (including ping result)
-	printf(" else if (request.readyState == 4 && latestState.length < %d && lastUpdate == 1)",3+((numudpports+numports+1)*3));
+	printf(" else if (request.readyState == 4 && latestState.length < %d && lastUpdate == 1)", (3+3+((numudpports+numports+1)*3)) );
 	#else
 	// handle failure to complete the scan in the allocated number of updates (no ping result)
-	printf(" else if (request.readyState == 4 && latestState.length < %d && lastUpdate == 1)",3+((numudpports+numports)*3));
+	printf(" else if (request.readyState == 4 && latestState.length < %d && lastUpdate == 1)", (3+3+((numudpports+numports)*3)) );
 	#endif
 	printf(" {");
 	printf(" clearInterval(myBlink);");
+	printf(" clearInterval(myInterval);");
 	printf(" document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"red\";");
 	// Disable the Page Exit handler
-	printf(" window.onbeforeunload = null;\n");
+	printf(" window.onbeforeunload = null;");
 	printf(" HTTPUnexpected(request.readyState, request.status);");
 	printf(" HTTPUnfinished();");
 	printf(" }");
 	printf(" }\n"); // end of myStateChange function()
 
+	//
 	// the update() function schedules a GET from the server and then awaits its successful completion.
+	//
 	printf("function update()");
 	printf(" {");
 	printf(" fetches += 1;"); // increment the fetch counter
-	printf(" var updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches;", reconquery);
-	printf(" if (fetches > %d)",(int)( 8 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )) );
+	printf(" let myTimeNow = new Date().now();");
+	printf(" const updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches;", reconquery);
+	// exit based on number of attempted fetches or time taken being too great
+	printf(" if (fetches >= %d || (Math.abs(myTimeNow - myTimeStamp) > %d))",(unsigned int)( 10 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )), IPSCAN_CLIENT_MAX_TIME_SECS );
 	printf(" {");
 	printf(" clearInterval(myInterval);");
-	printf(" lastUpdate = 1;");
+	printf(" lastUpdate = 1;"); // flag we've attempted enough fetches or exceeded maximum time
 	printf(" }");
-	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }"); // abort if in progress
+	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }"); // abort if previous transfer still in progress
 	printf(" myXmlHttpReqObj.open(\"GET\", updateURL, true);");
 	// the myStateChange() function waits for the asynchronous HTTP 200 code to be received and then evaluates the returned JSON array.
 	printf(" myXmlHttpReqObj.onreadystatechange = function(){myStateChange(myXmlHttpReqObj); };");
-	printf(" myHTTPTimeout = setTimeout(function() {HTTPTimedOut(); }, %d);", ((JSONFETCHEVERY - 1) * 1000) );
+	printf(" myHTTPTimeout = setTimeout(function() {HTTPTimedOut(); }, %d);", ((JSONFETCHEVERY*1000) - 500) );
 	printf(" myXmlHttpReqObj.send(\"\");");
 	printf(" }\n"); // end of function update()
 
-	// startTimer() is really the initiation function. it sets the scanstate to RUNNING to give the user confidence that things are happening.
-	// then the initial GET is performed to request that the server begins the scan.
-	// finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
-	printf("function startTimer()");
-	printf(" {");
-	printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING.\";");
-	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
-	// Use Date().now() as our timestamp to ensure all runs are unique
-	printf(" myTimeStamp = new Date().now();");
-	// Also get a random-ish session number
-	printf(" mySession = getSessionNumber();");
-	// Install the page exit handler
-	printf(" window.onbeforeunload = pageExitHandler;\n");
-	printf(" myBlink = setInterval(function(){blink(); }, 1000);");
-	printf(" var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
-	printf(" myXmlHttpReqObj = makeHttpObject();");
-	printf(" myXmlHttpReqObj.open(\"GET\", startURL, true);");
-	printf(" myXmlHttpReqObj.send(\"\");");
-	printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
-	printf(" }\n"); // end of function startTimer()
-
+	printf(" }\n"); // end of main()
 	printf("// end hiding contents from old browsers -->\n");
 	printf("</script>\n");
 	printf("</head>\n");
@@ -509,6 +631,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 void create_results_key_table(char * hostname, time_t timestamp)
 {
 	int i;
+	char tstring[64];
 	struct tm timestampbdt; // broken dowm time
 	struct tm * tsptr = NULL;
 	tsptr = localtime_r(&timestamp, &timestampbdt);
@@ -516,7 +639,6 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	printf("<p style=\"font-weight:bold\">");
 	if (NULL != tsptr)
 	{
-		char tstring[64];
 		if (0 != strftime(tstring, sizeof(tstring),"%a,%%20%d%%20%b%%20%Y%%20%T%%20%z", &timestampbdt))
 		{
 			printf("Special protocol tests, signified by [x] after a port number, test for known protocol weaknesses. ");
@@ -568,10 +690,11 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	char * stptr = NULL;
 	stptr = ctime_r(&timestamp, starttime);
 
-	printf("<body onload = \"startTimer()\">\n");
+//	printf("<body onload = \"startTimer()\">\n");
+	printf("<body onload = \"main()\">\n");
 
 	printf("<noscript>\n<hr>\n");
-	printf("<h3 style=\"color:red\">Your browser does not support Javascript, or else it is disabled.</h3>\n");
+	printf("<h3 style=\"color:blue\">Your browser does not support Javascript, or else it is disabled.</h3>\n");
 	printf("<p>An alternative version of this IPv6 TCP port scanner which does not use Javascript is available from ");
 	printf("the following <a href=\"%s/%s\">link.</a></p>\n", URIPATH, EXETXTNAME);
 	printf("<p>This alternative version does not support realtime in-browser updates and will take up to ");
@@ -581,7 +704,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 
 	printf("<div>\n");
 
-	printf("<h3>IPv6 Port Scan Results for host %s</h3>\n", hostname);
+	printf("<h3>IPv6 Port Scanner Version %s, results for host %s</h3>\n", IPSCAN_VER, hostname);
 
 	if (NULL == stptr)
 	{
@@ -593,8 +716,9 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	printf("<table border=\"1\">\n");
 	// ongoing status ROW
 	printf("<tr style=\"text-align: left\">\n");
-	printf("<td width=\"50%%\">Scan status is : </td><td width=\"50%%\" style=\"font-weight: bold\" id=\"scanstate\">IDLE.</td>\n");
+	printf("<td width=\"50%%\">Scan status is : </td><td width=\"50%%\" style=\"font-weight: bold\" title=\"0\" id=\"scanstate\">IDLE.</td>\n");
 	printf("</tr>\n");
+
 	// Only include the PING result row if necessary
 	#if (1 == IPSCAN_INCLUDE_PING)
 	printf("<tr style=\"font-weight: normal\">\n");
@@ -685,7 +809,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("</head>\n");
 	printf("<body>\n");
-	printf("<h3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</h3>\n");
+	printf("<h3 style=\"color:blue\">IPv6 Port Scanner Version %s by Tim Chappell</h3>\n", IPSCAN_VER);
 
 	printf("<p>Please note that this test may take up to %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
@@ -748,7 +872,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 
 	printf("<p style=\"font-weight:bold\">1. Select whether to include the default list of TCP ports, or not:</p>\n");
 
-	printf("<form action=\""URIPATH"/"EXENAME"\" accept-charset=\"ISO-8859-1\" method=\"GET\">\n");
+	printf("<form action=\""URIPATH"/"EXENAME"\" accept-charset=\"UTF-8\" method=\"GET\">\n");
 	printf("<input type=\"radio\" name=\"includeexisting\" value=\"1\" checked> Include default TCP ports listed above in the scan<br>\n");
 	printf("<input type=\"radio\" name=\"includeexisting\" value=\"-1\"> Exclude default TCP ports, test only those specified below<br>\n");
 	printf("<p style=\"font-weight:bold\">2. Enter any custom TCP ports you wish to scan (%d-%d inclusive). Duplicate or invalid ports will be discarded:</p>\n", MINVALIDPORT, MAXVALIDPORT);
@@ -792,7 +916,7 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, struct portlist_
 	printf("<body>\n");
 	printf("<div>\n");
 
-	printf("<h3 style=\"color:red\">IPv6 Port Scanner by Tim Chappell</h3>\n");
+	printf("<h3 style=\"color:blue\">IPv6 Port Scanner Version %s by Tim Chappell</h3>\n", IPSCAN_VER);
 
 	printf("<p>Please note that this test may take up to %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
@@ -855,7 +979,7 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, struct portlist_
 	printf("</table>\n");
 
 	printf("<p style=\"font-weight:bold\">1. Select whether to include the default list of TCP ports, or not:</p>\n");
-	printf("<form onsubmit=\"return checkForm(this);\" action=\""URIPATH"/"EXENAME"\" accept-charset=\"ISO-8859-1\" method=\"GET\">\n");
+	printf("<form action=\""URIPATH"/"EXENAME"\" accept-charset=\"UTF-8\" method=\"GET\">\n");
 	printf("<input type=\"radio\" name=\"includeexisting\" value=\"1\" checked> Include default TCP ports listed above in the scan<br>\n");
 	printf("<input type=\"radio\" name=\"includeexisting\" value=\"-1\"> Exclude default TCP ports, test only those specified below<br>\n");
 	printf("<p style=\"font-weight:bold\">2. Enter any custom TCP ports you wish to scan (%d-%d inclusive). Duplicate or invalid ports will be discarded:</p>\n", MINVALIDPORT, MAXVALIDPORT);
@@ -882,7 +1006,7 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, struct portlist_
 	printf("<p style=\"font-weight:bold\">3. and finally, please click on the Begin Scan button:</p>\n");
 	#endif
 
-	printf("<input style=\"color: white; font-size: 16px; text-align: center; border-radius: 1em; text-decoration: none; background-color: red; padding: 10px 15px; font-weight:bold\" type=\"submit\" value=\"Begin Scan\" >\n");
+	printf("<input style=\"color: white; font-size: 16px; text-align: center; border-radius: 1em; text-decoration: none; background-color: blue; padding: 10px 15px; font-weight:bold\" type=\"submit\" value=\"Begin Scan\" >\n");
 	printf("</form>\n");
 	printf("</div>\n");
 }

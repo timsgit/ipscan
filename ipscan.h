@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2023 Tim Chappell.
+//    Copyright (C) 2011-2025 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -53,20 +53,6 @@
 	#else
 		#define IPSCAN_LOG(...) syslog(LOG_NOTICE, __VA_ARGS__ )
 	#endif
-
-	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.93"
-
-	// Determine reported version string 
-	// and include a hint if parallel scanning (FAST) is enabled
-	//
-	#if (FAST == 1)
-		#define IPSCAN_VERFAST "-FAST"
-		#define IPSCAN_VER IPSCAN_VERNUM IPSCAN_VERFAST 
-	#else
-		#define IPSCAN_VER IPSCAN_VERNUM
-	#endif
-	//
 
 	//
 	// VERSION HISTORY
@@ -209,6 +195,35 @@
 	// 1.91 Fix portlist size calculation and user-defined port value masking
 	// 1.92 Move to consistent unsigned masks approach (for C, not generated Javscript)
 	// 1.93 Update copyright year
+	// 1.94 User-agent reporting improvements - only at scan initialisation, plus support
+	//	for Chrome UA strings 
+	// 1.95 Added count_rows_db() function to improve checking/reporting
+	// 1.96 increase FETCHEVERY to 6s
+
+	// ipscan Version Number
+	#define IPSCAN_VERNUM "1.96"
+
+	// ipscan type
+	#if (TEXTMODE == 0)
+		#define IPSCAN_VERTYPE "JS-"
+	#else
+		#define IPSCAN_VERTYPE "TXT-"
+	#endif
+
+	// Determine reported version string 
+	// and include a hint if parallel scanning (FAST) is enabled
+	//
+	#if (FAST == 1)
+		#define IPSCAN_VERFAST "-FAST"
+		#define IPSCAN_VER IPSCAN_VERTYPE IPSCAN_VERNUM IPSCAN_VERFAST 
+	#else
+		#define IPSCAN_VER IPSCAN_VERTYPE IPSCAN_VERNUM
+	#endif
+	//
+
+	//
+	#define IPSCAN_H_VER IPSCAN_VERNUM
+	//
 
 	// Email address
 	#define EMAILADDRESS "webmaster@chappell-family.com"
@@ -244,12 +259,16 @@
 	#define MYSQL_DBNAME "ipscan"
 	#define MYSQL_TBLNAME "results"
 
-	// MySQL - move to use memory engine type by default
-	// Change IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE to 0 to use the "default" engine type
-	#define IPSCAN_MYSQL_MEMORY_ENGINE_ENABLE 1
-	// IPscan doesn't need a large database typically, which helps servers with small amounts of RAM
-	#define MYSQL_MAX_HEAP_SIZE (8*1024*1024)
+	// MySQL - maximum number of rows expected per unique client session (IP/session/starttime)
+	// expected maximum is TCP+UDP+ICMP+state
+	// MUST be less than INT_MAX (so can add one futher) to return successfully from count_rows_db()
+	#define IPSCAN_DB_MAX_EXPECTED_ROWS (999)
 
+	// MySQL - use the InnoDB engine type by default
+	// You can verify the engine type using:
+	// mysql --user="ipscan-user" --password="ipscan-passwd" --host=localhost ipscan
+	// SHOW TABLE STATUS WHERE Name = 'results';
+	//
 	// Steps for creating the MySQL database - this MUST be done before tests are performed!
 	// -------------------------------------------------------------------------------------
 	//
@@ -280,12 +299,15 @@
 	//
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
-		#define CLIENTDEBUG 1
-		#define IPSCAN_LOGVERBOSITY 2
+		#define IPSCAN_LOGVERBOSITY 1
+		#define DBPSRDEBUG 0
 	#endif
 	//
-	// database related debug:
+	// database (NOT port scan results)  related debug:
 	// #define DBDEBUG 1
+	//
+	// database (port scan results) related debug:
+	// #define DBPSRDEBUG 1
 	//
 	// ICMPv6 ping related debug:
 	// #define PINGDEBUG 1
@@ -507,7 +529,7 @@
 	#define IPSCAN_MINTIME_PER_PORT 1
 
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
-	#define JSONFETCHEVERY 5
+	#define JSONFETCHEVERY 6
 
 	// ICMPv6 ECHO REQUEST packet size - suggest larger than 64 byte minimum is sensible, but as a minimum
 	// needs to support magic string insertion anyway
@@ -583,21 +605,36 @@
 	// Maximum length of string holding result name
 	#define IPSCAN_RESULT_STRING_MAX (32)
 
+	// Maximum time we allow the javascript client to complete the test
+	#define IPSCAN_CLIENT_MAX_TIME_SECS 240
+
 	// Timeout before results are deleted ...
 	// Should significantly exceed maximum test duration
-	#define IPSCAN_DELETE_TIMEOUT (180)
+	#define IPSCAN_DELETE_TIMEOUT (300)
 
 	// Sleep time between polls when waiting to delete results
-	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (10)
+	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (30)
 
 	// Time to wait before deleting database entries
 	// Should exceed time for multiple JSON fetches and sleep period
 	#define IPSCAN_DELETE_WAIT_PERIOD (IPSCAN_TESTSTATE_COMPLETE_SLEEP + 2 * JSONFETCHEVERY)
 
-	// Offset from now in seconds. All results older than (now-this) are deleted
-	// Should hardly ever be used, but ensures tests which were in progress when
+	// Offset from NOW in seconds. Results older than (NOW-this) are deleted
+	// Should hardly ever be used, but ensures tests which were in-progress when
 	// the server was shutdown/rebooted, etc. are deleted
-	#define IPSCAN_DELETE_TIME_OFFSET (300)
+	// All results, apart from the running state, older than the following will be deleted
+	#define IPSCAN_DELETE_BEFORE_TIME_OFFSET (300)
+	// Everything (results and running state) older than the following will be deleted
+	#define IPSCAN_DELETE_BEFORE_LONGTIME_OFFSET (1200)
+	//
+	// Delete minimum time - only delete from database if > this value
+	//
+	#define IPSCAN_DELETE_MINIMUM_TIME (1746449000)
+
+	// TIDY UP - either delete everything or 'just' results
+	#define IPSCAN_TIDYUP_EVERYTHING (1)
+	#define IPSCAN_TIDYUP_RESULTS_ONLY (0)
+
 
 	// Flag indicating that the response was indirect rather than from the host under test
 	// This may be the case if the host under test is behind a firewall or router
@@ -621,6 +658,7 @@
 		IPSCAN_UNSUCCESSFUL_COMPLETION,
 		IPSCAN_NAVIGATE_AWAY,
 		IPSCAN_BAD_JSON_ERROR,
+		IPSCAN_DB_ERROR,
 		IPSCAN_UNEXPECTED_CHANGE,
 	};
 
