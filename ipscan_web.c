@@ -302,7 +302,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function HTTPUnfinished()");
 	printf(" {");
 	printf(" const unfinishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
-//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", unfinishURL, true);");
 	printf(" myXmlHttpErrObj.send(\"\");");
@@ -314,7 +313,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//If we get to here then we've managed to fetch all the results and the test is complete
 	printf(" const finishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
 	// Send indication that fetch is complete and results can be deleted.
-//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", finishURL, true);");
 	printf(" myXmlHttpErrObj.send(\"\");");
@@ -326,7 +324,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" const errorString = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
 	printf(" const unexpectedURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(errorString);", reconquery, IPSCAN_UNEXPECTED_CHANGE);
 	// HTTP GET completed, but with an unexpected HTTP status code (i.e. not 200 OK)
-//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", unexpectedURL, true);");
 	printf(" myXmlHttpErrObj.send(\"\");");
@@ -337,7 +334,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
         printf(" {");
         printf(" const exceptionString = \"EXCEPTION:\" + es;");
         printf(" const badJSONParseURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(exceptionString);", reconquery, IPSCAN_BAD_JSON_ERROR);
-//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
         printf(" myXmlHttpErrObj.open(\"GET\", badJSONParseURL, true);");
         printf(" myXmlHttpErrObj.send(\"\");");
@@ -347,7 +343,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function HTTPNavAway()");
 	printf(" {");
 	printf(" const navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
-//4 was commented out
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
@@ -359,7 +354,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function HTTPDBError()");
 	printf(" {");
 	printf(" const dbErrorURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_DB_ERROR);
-//4	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", dbErrorURL, true);");
 	printf(" myXmlHttpErrObj.send(\"\");");
