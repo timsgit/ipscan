@@ -92,9 +92,12 @@
 // 0.70 - improve client host address reporting
 // 0.71 - improve client user agent and alternatives reporting
 // 0.72 - changes to report running state to client
+// 0.73 - delete_from_db() gets another parameter - delete everything or delete results only
+//        relies on tidy_up_db to get rid of final test state later on (not sensitive)
+// 0.74 - make up to two delete_from_db() attempts in case of database deadlock
 
 //
-#define IPSCAN_MAIN_VER "0.72"
+#define IPSCAN_MAIN_VER "0.74"
 //
 
 #include "ipscan.h"
@@ -140,7 +143,7 @@
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
-int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
+int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, int8_t deleteall);
 int tidy_up_db(uint64_t delete_before_time, int8_t deleteall);
 int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost);
 int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
@@ -1165,7 +1168,7 @@ int main(void)
                                 #endif
                         }
 			printf("<p>ICMPv6 ECHO-Request:</p>\n");
-			printf("<table border=\"1\">\n");
+			printf("<table>\n");
 			printf("<tr style=\"text-align:left\">\n");
 			if (pingresult >= IPSCAN_INDIRECT_RESPONSE)
 			{
@@ -1245,6 +1248,7 @@ int main(void)
 
 			printf("<p>Individual UDP port scan results:</p>\n");
 			// Start of UDP port scan results table
+			unsigned int position = 0;
 			printf("<table border=\"1\">\n");
 			for (uint16_t portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
@@ -1284,7 +1288,6 @@ int main(void)
 				#endif
 
 				// Start of a new row, so insert the appropriate tag if required
-				unsigned int position = 0;
 				if (position == 0) printf("<tr>");
 
 				// Find a matching returnval, or else flag it as unknown
@@ -1402,8 +1405,8 @@ int main(void)
                         }
 
 			// Start of TCP port scan results table
-			printf("<table border=\"1\">\n");
-			unsigned int position = 0;
+ 			printf("<table border=\"1\">\n");
+			position = 0;
 			for (uint16_t portindex= 0; portindex < numports ; portindex++)
 			{
 				port = portlist[portindex].port_num;
@@ -1564,12 +1567,31 @@ int main(void)
 			}
 
 			// Delete our results now that we're done
-			rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
-			if (0 != rc)
+			// have up to two attempts in case of deadlock
+			rc = -1;
+			for (i = 0 ; i<2 && rc != 0; i++)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
-				return(EXIT_SUCCESS);
+				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_DELETE_RESULTS_ONLY);
+				if (0 != rc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db attempt %d return code was %d (expected 0)\n", (i+1), rc);
+					// Wait to improve chances of missing a database deadlock
+                                	sleep( IPSCAN_DELETE_WAIT_PERIOD );
+				}
 			}
+                        if (0 != rc)
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db loop exited after two attempts with non-zero rc: %d\n", rc);
+                        }
+			// Mark test as completed successfully
+			result = IPSCAN_TESTSTATE_COMPLETE_BIT;
+			rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+                                (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+                        if (0 != rc)
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
+                        }
+			return(EXIT_SUCCESS);
 		}
 
 		// ----------------------------------------------------------------------
@@ -1683,31 +1705,38 @@ int main(void)
 			}
 			else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
 			{
-				result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
+				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
+				result |= IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
 			}
 			else if (IPSCAN_EVAL_ERROR == fetchnum)
 			{
-				result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_EVALERROR_BIT;
+				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_EVALERROR_BIT;
+				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
 			else if (IPSCAN_OTHER_ERROR == fetchnum)
 			{
-				result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_OTHERERROR_BIT; 
+				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_OTHERERROR_BIT; 
+				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 			}
 			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
 			{
-				result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
+				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
+				result |= IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
 			}
 			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 			{
-				result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT; 
+				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT; 
+				result |= IPSCAN_TESTSTATE_NAVAWAY_BIT; 
 			}
 			else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
 			{
-				result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_EVALERROR_BIT;
+				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_EVALERROR_BIT;
+				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
 			else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 			{
-				result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
+				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
+				result |= IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
 			}
 			else
 			{
@@ -1718,7 +1747,8 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: qsf = %d qstf = %d\n", qsf, qstf );
 				}
-				result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_OTHERERROR_BIT; 
+				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_OTHERERROR_BIT; 
+				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: state changed to indicate OTHER error\n" );
 			}
 			// Default for unused database entries
@@ -1730,8 +1760,8 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
 			}
-// Replacement for dummy output
-// Simplified header in which to wrap array of results
+			// Replacement for dummy output
+			// Simplified header in which to wrap array of results
                         create_json_header();
                         // Dump the current port results for this client, querystarttime and querysession
                         rc = dump_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
@@ -1740,7 +1770,7 @@ int main(void)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: dump_db return code was %d (expected 0)\n", rc);
                                 return(EXIT_SUCCESS);
                         }
-// Replacement for dummy output
+			// Replacement for dummy output
 		}
 
 		// *IF* we have everything we need to query the database ...
@@ -2414,16 +2444,20 @@ int main(void)
 			// If the client finished successfully then delete the results now, otherwise cleanup will delete them later
 			if (1 == client_finished)
 			{
-				// Wait so that errant/delayed XHR fetches are likely to subside
-				sleep( IPSCAN_DELETE_WAIT_PERIOD );
+				// Have two attempts in case of database deadlock
+				rc = -1;
+                        	for (i = 0 ; i<2 && rc != 0; i++)
+                        	{
+					// Wait so that errant/delayed XHR fetches are likely to subside and deadlocks less likely
+					sleep( IPSCAN_DELETE_WAIT_PERIOD );
 
-
-				// Delete the results
-				//
-				rc = delete_from_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-				if (0 != rc)
-				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: delete_from_db return code was %d (expected 0)\n", rc);
+					// Delete the results
+					//
+					rc = delete_from_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_DELETE_RESULTS_ONLY);
+					if (0 != rc)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript delete_from_db attempt %d return code was %d (expected 0)\n", (i+1),  rc);
+					}
 				}
 			}
 		}
@@ -2549,6 +2583,9 @@ int main(void)
 		}
 	}
 
+	#ifdef IPSCAN_NO_TIDY_UP_DB
+	IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: tidy_up_db() calls disabled\n");
+	#else
 	// Call tidy_up_db() to purge any expired results 
 	time_t current_time = time(NULL);
 	errsv = errno;
@@ -2563,26 +2600,27 @@ int main(void)
 		// Only perform delete if the calculated time is valid
 		if (delete_before_time > IPSCAN_DELETE_MINIMUM_TIME)
 		{
-			rc = tidy_up_db( delete_before_time, IPSCAN_TIDYUP_RESULTS_ONLY);
-			if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(time, IPSCAN_TIDYUP_RESULTS_ONLY) returned %d\n", rc);
+			rc = tidy_up_db( delete_before_time, IPSCAN_DELETE_RESULTS_ONLY);
+			if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(time, IPSCAN_DELETE_RESULTS_ONLY) returned %d\n", rc);
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(%"PRIu64", IPSCAN_TIDYUP_RESULTS_ONLY) - calculated time too early\n", delete_before_time);
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(%"PRIu64", IPSCAN_DELETE_RESULTS_ONLY) - calculated time too early\n", delete_before_time);
 		}
 
 		delete_before_time = ( (uint64_t)current_time - (uint64_t)IPSCAN_DELETE_BEFORE_LONGTIME_OFFSET );
 		// Only perform delete if the calculated time is valid
 		if (delete_before_time > IPSCAN_DELETE_MINIMUM_TIME)
 		{
-			rc = tidy_up_db( delete_before_time, IPSCAN_TIDYUP_EVERYTHING);
-			if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(time, IPSCAN_TIDYUP_EVERYTHING)   returned %d\n", rc);
+			rc = tidy_up_db( delete_before_time, IPSCAN_DELETE_EVERYTHING);
+			if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(time, IPSCAN_DELETE_EVERYTHING)   returned %d\n", rc);
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(%"PRIu64", IPSCAN_TIDYUP_EVERYTHING) - calculated time too early\n", delete_before_time);
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(%"PRIu64", IPSCAN_DELETE_EVERYTHING) - calculated time too early\n", delete_before_time);
 		}
 	}
+	#endif
 
 	return(EXIT_SUCCESS);
 }

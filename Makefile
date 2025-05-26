@@ -56,7 +56,7 @@ LIBPATHS=-L/usr/lib
 INCLUDES=-I/usr/include
 LIBS=
 CC=gcc
-CFLAGS=-Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O1 -D_FORTIFY_SOURCE=2
+CFLAGS=-Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wwrite-strings -Wformat -Wformat-security -O2 -D_FORTIFY_SOURCE=2
 CFLAGS+= -fstack-protector-all -fstack-clash-protection -Wstack-protector --param ssp-buffer-size=4 
 CFLAGS+= -ftrapv -fexceptions -fPIE -fpie -Wl,-pie -Wl,-z,relro -Wl,-z,now -Werror=implicit-function-declaration 
 # testing CFLAGS+= -D_TIME_BITS=64

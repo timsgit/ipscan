@@ -299,8 +299,12 @@
 	//
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
-		#define IPSCAN_LOGVERBOSITY 1
-		#define DBPSRDEBUG 0
+		#define IPSCAN_LOGVERBOSITY 3
+		#define DBDEBUG 1
+		#define CLIENTDEBUG 1
+		// #define DBPSRDEBUG 1
+		#define TUDBPSRDEBUG 1
+		// #define IPSCAN_NO_TIDY_UP_DB 1
 	#endif
 	//
 	// database (NOT port scan results)  related debug:
@@ -397,15 +401,16 @@
 	#define IPSCAN_ICON_HREF "/favicon.ico"
 
 	// Number of columns for HTML output:
-	#define MAXCOLS 6
+	#define MAXCOLS 5
 	#define COLUMNPCT (100/MAXCOLS)
 
 	// Number of columns for UDP HTML output:
-	#define MAXUDPCOLS 6
+	#define MAXUDPCOLS 4
 	#define COLUMNUDPPCT (100/MAXCOLS)
 
 	// Number of columns for text-only browser output case
-	#define TXTMAXCOLS 4
+	// was #define TXTMAXCOLS 4
+	#define TXTMAXCOLS 5
 
 	// Number of columns per line in log outputs
 	#define LOGMAXCOLS 4
@@ -623,17 +628,17 @@
 	// Should hardly ever be used, but ensures tests which were in-progress when
 	// the server was shutdown/rebooted, etc. are deleted
 	// All results, apart from the running state, older than the following will be deleted
-	#define IPSCAN_DELETE_BEFORE_TIME_OFFSET (300)
+	#define IPSCAN_DELETE_BEFORE_TIME_OFFSET (600)
 	// Everything (results and running state) older than the following will be deleted
-	#define IPSCAN_DELETE_BEFORE_LONGTIME_OFFSET (1200)
+	#define IPSCAN_DELETE_BEFORE_LONGTIME_OFFSET (3600)
 	//
 	// Delete minimum time - only delete from database if > this value
 	//
 	#define IPSCAN_DELETE_MINIMUM_TIME (1746449000)
 
-	// TIDY UP - either delete everything or 'just' results
-	#define IPSCAN_TIDYUP_EVERYTHING (1)
-	#define IPSCAN_TIDYUP_RESULTS_ONLY (0)
+	// TIDY UP - either delete everything in the database or 'just' results
+	#define IPSCAN_DELETE_EVERYTHING (1)
+	#define IPSCAN_DELETE_RESULTS_ONLY (0)
 
 
 	// Flag indicating that the response was indirect rather than from the host under test
