@@ -73,9 +73,10 @@
 // 0.52 - tidy_up_db now uses constants to define mode, plus separate TUDBPSRDEBUG
 // 0.53 - add session transaction level setting to all functions
 // 0.54 - add delete EVERYTHING or RESULTS-ONLY parameter to delete_from_db()
+// 0.55 - further database call improvements
 
 //
-#define IPSCAN_DB_VER "0.54"
+#define IPSCAN_DB_VER "0.55"
 //
 
 #include "ipscan.h"
@@ -189,7 +190,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 		if (0 == rc)
 		{
 
-			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, CLIENT_MULTI_STATEMENTS);
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
@@ -209,15 +210,6 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 						IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: SET SESSION TRANSACTION ISOLATION LEVEL failed, returned %d\n", rc);
 					}
 				}
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: START TRANSACTION READ WRITE failed, returned %d\n", rc);
-					}
-				}
 				// Use the default engine - sensitive data may persist until next tidy_up_db() call
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '' ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -225,8 +217,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
-// BEGIN COMMIT added
-						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %u, %d, '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
+						qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE ; INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indhost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %u, %d, '%s' ) ; COMMIT", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
 						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							#ifdef DBDEBUG
@@ -239,14 +230,14 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 								if (NULL != staterc)
 								{
 
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %x:%x:%x:%x:%x:%x:%x:%x, createdate = '%"PRIu64"', session = '%"PRIu64"', portnum = %u, TESTSTATE = %d (%s), indhost = '%s')\n",\
+									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %x:%x:%x:%x:%x:%x:%x:%x, createdate = %"PRIu64", session = %"PRIu64", portnum = %u, TESTSTATE = %d (%s), indhost = '%s')\n",\
 										MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF),\
 										 (unsigned int)(host_msb & 0xFFFF), (unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF),\
 										 (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session, port, result, staterc, indirecthost); 
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %x:%x:%x:%x:%x:%x:%x:%x, createdate = '%"PRIu64"', session = '%"PRIu64"', portnum = %u, TESTSTATE = %d, indhost = '%s')\n",\
+									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %x:%x:%x:%x:%x:%x:%x:%x, createdate = %"PRIu64", session = %"PRIu64", portnum = %u, TESTSTATE = %d, indhost = '%s')\n",\
 									 	MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF),\
 										 (unsigned int)(host_msb & 0xFFFF), (unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF),\
 										 (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session, port, result, indirecthost); 
@@ -263,14 +254,14 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 								result_to_string(result, resultstring);
 								if (0 != special)
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %x:%x:%x:%x:%x:%x:%x:%x, createdate = '%"PRIu64"', session = '%"PRIu64"' proto = %d(%s), port = %d:%d, result = %d(%s), indirecthost = \"%s\")\n",\
+									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %x:%x:%x:%x:%x:%x:%x:%x, createdate = %"PRIu64", session = %"PRIu64" proto = %d(%s), port = %d:%d, result = %d(%s), indirecthost = \"%s\")\n",\
 									 MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF),\
 									 (unsigned int)(host_msb & 0xFFFF), (unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF), (unsigned int)((host_lsb>>16)&0xFFFF),\
 									 (unsigned int)(host_lsb & 0xFFFF), timestamp, session, proto, protostring, realport, special, result, resultstring, indirecthost); 
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %x:%x:%x:%x:%x:%x:%x:%x, createdate = '%"PRIu64"', session = '%"PRIu64"' proto = %d(%s), port = %d, result = %d(%s), indirecthost = \"%s\")\n",\
+									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %x:%x:%x:%x:%x:%x:%x:%x, createdate = %"PRIu64", session = %"PRIu64" proto = %d(%s), port = %d, result = %d(%s), indirecthost = \"%s\")\n",\
 									 MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF),\
 									 (unsigned int)(host_msb & 0xFFFF), (unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF),\
 									 (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF),\
@@ -384,23 +375,14 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
                                                 IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: SET SESSION TRANSACTION ISOLATION LEVEL failed, returned %d\n", rc);
                                         }
                                 }
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ ONLY");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: START TRANSACTION READ ONLY failed, returned %d\n", rc);
-					}
-				}
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
 					#ifdef DBDEBUG
-                                	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: SELECT * FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id\n",\
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: SELECT * FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id\n",\
 						 MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF), (unsigned int)(host_msb & 0xFFFF),\
                                                 (unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF), (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session);
                                 	#endif
@@ -603,7 +585,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 		if (0 == rc)
 		{
 
-			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, CLIENT_MULTI_STATEMENTS);
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
@@ -622,26 +604,16 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
                                                 IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: SET SESSION TRANSACTION ISOLATION LEVEL failed, returned %d\n", rc);
                                         }
                                 }
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: START TRANSACTION READ WRITE failed, returned %d\n", rc);
-					}
-				}
-
 				// DELETE FROM t1 WHERE ( a = b ) ORDER BY id;
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete everything for this test
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE ; DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id ; COMMIT", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				}
 				else
 				{
 					// delete everything for this test except the test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum <> '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE ; DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %d) ORDER BY id ; COMMIT", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
 				}
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -649,13 +621,13 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					#ifdef DBDEBUG
 					if (IPSCAN_DELETE_EVERYTHING == deleteall)
 					{
-					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: DELETE FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id\n",\
+					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: DELETE FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id\n",\
 						 MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF), (unsigned int)(host_msb & 0xFFFF),\
 						(unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF), (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session);
 					}
 					else
 					{
-					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: DELETE FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum <> '%d') ORDER BY id\n",\
+					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: DELETE FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %d) ORDER BY id\n",\
 						 MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF), (unsigned int)(host_msb & 0xFFFF),\
 						(unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF), (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
 					}
@@ -758,18 +730,9 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
                                                 IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: SET SESSION TRANSACTION ISOLATION LEVEL failed, returned %d\n", rc);
                                         }
                                 }
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ ONLY");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: START TRANSACTION READ ONLY failed, returned %d\n", rc);
-					}
-				}
 				// SELECT x FROM t1 WHERE ( a = b ) ORDER BY x DESC;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND portnum = '%d') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %d) ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
@@ -911,10 +874,6 @@ int tidy_up_db(uint64_t delete_before_time, int8_t deleteall)
 	// Only need these variables if we're going to report the records
 	// to be deleted during tidy_up_db()
 	//
-	#if (DBDEBUG >= 1)
-	MYSQL_ROW row;
-	int port, res;
-	#endif
 
 	#if (DBDEBUG >= 1)
 	struct tm *local = localtime( (const time_t *)&delete_before_time );
@@ -951,7 +910,7 @@ int tidy_up_db(uint64_t delete_before_time, int8_t deleteall)
 		if (0 == rc)
 		{
 
-			MYSQL *mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, CLIENT_MULTI_STATEMENTS);
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
@@ -970,211 +929,19 @@ int tidy_up_db(uint64_t delete_before_time, int8_t deleteall)
                                                 IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: SET SESSION TRANSACTION ISOLATION LEVEL failed, returned %d\n", rc);
                                         }
                                 }
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ ONLY");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: START TRANSACTION READ ONLY failed, returned %d\n", rc);
-					}
-				}
-				#if (DBDEBUG >= 1)
-				//
-				// Select and report old (expired) results - SELECT * FROM t1 WHERE ( createdate <= delete_before_time ) ORDER BY id;
-				//
-				if (IPSCAN_DELETE_EVERYTHING == deleteall)
-				{
-					// select based on time only
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( createdate <= '%"PRIu64"' ) ORDER BY id", MYSQL_TBLNAME, delete_before_time);
-				}
-				else
-				{
-					// select based on time and row is NOT running_state entry
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( createdate <= '%"PRIu64"' AND portnum <> '%d' ) ORDER BY id",\
-						 MYSQL_TBLNAME, delete_before_time, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
-				}
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					#if (DBDEBUG > 1)
-					IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: MySQL SELECT query is : %s\n", query);
-					#endif
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 == rc)
-					{
-						MYSQL_RES * result = mysql_store_result(connection);
-						if (0 != result)
-						{
-							unsigned int num_fields = mysql_num_fields(result);
-							uint64_t num_rows = mysql_num_rows(result);
-							if (0 == num_rows)
-							{
-								#if (DBDEBUG > 1)
-								IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: 0 rows to delete.\n");
-								#endif
-							}
-							else
-							{
-								if (IPSCAN_DELETE_EVERYTHING == deleteall)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: about to dump %"PRIu64" rows WHERE ( createdate <= '%"PRIu64"' ) ORDER BY id\n", num_rows, delete_before_time);
-								}
-								else
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: about to dump %"PRIu64" rows WHERE ( createdate <= '%"PRIu64"' AND portnum <> '%d' ) ORDER BY id\n", num_rows, delete_before_time, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)));
-								}
-							}
-
-							int rcdate, rcsess;
-							uint64_t value;
-							char hostname[INET6_ADDRSTRLEN+1];
-							#if (TUDBPSRDEBUG ==1)
-							int i;
-							uint64_t hostmsb, hostlsb ;
-							int rcmsb, rclsb;
-							const char * rchostname;
-							uint64_t session = 0ULL ;
-							unsigned char remotehost[sizeof(struct in6_addr)];
-							#endif
-							time_t createdate;
-							char createdateresult[32]; // 26 chars for ctime_r()
-							memset(&createdateresult[0],0,32);
-							char * cdptr = NULL;
-
-							while ((row = mysql_fetch_row(result)))
-							{
-								if (8 == num_fields) // database includes indirect host field
-								{
-									rcdate=sscanf(row[3],"%"SCNu64, &value);
-									if (1 == rcdate) createdate = (time_t)value; else createdate = 0;
-									cdptr = ctime_r(&createdate, createdateresult);
-									if (NULL == cdptr) createdateresult[0]=0;
-									#if (TUDBPSRDEBUG ==1)
-									// row[0] - id
-									rcmsb=sscanf(row[1],"%"SCNu64, &value);
-									if (1 == rcmsb) hostmsb = value; else hostmsb = 0ULL;
-									rclsb=sscanf(row[2],"%"SCNu64, &value);
-									if (1 == rclsb) hostlsb = value; else hostlsb = 0ULL;
-									rcsess=sscanf(row[4],"%"SCNu64, &value);
-									if (1 == rcsess) session = value; else session = 0ULL;
-
-									value = hostmsb;
-									for (i=0 ; i<8 ; i++)
-									{
-										remotehost[7-i] = value & 0xFF;
-										value = (value >> 8);
-									}
-									value = hostlsb;
-									for (i=0 ; i<8 ; i++)
-									{
-										remotehost[15-i] = value & 0xFF;
-										value = (value >> 8);
-									}
-									#endif
-
-									int errsave = errno;
-									int rcport = sscanf(row[5], "%d", &port);
-									int rcres = sscanf(row[6], "%d", &res);
-									char hostind[INET6_ADDRSTRLEN+1];
-									int rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
-
-									#if (TUDBPSRDEBUG ==1)
-									rchostname = inet_ntop(AF_INET6, &remotehost, hostname, INET6_ADDRSTRLEN);
-									if ( 1 == rcres && 1 == rcindhost && 1 == rcport && 1 == rcsess && NULL != rchostname)
-									#else
-									if ( 1 == rcres && 1 == rcindhost && 1 == rcport)
-									#endif
-									{
-										int proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
-										char protostring[IPSCAN_PROTO_STRING_MAX+1]; 
-										char resstring[IPSCAN_RESULT_STRING_MAX+1];
-										proto_to_string(proto, &protostring[0]);
-										result_to_string(res,&resstring[0]);
-										if (IPSCAN_PROTO_TESTSTATE != proto)
-										{
-											#if (TUDBPSRDEBUG ==1)
-											int portnum = (port >> IPSCAN_PORT_SHIFT) & IPSCAN_PORT_MASK;
-											int special = (port >> IPSCAN_SPECIAL_SHIFT) & IPSCAN_SPECIAL_MASK;
-											IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: raw results: host %s, date %"PRIu64" (%s), session %"PRIu64", proto %d(%s), special %d, port %d, result %d (%s), indhost %s\n", hostname, (uint64_t)createdate, createdateresult, session, proto, protostring, special, portnum, res, resstring, hostind);
-											#endif
-										}
-										else
-										{
-											char statestring[IPSCAN_FLAGSBUFFER_SIZE+1];
-											char * staterc;
-											staterc = state_to_string(res, &statestring[0], (int)IPSCAN_FLAGSBUFFER_SIZE );
-											if (NULL != staterc)
-											{
-												IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: host \"%s\", date \"%s\", TESTSTATE (%s), port %d, result %d\n", hostname, createdateresult, staterc, port, res);
-											}
-											else
-											{
-												IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: host \"%s\", date \"%s\", TESTSTATE, port %d, result %d\n", hostname, createdateresult, port, res);
-											}
-										}
-									}
-									else
-									{
-										IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: Unexpected row scan results - rchostname(errno) = %d, rcport = %d, rcres = %d, rcindhost = %d, rcsess = %d\n", errsave, rcport, rcres, rcindhost, rcsess);
-									}
-								}
-								else // original database approach
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: MySQL returned num_fields : %d\n", num_fields);
-									IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
-									retval = 5;
-								}
-							}
-							if (0 != num_rows)
-							{
-								if (IPSCAN_DELETE_EVERYTHING == deleteall)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db:   end of dump rows WHERE ( createdate <= '%"PRIu64"' ) ORDER BY id\n", delete_before_time);
-								}
-								else
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db:   end of dump rows WHERE ( createdate <= '%"PRIu64"' AND portnum <> '%d' ) ORDER BY id\n", delete_before_time, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
-								}
-							}
-						}
-						else
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: select ERROR - no result\n");
-						}
-					}
-					else
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: select failed, returned %d (%s).\n", rc, mysql_error(connection) );
-					}
-				}
-				else
-				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: select query creation returned: %d.\n", qrylen );
-				}
-				#endif
-
 				//
 				// Delete old (expired) results - DELETE FROM t1 WHERE ( createdate <= delete_before_time ) ORDER BY id
 				//
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: START TRANSACTION READ WRITE failed, returned %d\n", rc);
-					}
-				}
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete based on time only
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= '%"PRIu64"' ) ORDER BY id", \
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE; DELETE FROM `%s` WHERE ( createdate <= %"PRIu64" ) ORDER BY id; COMMIT;", \
 						MYSQL_TBLNAME, delete_before_time );
 				}
 				else
 				{
 					// delete based on time and row is not test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= '%"PRIu64"' AND portnum <> '%d' ) ORDER BY id", \
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE; DELETE FROM `%s` WHERE ( createdate <= %"PRIu64" AND portnum <> %d ) ORDER BY id; COMMIT;", \
 						MYSQL_TBLNAME, delete_before_time, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)));
 				}
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -1277,7 +1044,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
 		if (0 == rc)
 		{
-			// allow multiple statements so we can use BEGIN ; ...; COMMIT
+			// allow multiple statements so we can use START TRANSACTION ; ...; COMMIT
 			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, CLIENT_MULTI_STATEMENTS);
 			if (NULL == mysqlrc)
 			{
@@ -1298,15 +1065,6 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
                                                 IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: SET SESSION TRANSACTION ISOLATION LEVEL failed, returned %d\n", rc);
                                         }
                                 }
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: START TRANSACTION READ WRITE failed, returned %d\n", rc);
-					}
-				}
 				// Use the default engine - sensitive data may persist until next tidy_up_db() call
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS %s(id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indhost VARCHAR(%d) DEFAULT '' ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -1314,15 +1072,11 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
-						qrylen = snprintf(query, MAXDBQUERYSIZE, "BEGIN; SELECT * FROM `%s` WHERE ( `hostmsb` = %"PRIu64" AND `hostlsb` = %"PRIu64" AND `createdate` = %"PRIu64" AND `session` = %"PRIu64" AND `portnum` = %u AND `indhost` = '%s' ) ORDER BY id FOR UPDATE; UPDATE `%s` set `portresult` = %d WHERE ( `hostmsb` = %"PRIu64" AND `hostlsb` = %"PRIu64" AND `createdate` = %"PRIu64" AND `session` = %"PRIu64" AND `portnum` = %u AND `indhost` = '%s' ); COMMIT" , MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, indirecthost, MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port, indirecthost);
+						qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ WRITE ; UPDATE `%s` SET portresult = %d WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u AND indhost = '%s' ); COMMIT" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port, indirecthost);
 						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							#ifdef DBDEBUG
-							IPSCAN_LOG( LOGPREFIX "ipscan: update_db: BEGIN; SELECT * FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND `createdate` = %"PRIu64" AND `session` = %"PRIu64" AND `portnum` = %u AND `indhost` = '%s' ) ORDER BY id FOR UPDATE; UPDATE `%s` set `portresult` = %d WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = '%"PRIu64"' AND session = '%"PRIu64"' AND `portnum` = %u AND `indhost` = '%s'); COMMIT\n",\
-								MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF),\
-								(unsigned int)(host_msb & 0xFFFF), (unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF),\
-								(unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF),\
-								timestamp, session, port, indirecthost,\
+							IPSCAN_LOG( LOGPREFIX "ipscan: update_db: START TRANSACTION READ WRITE ; UPDATE `%s` SET portresult = %d WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u AND indhost = '%s'); COMMIT\n",\
 								MYSQL_TBLNAME, result, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF),\
 								(unsigned int)(host_msb & 0xFFFF), (unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF),\
 								(unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session, port, indirecthost);
@@ -1423,7 +1177,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 
 // ----------------------------------------------------------------------------------------
 //
-// Function to count the number of valid rows for given 'user'
+// Function to count the number of valid rows for given test set
 //
 // ----------------------------------------------------------------------------------------
 
@@ -1464,8 +1218,6 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 			}
 			else
 			{
-				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
-				// SELECT x FROM t1 WHERE a = b ORDER BY x;
 				char query[MAXDBQUERYSIZE];
                                 int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
                                 if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -1476,22 +1228,15 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
                                                 IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: SET SESSION TRANSACTION ISOLATION LEVEL failed, returned %d\n", rc);
                                         }
                                 }
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION READ ONLY");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: START TRANSACTION READ ONLY failed, returned %d\n", rc);
-					}
-				}
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = '%"PRIu64"' AND hostlsb = '%"PRIu64"' AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
+				// SELECT x FROM t1 WHERE a = b ORDER BY x;
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
 					#ifdef DBDEBUG
-					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = '%"PRIu64"' AND session = '%"PRIu64"') ORDER BY id\n",\
+					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id\n",\
 						 MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF), (unsigned int)(host_msb & 0xFFFF),\
 						(unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF), (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session);
 					#endif

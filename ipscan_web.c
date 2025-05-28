@@ -78,8 +78,9 @@
 // 0.58 - javascript changes to handle reporting of current state (hover over scan status cell)
 // 0.59 - change timeout calculation to give larger window
 // 0.60 - ontimeout change
+// 0.61 - further tidying
 
-#define IPSCAN_WEB_VER "0.60"
+#define IPSCAN_WEB_VER "0.61"
 
 #include "ipscan.h"
 
@@ -219,8 +220,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" let myInterval = 0;");
 	printf(" let myBlink = 0;");
 	printf(" let myHTTPTimeout;");
-//	printf(" let myXmlHttpReqObj;");
-//	printf(" let myXmlHttpErrObj;");
 	printf(" let fetches = 0;");
 	printf(" let statusresult = 0;");
 	printf(" let lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
@@ -622,7 +621,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myXmlHttpReqObj.onreadystatechange = function(){myStateChange(myXmlHttpReqObj); };");
 	printf(" myXmlHttpReqObj.ontimeout = function() {HTTPTimedOut(); };");
 	printf(" myXmlHttpReqObj.timeout = %d;", ((JSONFETCHEVERY*1000) - 500) );
-// two replacement lines
 	printf(" myXmlHttpReqObj.send(null);");
 	printf(" }\n"); // end of function update()
 
@@ -695,7 +693,6 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	char * stptr = NULL;
 	stptr = ctime_r(&timestamp, starttime);
 
-//	printf("<body onload = \"startTimer()\">\n");
 	printf("<body onload = \"main()\">\n");
 
 	printf("<noscript>\n<hr>\n");
