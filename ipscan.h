@@ -409,7 +409,6 @@
 	#define COLUMNUDPPCT (100/MAXCOLS)
 
 	// Number of columns for text-only browser output case
-	// was #define TXTMAXCOLS 4
 	#define TXTMAXCOLS 5
 
 	// Number of columns per line in log outputs

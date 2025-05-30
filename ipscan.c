@@ -95,9 +95,10 @@
 // 0.73 - delete_from_db() gets another parameter - delete everything or delete results only
 //        relies on tidy_up_db to get rid of final test state later on (not sensitive)
 // 0.74 - make up to two delete_from_db() attempts in case of database deadlock
+// 0.75 - delete some redundant code/comments
 
 //
-#define IPSCAN_MAIN_VER "0.74"
+#define IPSCAN_MAIN_VER "0.75"
 //
 
 #include "ipscan.h"
@@ -1705,37 +1706,30 @@ int main(void)
 			}
 			else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
 			{
-				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
 				result |= IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
 			}
 			else if (IPSCAN_EVAL_ERROR == fetchnum)
 			{
-				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_EVALERROR_BIT;
 				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
 			else if (IPSCAN_OTHER_ERROR == fetchnum)
 			{
-				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 			}
 			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
 			{
-				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
 				result |= IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
 			}
 			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 			{
-				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT; 
 				result |= IPSCAN_TESTSTATE_NAVAWAY_BIT; 
 			}
 			else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
 			{
-				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_EVALERROR_BIT;
 				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
 			else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 			{
-				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
 				result |= IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
 			}
 			else
@@ -1747,7 +1741,6 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: qsf = %d qstf = %d\n", qsf, qstf );
 				}
-				// was result = IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: state changed to indicate OTHER error\n" );
 			}

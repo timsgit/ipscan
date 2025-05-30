@@ -226,10 +226,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 
 	// Use Date().now() as our timestamp to ensure all runs are unique
 	// myTimeStamp becomes the starttime query parameter
-	printf(" const myTimeStamp = new Date().now();"); // was let
+	printf(" const myTimeStamp = new Date().now();");
 	// Also create a random-ish session number
 	// mySession becomes the session query parameter - multiple runs on the same browser should each be unique
-	printf(" const mySession = getSessionNumber();"); // was let
+	printf(" const mySession = getSessionNumber();");
 
 	// Main initialisation ... It sets the scanstate to RUNNING to give the user confidence that things are happening.
 	// then the initial GET is performed to request that the server begins the scan.
@@ -352,6 +352,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" const navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
 	printf(" clearTimeout(myHTTPTimeout);");
+	// abort current state fetches (if there are any in progress) since we're navigating away and don't care
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", navAwayURL, true);");
