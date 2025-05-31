@@ -79,8 +79,9 @@
 // 0.59 - change timeout calculation to give larger window
 // 0.60 - ontimeout change
 // 0.61 - further tidying
+// 0.62 - portlist structs are now consts
 
-#define IPSCAN_WEB_VER "0.61"
+#define IPSCAN_WEB_VER "0.62"
 
 #include "ipscan.h"
 
@@ -801,7 +802,7 @@ void create_html_body_end(void)
 	printf("</html>\n");
 }
 
-void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist)
+void create_html_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist)
 {
 	int i;
 	uint16_t port,portindex;
@@ -906,7 +907,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_s
 }
 
 #ifdef IPSCAN_HTML5_ENABLED
-void create_html5_form(uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist)
+void create_html5_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist)
 {
 	int i;
 	uint16_t port,portindex;

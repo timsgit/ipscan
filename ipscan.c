@@ -96,9 +96,10 @@
 //        relies on tidy_up_db to get rid of final test state later on (not sensitive)
 // 0.74 - make up to two delete_from_db() attempts in case of database deadlock
 // 0.75 - delete some redundant code/comments
+// 0.76 - portlist structs are consts
 
 //
-#define IPSCAN_MAIN_VER "0.75"
+#define IPSCAN_MAIN_VER "0.76"
 //
 
 #include "ipscan.h"
@@ -149,13 +150,13 @@ int tidy_up_db(uint64_t delete_before_time, int8_t deleteall);
 int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost);
 int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 
-int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist);
-int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist);
+int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *udpportlist);
+int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *portlist);
 
 void create_json_header(void);
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery);
 // starttime is of type time_t in create_html_body() calls:
-void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist);
+void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
 void report_useragent_strings(char *uavar, char *secchuavar, char *secchuaarchvar, char *secchuaarchplatvar);
 void report_ipscan_versions(const char *mainver, const char *generalver, const char *tcpver, const char *udpver, const char *icmpv6ver, const char *dbver,\
          const char *webver, const char *hver, const char *plver);
@@ -168,9 +169,9 @@ const char* ipscan_web_ver(void);
 
 #ifdef IPSCAN_HTML5_ENABLED
 void create_html5_common_header(void);
-void create_html5_form(uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist);
+void create_html5_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
 #else
-void create_html_form(uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist);
+void create_html_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
 #endif
 
 void create_html_common_header(void);
@@ -201,7 +202,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 //
 
 // structure holding the potential results table - entries MUST be in montonically increasing enumerated returnval order
-struct rslt_struc resultsstruct[] =
+const struct rslt_struc resultsstruct[] =
 {
 		/* returnval,		connrc,	conn_errno		TEXT lbl			TEXT col	Description/User feedback	*/
 		{ PORTOPEN, 		0, 		0,	 			"OPEN", 			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},

@@ -42,9 +42,10 @@
 // 0.18 - update copyright year
 // 0.19 - add TCP/20005 (for KCodes NetUSB - see CVE-2021-45608)
 // 0.20 - update copyright year
+// 0.21 - const portlist structs
 
 //
-#define IPSCAN_PORTLIST_VER "0.20"
+#define IPSCAN_PORTLIST_VER "0.21"
 //
 
 #include "ipscan.h"
@@ -56,7 +57,7 @@
 // Note: each entry includes its port number followed by
 // a text description (up to PORTDESCSIZE-1 characters long)
 //
-struct portlist_struc defportlist[] =
+const struct portlist_struc defportlist[] =
 {
 		{    7, 0, "Echo"},\
 		{   21, 0, "FTP" },\
@@ -128,7 +129,7 @@ struct portlist_struc defportlist[] =
 // Calculate and record the number of default ports to be tested
 #define DEFNUMPORTS ( sizeof(defportlist) / sizeof(struct portlist_struc) )
 
-struct portlist_struc udpportlist[] =
+const struct portlist_struc udpportlist[] =
 {
 		{   53, 0, "DNS" },\
 		{   69, 0, "TFTP" },\

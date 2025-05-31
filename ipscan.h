@@ -731,7 +731,7 @@
 	};
 
 	// Single definition of external : resultsstruct
-	extern struct rslt_struc resultsstruct[];
+	extern const struct rslt_struc resultsstruct[];
 
 	// Default ports structure
 	//
