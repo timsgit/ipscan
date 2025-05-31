@@ -507,13 +507,14 @@ int main(void)
 					if (0 == finished && '=' == querystring[queryindex])
 					{
 						// Jump over '='
-						while ('=' == querystring[queryindex] && MAXQUERYSTRLEN > queryindex)
+						while (MAXQUERYSTRLEN > queryindex && '=' == querystring[queryindex])
 						{
 							queryindex++;
 						}
 						int valueindex = 0;
-						while ( 32 <= querystring[queryindex] && 127 > querystring[queryindex] && '=' != querystring[queryindex] \
-								&& '&' != querystring[queryindex] && MAXQUERYVALLEN > valueindex && MAXQUERYSTRLEN > queryindex)
+						while (MAXQUERYVALLEN > valueindex && MAXQUERYSTRLEN > queryindex \
+							&& 32 <= querystring[queryindex] && 127 > querystring[queryindex] && '=' != querystring[queryindex] \
+								&& '&' != querystring[queryindex])
 						{
 							valstring[valueindex] = querystring[queryindex];
 							queryindex++;

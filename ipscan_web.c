@@ -808,7 +808,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, const struct port
 	uint16_t port,portindex;
 	uint8_t special;
 	int position = 0;
-	int last = 0;
+// remove	int last = 0;
 
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("</head>\n");
@@ -828,7 +828,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, const struct port
 		{
 			port = udpportlist[portindex].port_num;
 			special = udpportlist[portindex].special;
-			last = (portindex == (numudpports-1)) ? 1 : 0 ;
+			int last = (portindex == (numudpports-1)) ? 1 : 0 ;
 
 			if (position == 0) printf("<tr style=\"text-align:center\">\n");
 			if (0 != special)
@@ -856,7 +856,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, const struct port
 	{
 		port = portlist[portindex].port_num;
 		special = portlist[portindex].special;
-		last = (portindex == (numports-1)) ? 1 : 0 ;
+		int last = (portindex == (numports-1)) ? 1 : 0 ;
 
 		if (0 == position) printf("<tr style=\"text-align:center\">\n");
 		if (0 != special)
@@ -886,7 +886,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, const struct port
 	for (i = 0; i < NUMUSERDEFPORTS ; i++)
 	{
 		// Start of a new row, so insert the appropriate tag if required
-		last = (i == (NUMUSERDEFPORTS-1)) ? 1 : 0;
+		int last = (i == (NUMUSERDEFPORTS-1)) ? 1 : 0;
 		if (position == 0) printf("<tr style=\"text-align:center\">\n");
 
 		printf("<td width=\"%d%%\"><input type=\"text\" value=\"\" size=\"5\" maxlength=\"5\" alt=\"Custom TCP port #%d\" name=\"customport%d\"></td>\n", COLUMNPCT, i, i);
@@ -913,7 +913,7 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, const struct por
 	uint16_t port,portindex;
 	uint8_t special;
 	int position = 0;
-	int last = 0;
+// remove	int last = 0;
 
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("</head>\n");
@@ -935,7 +935,7 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, const struct por
 		{
 			port = udpportlist[portindex].port_num;
 			special = udpportlist[portindex].special;
-			last = (portindex == (numudpports-1)) ? 1 : 0 ;
+			int last = (portindex == (numudpports-1)) ? 1 : 0 ;
 
 			if (position == 0) printf("<tr>\n");
 
@@ -964,7 +964,7 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, const struct por
 	{
 		port = portlist[portindex].port_num;
 		special = portlist[portindex].special;
-		last = (portindex == (numports-1)) ? 1 : 0 ;
+		int last = (portindex == (numports-1)) ? 1 : 0 ;
 
 		if (position == 0) printf("<tr>\n");
 		if (0 != special)
@@ -993,7 +993,7 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, const struct por
 	for (i = 0; i < NUMUSERDEFPORTS ; i++)
 	{
 		// Start of a new row, so insert the appropriate tag if required
-		last = (i == (NUMUSERDEFPORTS-1)) ? 1 : 0;
+		int last = (i == (NUMUSERDEFPORTS-1)) ? 1 : 0;
 		if (position == 0) printf("<tr style=\"text-align:center\">\n");
 
 		printf("<td><input type=\"number\" value=\"\" min=\"%d\" max=\"%d\" alt=\"Custom TCP port #%d\" name=\"customport%d\" pattern=\"\\d+\"></td>\n", MINVALIDPORT, MAXVALIDPORT, i, i);
