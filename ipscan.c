@@ -528,7 +528,7 @@ int main(void)
 						}
 						valstring[valueindex]=0; // Add termination
 
-						rc = sscanf(valstring,"%"SCNd64, &varval );
+						rc = sscanf(valstring,"%20"SCNd64, &varval ); // added max width specifier
 						if (1 == rc)
 						{
 							// Mark the entry as valid, increment the number of queries found
