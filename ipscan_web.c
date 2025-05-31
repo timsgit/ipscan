@@ -80,8 +80,9 @@
 // 0.60 - ontimeout change
 // 0.61 - further tidying
 // 0.62 - portlist structs are now consts
+// 0.63 - further CodeQL improvements
 
-#define IPSCAN_WEB_VER "0.62"
+#define IPSCAN_WEB_VER "0.63"
 
 #include "ipscan.h"
 
@@ -684,7 +685,7 @@ void create_results_key_table(char * hostname, time_t timestamp)
 	#endif
 }
 
-void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, struct portlist_struc *portlist, struct portlist_struc *udpportlist)
+void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist)
 {
 	uint16_t portindex;
 	uint16_t port;
@@ -808,7 +809,6 @@ void create_html_form(uint16_t numports, uint16_t numudpports, const struct port
 	uint16_t port,portindex;
 	uint8_t special;
 	int position = 0;
-// remove	int last = 0;
 
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("</head>\n");
@@ -913,7 +913,6 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, const struct por
 	uint16_t port,portindex;
 	uint8_t special;
 	int position = 0;
-// remove	int last = 0;
 
 	printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 	printf("</head>\n");
