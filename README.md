@@ -136,9 +136,9 @@ versions 0.90 and later. See step 4 below for details.
         depend upon your existing installation. Please consult the SELinux documentation for further details. 
           
     8.  Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
-        w3m https://www64.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
+        w3m https://www66.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
         or: 
-        lynx https://[2001:470:971f:6::4]/cgi-bin6/ipscantxt.cgi
+	w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
 
     9.  Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
         web server error log or syslog if enabled to do so (this is NOT the default option - change 
