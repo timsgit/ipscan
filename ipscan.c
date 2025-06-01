@@ -97,9 +97,10 @@
 // 0.74 - make up to two delete_from_db() attempts in case of database deadlock
 // 0.75 - delete some redundant code/comments
 // 0.76 - portlist structs are consts
+// 0.77 - rewrite running state if a normal fetch completes successfully
 
 //
-#define IPSCAN_MAIN_VER "0.76"
+#define IPSCAN_MAIN_VER "0.77"
 //
 
 #include "ipscan.h"
@@ -1836,6 +1837,25 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: dump_db return code was %d (expected 0)\n", rc);
 				return(EXIT_SUCCESS);
+			}
+			// Check the current running state and if it's NOT running then update it to running
+			// effectively clear timeout bit, etc. if we've had a successful fetch
+			result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+                                        (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
+			if (IPSCAN_TESTSTATE_RUNNING_BIT != result)
+			{
+				#ifdef CLIENTDEBUG
+				IPSCAN_LOG( LOGPREFIX "ipscan: javascript fetch attempting to rewrite result from %d to %d\n", result, IPSCAN_TESTSTATE_RUNNING_BIT );
+				#endif
+				result = IPSCAN_TESTSTATE_RUNNING_BIT;
+                        	// Write the new value back to the database
+				const char unusedfield[] = "unused";
+                        	rc = update_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+                                 	(uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+                        	if (0 != rc)
+                        	{
+                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for javascript-mode fetch IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
+                        	}
 			}
 		}
 
