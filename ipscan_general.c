@@ -36,9 +36,10 @@
 // 0.16 - hide leading and trailing spaces
 // 0.17 - added flag values
 // 0.18 - added report_ipscan_versions()
+// 0.19 - CodeQL improvements
 
 //
-#define IPSCAN_GENERAL_VER "0.18"
+#define IPSCAN_GENERAL_VER "0.19"
 //
 
 #include "ipscan.h"
@@ -415,7 +416,7 @@ void report_agent_string(char * agentstringvar, const char *varname, unsigned in
 {
 	// Note that none of this content can be trusted - so agressively limit the character set
 	char agentstring[ (MAXUSERAGENTLEN + 1) ];
-	unsigned int i = 0;
+	unsigned int i;
 	// Pre-clear array since using sscanf with %Nc doesn't guarantee string will be 0 terminated
 	memset(agentstring, 0, sizeof(agentstring));
 
@@ -485,7 +486,7 @@ void report_agent_string(char * agentstringvar, const char *varname, unsigned in
 			right = strnlen(agentstring,MAXUSERAGENTLEN+1);
 		}
 		// skip left-leading spaces
-		while (agentstring[left]==' ' && left < right && left < MAXUSERAGENTLEN)
+		while (left < right && left < MAXUSERAGENTLEN && agentstring[left]==' ')
 		{
 			left++;
 		}

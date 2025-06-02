@@ -98,9 +98,10 @@
 // 0.75 - delete some redundant code/comments
 // 0.76 - portlist structs are consts
 // 0.77 - rewrite running state if a normal fetch completes successfully
+// 0.78 - CodeQL improvements
 
 //
-#define IPSCAN_MAIN_VER "0.77"
+#define IPSCAN_MAIN_VER "0.78"
 //
 
 #include "ipscan.h"
@@ -290,15 +291,15 @@ int main(void)
 	int childstatus;
 
 	// Ports to be tested
-	uint16_t numports = 0;
+	uint16_t numports;
 	#if (1 == IPSCAN_INCLUDE_UDP)
 	uint16_t numudpports = NUMUDPPORTS;
 	#endif
 
 	// "general purpose" variables, used as required
-	int rc = 0;
+	int rc;
 	unsigned int i = 0;
-	unsigned int shift = 0;
+	unsigned int shift;
 
 	// stats
 	unsigned int portsstats[ NUMRESULTTYPES ];
@@ -2329,11 +2330,11 @@ int main(void)
 			{
 				if (position == 0)
 				{
-					rc = snprintf(logbufferptr, logbuffersize, "Found %d %s",portsstats[i], resultsstruct[i].label );
+					rc = snprintf(logbufferptr, logbuffersize, "Found %u %s",portsstats[i], resultsstruct[i].label );
 				}
 				else
 				{
-					rc = snprintf(logbufferptr, logbuffersize, ", %d %s", portsstats[i], resultsstruct[i].label);
+					rc = snprintf(logbufferptr, logbuffersize, ", %u %s", portsstats[i], resultsstruct[i].label);
 				}
 
 				if (rc < 0 || rc >= (int)logbuffersize)

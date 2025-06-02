@@ -644,7 +644,7 @@
 	// This may be the case if the host under test is behind a firewall or router
 	#define IPSCAN_INDIRECT_RESPONSE 256
 	// Mask to extract the response code - used in created Javascript
-	#define IPSCAN_INDIRECT_MASK 255
+	#define IPSCAN_INDIRECT_MASK ((unsigned)255)
 
 	// Completion indicators (passed in fetch querystring)
 	//

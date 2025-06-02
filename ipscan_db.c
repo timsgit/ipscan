@@ -76,9 +76,10 @@
 // 0.55 - further database call improvements
 // 0.56 - correct indhost column typos
 // 0.57 - yet more database call improvements
+// 0.58 - CodeQL improvements
 
 //
-#define IPSCAN_DB_VER "0.57"
+#define IPSCAN_DB_VER "0.58"
 //
 
 #include "ipscan.h"
@@ -421,7 +422,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 										if (IPSCAN_PROTO_TESTSTATE != proto)
 										{
 											// results returned to browser ...
-											printf("%d, %d, \"%s\", ", port, res, hostind);
+											printf("%u, %u, \"%s\", ", port, res, hostind);
 											// results returned to log ...
 											#if (DBPSRDEBUG == 1)
 											uint32_t realport = (port >> IPSCAN_PORT_SHIFT) & IPSCAN_PORT_MASK;
@@ -448,7 +449,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 										else
 										{
 											// results returned to browser ...
-											printf("%d, %d, \"%s\", ", port, res, hostind);
+											printf("%u, %u, \"%s\", ", port, res, hostind);
 											dumped_running_state = 1;
 											// results returned to log ...
 											#if (DBPSRDEBUG == 1)
@@ -489,7 +490,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								// default  - in case TESTSTATE was missing from database
 								port = (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT));
 								res =  (uint32_t)(IPSCAN_TESTSTATE_DATABASE_ERROR_BIT);
-								printf("%d, %d, \"%s\", ", port, res, "::1");
+								printf("%u, %u, \"%s\", ", port, res, "::1");
 								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: TESTSTATE missing, so reported IPSCAN_TESTSTATE_DATABASE_ERROR_BIT to client.\n");
 								dumped_running_state = 1;
 							}
@@ -862,7 +863,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 int tidy_up_db(uint64_t delete_before_time, int8_t deleteall)
 {
 	int retval = 0;
-	int qrylen = 0;
+	int qrylen;
 	MYSQL *connection;
 
 	//

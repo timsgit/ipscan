@@ -81,8 +81,9 @@
 // 0.61 - further tidying
 // 0.62 - portlist structs are now consts
 // 0.63 - further CodeQL improvements
+// 0.64 - even more CodeQL improvements
 
-#define IPSCAN_WEB_VER "0.63"
+#define IPSCAN_WEB_VER "0.64"
 
 #include "ipscan.h"
 
@@ -467,9 +468,9 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// psp = protocol, special, port
 	printf(" psp = latestState[i];");
 	// >>> is unsigned shift right
-	printf(" proto = ((psp >>> %d) & %d);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
-	printf(" special = ((psp >>> %d) & %d);", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
-	printf(" port = ((psp >>> %d) & %d);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
+	printf(" proto = ((psp >>> %u) & %u);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
+	printf(" special = ((psp >>> %u) & %u);", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
+	printf(" port = ((psp >>> %d) & %u);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
 	printf(" result = latestState[i+1];");
 	printf(" host = latestState[i+2];");
 
@@ -481,7 +482,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 
 	printf(" for (j = 0; j < retVals.length; j += 1)");
 	printf(" {");
-	printf(" if (retVals[j] == (result & %d))", IPSCAN_INDIRECT_MASK);
+	printf(" if (retVals[j] == (result & %u))", IPSCAN_INDIRECT_MASK);
 	printf(" {");
 
 	printf(" switch(proto)");
@@ -613,7 +614,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" let myTimeNow = new Date().now();");
 	printf(" const updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches;", reconquery);
 	// exit based on number of attempted fetches or time taken being too great
-	printf(" if (fetches >= %d || (Math.abs(myTimeNow - myTimeStamp) > %d))",(unsigned int)( 10 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )), IPSCAN_CLIENT_MAX_TIME_SECS );
+	printf(" if (fetches >= %u || (Math.abs(myTimeNow - myTimeStamp) > %d))",(unsigned int)( 10 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )), IPSCAN_CLIENT_MAX_TIME_SECS );
 	printf(" {");
 	printf(" clearInterval(myInterval);");
 	printf(" lastUpdate = 1;"); // flag we've attempted enough fetches or exceeded maximum time
@@ -691,7 +692,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	uint16_t port;
 	uint8_t special;
 	int position = 0;
-	int last = 0;
+	int last;
 	char starttime[32]; // ctime requires 26 chars
 	char * stptr = NULL;
 	stptr = ctime_r(&timestamp, starttime);
