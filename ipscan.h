@@ -199,9 +199,11 @@
 	//	for Chrome UA strings 
 	// 1.95 Added count_rows_db() function to improve checking/reporting
 	// 1.96 increase FETCHEVERY to 6s
+	// 1.97 add a server timestamp to the database to fix an issue with client timestamps being wrong/offset
+	//      A database update is mandatory - see README.md for details.
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.96"
+	#define IPSCAN_VERNUM "1.97"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -625,11 +627,12 @@
 
 	// Offset from NOW in seconds. Results older than (NOW-this) are deleted
 	// Should hardly ever be used, but ensures tests which were in-progress when
-	// the server was shutdown/rebooted, etc. are deleted
+	// the server was shutdown/rebooted, or the client navigated away, etc. are deleted
 	// All results, apart from the running state, older than the following will be deleted
-	#define IPSCAN_DELETE_BEFORE_TIME_OFFSET (600)
-	// Everything (results and running state) older than the following will be deleted
-	#define IPSCAN_DELETE_BEFORE_LONGTIME_OFFSET (3600)
+	// NOTE: time must be in seconds and exceed the longest time that a test can take to execute (150s)
+	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (600)
+	// Everything (results and running state) older than the following (in seconds) will be deleted
+	#define IPSCAN_DELETE_EVERYTHING_LONG_OFFSET (3600)
 	//
 	// Delete minimum time - only delete from database if > this value
 	//

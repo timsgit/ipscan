@@ -99,9 +99,10 @@
 // 0.76 - portlist structs are consts
 // 0.77 - rewrite running state if a normal fetch completes successfully
 // 0.78 - CodeQL improvements
+// 0.79 - incorporate new tidy_up_db() using server defined timestamp
 
 //
-#define IPSCAN_MAIN_VER "0.78"
+#define IPSCAN_MAIN_VER "0.79"
 //
 
 #include "ipscan.h"
@@ -148,7 +149,8 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
 int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, int8_t deleteall);
-int tidy_up_db(uint64_t delete_before_time, int8_t deleteall);
+int tidy_up_db(int8_t deleteall);
+
 int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost);
 int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 
@@ -1635,9 +1637,10 @@ int main(void)
                         time_t nowtimeref = time(NULL);
 			errsv = errno;
                         int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-                        if (IPSCAN_DELETE_BEFORE_TIME_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_BEFORE_TIME_OFFSET))
+
+                        if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: WARN: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
                                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                                         (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, fetchnum, timedifference );
                         }  
@@ -1789,9 +1792,9 @@ int main(void)
 			// Calculate and report time-difference
                         time_t nowtimeref = time(NULL);
                         int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-                        if (IPSCAN_DELETE_BEFORE_TIME_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_BEFORE_TIME_OFFSET))
+                        if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: WARN: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
                                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                                         (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, fetchnum, timedifference );
                         }  
@@ -1885,9 +1888,9 @@ int main(void)
 			// Calculate and report time-difference
 			time_t nowtimeref = time(NULL);
 			int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-			if (IPSCAN_DELETE_BEFORE_TIME_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_BEFORE_TIME_OFFSET))
+			if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARN: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
+				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
 					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, timedifference );
 			}
@@ -2603,39 +2606,10 @@ int main(void)
 	IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: tidy_up_db() calls disabled\n");
 	#else
 	// Call tidy_up_db() to purge any expired results 
-	time_t current_time = time(NULL);
-	errsv = errno;
-	if (current_time < 0)
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db() time(NULL) returned -1, errno = %d(%s)\n", errsv, strerror(errsv));
-	}
-	else
-	{
-
-		uint64_t delete_before_time = ( (uint64_t)current_time - (uint64_t)IPSCAN_DELETE_BEFORE_TIME_OFFSET );
-		// Only perform delete if the calculated time is valid
-		if (delete_before_time > IPSCAN_DELETE_MINIMUM_TIME)
-		{
-			rc = tidy_up_db( delete_before_time, IPSCAN_DELETE_RESULTS_ONLY);
-			if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(time, IPSCAN_DELETE_RESULTS_ONLY) returned %d\n", rc);
-		}
-		else
-		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(%"PRIu64", IPSCAN_DELETE_RESULTS_ONLY) - calculated time too early\n", delete_before_time);
-		}
-
-		delete_before_time = ( (uint64_t)current_time - (uint64_t)IPSCAN_DELETE_BEFORE_LONGTIME_OFFSET );
-		// Only perform delete if the calculated time is valid
-		if (delete_before_time > IPSCAN_DELETE_MINIMUM_TIME)
-		{
-			rc = tidy_up_db( delete_before_time, IPSCAN_DELETE_EVERYTHING);
-			if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(time, IPSCAN_DELETE_EVERYTHING)   returned %d\n", rc);
-		}
-		else
-		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(%"PRIu64", IPSCAN_DELETE_EVERYTHING) - calculated time too early\n", delete_before_time);
-		}
-	}
+	rc = tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY);
+	if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) returned %d\n", rc);
+	rc = tidy_up_db(IPSCAN_DELETE_EVERYTHING);
+	if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) returned %d\n", rc);
 	#endif
 
 	return(EXIT_SUCCESS);

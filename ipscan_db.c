@@ -78,9 +78,11 @@
 // 0.57 - yet more database call improvements
 // 0.58 - CodeQL improvements
 // 0.59 - add missing table name quotea for consistency
+// 0.60 - add timestamp to database (for reliable tidy_up_db deletions)
+// 0.61 - update to simplify tidy_up_db() and delete based on server timestamp entries
 
 //
-#define IPSCAN_DB_VER "0.59"
+#define IPSCAN_DB_VER "0.61"
 //
 
 #include "ipscan.h"
@@ -144,23 +146,27 @@ const char* ipscan_db_ver(void)
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost )
 {
 
-	// ID                 BIGINT UNSIGNED
+	// ID                 	BIGINT UNSIGNED
 	//
-	// HOSTADDRESS MSB    BIGINT UNSIGNED
-	//	       LSB    BIGINT UNSIGNED
+	// HOSTMSB    		BIGINT UNSIGNED
+	//     LSB    		BIGINT UNSIGNED
 	//
-	// DATE-TIME          BIGINT UNSIGNED
+	// CREATETIME         	BIGINT UNSIGNED
+	//				Client's time - used only as a unique field 
 	//
-	// SESSIONID          BIGINT UNSIGNED
+	// SESSION          	BIGINT UNSIGNED
 	//
-	// PORT               BIGINT UNSIGNED
-	//				  Multiple fields are mapped to this single entry by the calling routines.
-	//				  This includes the port, a special case indicator and the protocol.
-	//				  See ipscan.h for the field masks and shifts
+	// PORTNUM            	BIGINT UNSIGNED
+	//			  	Multiple fields are mapped to this single entry by the calling routines.
+	//			  	This includes the port, a special case indicator and the protocol.
+	//			  	See ipscan.h for the field masks and shifts
 	//
-	// RESULT             BIGINT UNSIGNED
+	// PORTRESULT		BIGINT UNSIGNED
 	//
-	// INDHOST            VARCHAR(INET6_ADDRSTRLEN+1)
+	// INDIRECTHOST		VARCHAR(INET6_ADDRSTRLEN+1)
+	//
+	// TS		      	TIMESTAMP
+	//				Server's time - added as entries are inserted. Used for later auto-deletion.
 
 	int retval = -1; // do not change this
 	MYSQL *connection;
@@ -208,7 +214,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 					}
 				}
 				// Use the default engine - sensitive data may persist until next tidy_up_db() call
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '' ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
@@ -410,7 +416,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 
 							while ((row = mysql_fetch_row(result)))
 							{
-								if (8 == num_fields) // database includes indirect host field
+								if (9 == num_fields) // database includes indirect host and timestamp fields
 								{
 									char hostind[INET6_ADDRSTRLEN+1];
 									int rcport = sscanf(row[5], "%u", &port);
@@ -476,7 +482,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								else // original approach
 								{
 									printf("%s, ", row[num_fields-1]);
-									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: MySQL returned num_fields : %d\n", num_fields);
+									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: MySQL returned num_fields : %d expecting 9\n", num_fields);
 									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
 									#ifdef RESULTSDEBUG
 									#if (IPSCAN_LOGVERBOSITY >= 1)
@@ -749,7 +755,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 							}
 							while ((row = mysql_fetch_row(result)))
 							{
-								if (8 == num_fields) // database includes indirect host field
+								if (9 == num_fields) // database includes indirect host and timestamp fields
 								{
 									int rcres = sscanf(row[6], "%d", &dbres);
 									if (1 == rcres)
@@ -810,7 +816,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Unexpected num_fields results - num_fields() = %d\n", num_fields);
+									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Unexpected num_fields results - num_fields() = %d, not 9\n", num_fields);
 								}
 							}
 							mysql_free_result(result);
@@ -861,28 +867,11 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 // Function to tidy up old results from the database
 //
 // ----------------------------------------------------------------------------------------
-int tidy_up_db(uint64_t delete_before_time, int8_t deleteall)
+int tidy_up_db(int8_t deleteall)
 {
 	int retval = 0;
 	int qrylen;
 	MYSQL *connection;
-
-	//
-	// Only need these variables if we're going to report the records
-	// to be deleted during tidy_up_db()
-	//
-
-	#if (DBDEBUG >= 1)
-	struct tm *local = localtime( (const time_t *)&delete_before_time );
-	if (IPSCAN_DELETE_EVERYTHING == deleteall)
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: entered with ( IPSCAN_DELETE_EVERYTHING   before %04d-%02d-%02d %02d:%02d:%02d )\n", (local->tm_year+1900), (local->tm_mon+1), local->tm_mday, local->tm_hour, local->tm_min, local->tm_sec);
-	}
-	else
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: entered with ( IPSCAN_DELETE_RESULTS_ONLY before %04d-%02d-%02d %02d:%02d:%02d )\n", (local->tm_year+1900), (local->tm_mon+1), local->tm_mday, local->tm_hour, local->tm_min, local->tm_sec);
-	}
-	#endif
 
 	int rc = mysql_library_init(0, NULL, NULL);
         if (0 != rc)
@@ -926,20 +915,21 @@ int tidy_up_db(uint64_t delete_before_time, int8_t deleteall)
                                                 IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: SET SESSION TRANSACTION ISOLATION LEVEL failed, returned %d\n", rc);
                                         }
                                 }
+
 				//
-				// Delete old (expired) results - DELETE FROM t1 WHERE ( createdate <= delete_before_time ) ORDER BY id
+				// Delete old (expired) results - DELETE FROM t1 WHERE ( ts <= NOW() - INTERVAL xx ) ORDER BY id
 				//
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete based on time only
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= %"PRIu64" ) ORDER BY id", \
-						MYSQL_TBLNAME, delete_before_time );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( ts <= NOW() - INTERVAL %u SECOND ) ORDER BY id",\
+						 MYSQL_TBLNAME, (uint32_t)IPSCAN_DELETE_EVERYTHING_LONG_OFFSET );
 				}
 				else
 				{
 					// delete based on time and row is not test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( createdate <= %"PRIu64" AND portnum <> %d ) ORDER BY id", \
-						MYSQL_TBLNAME, delete_before_time, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)));
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %u AND ts <= NOW() - INTERVAL %u SECOND ) ORDER BY id",\
+						 MYSQL_TBLNAME, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET );
 				}
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1005,6 +995,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	//	       LSB    BIGINT UNSIGNED
 	//
 	// DATE-TIME          BIGINT UNSIGNED
+	//			Client's idea of time - can't rely on this - just use as an uniqifier
 	//
 	// SESSIONID          BIGINT UNSIGNED
 	//
@@ -1016,6 +1007,10 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	// RESULT             BIGINT UNSIGNED
 	//
 	// INDHOST            VARCHAR(INET6_ADDRSTRLEN+1)
+	//
+	// TS		      TIMESTAMP
+	//			Server's idea of time - can rely on this	
+	//
 
 	int retval = -1; // do not change this
 	MYSQL *connection;
@@ -1063,7 +1058,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
                                         }
                                 }
 				// Use the default engine - sensitive data may persist until next tidy_up_db() call
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '' ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);

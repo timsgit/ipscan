@@ -35,9 +35,9 @@ have been implemented, for unmodified ipscan.h configurations.
 
 Installation Steps:
 ===================
-IMPORTANT: when UPGRADING from versions before 0.90: a database change has occurred and consequently 
+IMPORTANT: when UPGRADING from versions before 1.97: a database change has occurred and consequently 
 it is necessary that you remove your existing database prior to building and installing 
-versions 0.90 and later. See step 4 below for details.
+versions 1.97 and later. See step 4 below for details.
 
     1.  edit the Makefile and adjust the following entries as required:
          a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
