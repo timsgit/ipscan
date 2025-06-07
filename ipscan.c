@@ -979,16 +979,21 @@ int main(void)
 		}
 
 		// Dump the variables resulting from the query-string parsing
-		#ifdef QUERYDEBUG
 		// Calculate and report time-difference
                 time_t nowtimeref = time(NULL);
 		if (nowtimeref < 0)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: nowtimeref out of range before timedifference calculation, time(NULL) returned %d(%s)\n", errno, strerror(errno) );
 		}
+
+		#if (TEXTMODE != 1)
+		// javascript mode only
+                int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+		#endif
+
+		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numqueries = %d\n", numqueries);
 		#if (TEXTMODE != 1)
-                int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: querysession = %"PRIu64" querystarttime = %"PRIu64" diff = %"PRId64"\n", querysession, querystarttime, timedifference );
 		if (1 != qsf || 1 != qstf)
@@ -1002,12 +1007,10 @@ int main(void)
 		#endif
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: reconstituted query string = %s\n", reconquery );
-		#endif
-		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: portlist contents, numports = %d:\n", numports);
 		for ( unsigned int j = 0 ; j < numports ; j++ )
 		{
-			IPSCAN_LOG (LOGPREFIX "ipscan: DEBUG : port_num = %d, special = %d\n", portlist[j].port_num, portlist[j].special);
+			IPSCAN_LOG (LOGPREFIX "ipscan: DEBUG INFO: port_num = %d, special = %d\n", portlist[j].port_num, portlist[j].special);
 		}
 		#endif
 
@@ -1632,18 +1635,11 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: qsf = %d qstf = %d\n", qsf, qstf );
 			}
+			#endif
 
 			// Calculate and report time-difference
-			#ifdef QUERYDEBUG
                         nowtimeref = time(NULL);
-			#else
-                        time_t nowtimeref = time(NULL);
-			#endif
-			#if (TEXTMODE != 1)
                         timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-			#else
-                        int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-			#endif
 
                         if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
@@ -1657,7 +1653,6 @@ int main(void)
                                         (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
                                         (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, fetchnum, timedifference );
                         }
-			#endif
 
 			// Check we know about this client
 			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
@@ -1797,16 +1792,8 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "ipscan: qsf = %d qstf = %d\n", qsf, qstf );
 			}
 			// Calculate and report time-difference
-			#ifdef QUERYDEBUG
                         nowtimeref = time(NULL);
-			#else
-                        time_t nowtimeref = time(NULL);
-			#endif
-			#if (TEXTMODE != 1)
                         timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-			#else
-                        int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-			#endif
                         if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
@@ -1901,16 +1888,8 @@ int main(void)
 				 ipscan_web_ver(), ipscan_h_ver(), ipscan_portlist_ver());
         		#endif
 			// Calculate and report time-difference
-			#ifdef QUERYDEBUG
 			nowtimeref = time(NULL);
-			#else
-			time_t nowtimeref = time(NULL);
-			#endif
-			#if (TEXTMODE != 1)
 			timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-			#else
-			int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-			#endif
 			if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
