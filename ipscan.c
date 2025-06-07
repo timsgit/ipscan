@@ -101,9 +101,10 @@
 // 0.78 - CodeQL improvements
 // 0.79 - incorporate new tidy_up_db() using server defined timestamp
 // 0.80 - various code quality improvements (scope reductions)
+// 0.81 - querystring parsing improvements
 
 //
-#define IPSCAN_MAIN_VER "0.80"
+#define IPSCAN_MAIN_VER "0.81"
 //
 
 #include "ipscan.h"
@@ -145,19 +146,15 @@
 //
 // Prototype declarations
 //
-
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
 int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, int8_t deleteall);
 int tidy_up_db(int8_t deleteall);
-
 int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost);
 int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
-
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *udpportlist);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *portlist);
-
 void create_json_header(void);
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery);
 // starttime is of type time_t in create_html_body() calls:
@@ -165,42 +162,37 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 void report_useragent_strings(char *uavar, char *secchuavar, char *secchuaarchvar, char *secchuaarchplatvar);
 void report_ipscan_versions(const char *mainver, const char *generalver, const char *tcpver, const char *udpver, const char *icmpv6ver, const char *dbver,\
          const char *webver, const char *hver, const char *plver);
+int querystring_is_alphanum(char check);
+int querystring_is_valid(char check);
+int querystring_is_number(char check);
 const char* ipscan_general_ver(void);
 const char* ipscan_tcp_ver(void);
 const char* ipscan_udp_ver(void);
 const char* ipscan_icmpv6_ver(void);
 const char* ipscan_db_ver(void);
 const char* ipscan_web_ver(void);
-
 #ifdef IPSCAN_HTML5_ENABLED
 void create_html5_common_header(void);
 void create_html5_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
 #else
 void create_html_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
 #endif
-
 void create_html_common_header(void);
 void create_html_body_end(void);
-
-// from ipscan_general
 #if (1 == TEXTMODE)
 uint64_t get_session(void);
 #endif
 void proto_to_string(int proto, char * retstring);
 void fetch_to_string(int fetchnum, char * retstring);
 char * state_to_string(int statenum, char * retstringptr, int retstringfree);
-
 // create_results_key_table is only referenced if creating the text-only version of the scanner
 #if (1 == TEXTMODE)
 void create_results_key_table(char * hostname, time_t timestamp);
 #endif
-
 // Only include reference to ping-test function if compiled in
 #if (1 == IPSCAN_INCLUDE_PING)
 int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
 #endif
-
-
 
 //
 // End of prototypes declarations
@@ -356,12 +348,12 @@ int main(void)
 	// Log the current time and "session" with which to initiate scan and fetch results
 	// These should ensure that each test is globally unique when client IP address is also used.
 	starttime = time(NULL);
-	int errsv = errno;
 	if (starttime < 0)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for starttime %d (%s)\n", errsv, strerror(errsv));
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time() returned bad value for starttime %d (%s)\n", errno, strerror(errno));
 		return(EXIT_SUCCESS);
 	}
+
 	#if (1 == TEXTMODE)
 	uint64_t session = get_session();
 	// This should never occur, but just in case ...
@@ -465,9 +457,8 @@ int main(void)
 			else
 			{
 				#ifdef QUERYDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: Query-string : %s\n", querystring);
+				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: Query-string : %s\n", querystring);
 				#endif
-
 
 				// Force lowercase to ease later comparison
 				for (i = 0; i < (unsigned int)strnlen(querystring,(MAXQUERYSTRLEN)); i++)
@@ -479,16 +470,20 @@ int main(void)
 				//
 				// Split the query string into variable names and values
 				//
-				// URL is of the form: ipscan-js.cgi?name1=value1&name2=value2
+				// URL is of the form: ipscanjs.cgi?name1=value1&name2=value2
 				unsigned int queryindex = 0;
 				int finished = 0;
 
-				while (MAXQUERYSTRLEN > queryindex && 32 <= querystring[queryindex] && 0 == finished && MAXQUERIES > numqueries)
+				// Loop around while we haven't exceeded MAXQUERYSTRLEN, the next character is valid, and we haven't found too many query strings
+				while (MAXQUERYSTRLEN > queryindex && 0 != querystring_is_alphanum(querystring[queryindex]) && 0 == finished && MAXQUERIES > numqueries)
 				{
 					int varnameindex = 0;
 					query[numqueries].valid = 0;
-					while ( 32 <= querystring[queryindex] && 127 > querystring[queryindex] && '=' != querystring[queryindex] \
-							&& '&' != querystring[queryindex] && MAXQUERYSTRLEN > queryindex && MAXQUERYNAMELEN > varnameindex && 0 == finished)
+
+					// Determine the querystring variable name
+					// Loop around while the character is an alphanumeric and we haven't reached the allowed querystring or variable name length
+					while ( 0 != querystring_is_alphanum(querystring[queryindex])\
+							&& MAXQUERYSTRLEN > queryindex && MAXQUERYNAMELEN > varnameindex && 0 == finished)
 					{
 						query[numqueries].varname[varnameindex] = querystring[queryindex];
 						varnameindex ++;
@@ -501,7 +496,10 @@ int main(void)
 					}
 					query[numqueries].varname[varnameindex]=0; // Add termination
 
-					finished = (32 > querystring[queryindex] || 126 < querystring[queryindex] || MAXQUERYSTRLEN <= queryindex) ? 1 : 0;
+					// Finished if the querystring contains an invalid character (including end-of-string) or we've exceeded the maximum length
+					finished = (0 == querystring_is_valid(querystring[queryindex]) ||  MAXQUERYSTRLEN <= queryindex) ? 1 : 0;
+
+					// Jump over '=' characters - don't really need a loop, but it gives slightly more flexibility
 					if (0 == finished && '=' == querystring[queryindex])
 					{
 						// Jump over '='
@@ -510,15 +508,16 @@ int main(void)
 							queryindex++;
 						}
 						int valueindex = 0;
-						while (MAXQUERYVALLEN > valueindex && MAXQUERYSTRLEN > queryindex \
-							&& 32 <= querystring[queryindex] && 127 > querystring[queryindex] && '=' != querystring[queryindex] \
-								&& '&' != querystring[queryindex])
+
+						// Copy the value string into a separate variable. 
+						// Allow numbers and signs whilst we remain under both the value and querystring length
+						while ( MAXQUERYVALLEN > valueindex && MAXQUERYSTRLEN > queryindex && 0 != querystring_is_number(querystring[queryindex]) )
 						{
 							valstring[valueindex] = querystring[queryindex];
 							queryindex++;
 							valueindex++;
 						}
-
+						// Truncate and terminate, if required
 						if (MAXQUERYVALLEN <= valueindex)
 						{
 							IPSCAN_LOG( LOGPREFIX "ipscan: query parameter value string is too long : %s\n", querystring);
@@ -526,10 +525,11 @@ int main(void)
 						}
 						valstring[valueindex]=0; // Add termination
 
+						// Parse the value string as a signed 64-bit integer
 						rc = sscanf(valstring,"%20"SCNd64, &varval ); // added max width specifier
 						if (1 == rc)
 						{
-							// Mark the entry as valid, increment the number of queries found
+							// Valid, so record the value, mark the entry as valid, and increment the number of queries found
 							query[numqueries].varval = varval;
 							query[numqueries].valid = 1;
 							#ifdef QUERYDEBUG
@@ -539,6 +539,7 @@ int main(void)
 						}
 						else
 						{
+							// Invalid, so clear the value, mark the entry as invalid, and increment the number of queries found
 							#ifdef QUERYDEBUG
 							IPSCAN_LOG( LOGPREFIX "ipscan: Bad value assignment for %s, setting invalid.\n", query[numqueries].varname);
 							#endif
@@ -547,12 +548,14 @@ int main(void)
 							numqueries++;
 						}
 					}
-					// Move past the '&' sign
+
+					// Move past the '&' sign(s)
 					while (MAXQUERYSTRLEN > queryindex && 0 == finished && '&' == querystring[queryindex])
 					{
 						queryindex++;
 					}
-					finished = (querystring[queryindex] < 32 || queryindex >= MAXQUERYSTRLEN) ? 1 : 0;
+					// Finished if the querystring contains an invalid character (including end-of-string) or we've exceeded the maximum length
+					finished = (0 == querystring_is_valid(querystring[queryindex]) ||  MAXQUERYSTRLEN <= queryindex) ? 1 : 0;
 				}
 				#ifdef QUERYDEBUG
 				IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %d\n", numqueries);
@@ -572,7 +575,7 @@ int main(void)
 		}
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: called with an unsupported request method: %s.\n", requestmethod);
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: called with an unsupported request method: %s.\n", requestmethod);
 			// Create the header
 			HTML_HEADER();
 			// Now finish the header
@@ -854,7 +857,7 @@ int main(void)
 				// Check the port number is in the valid range
 				if (query[i].varval >= MINVALIDPORT && query[i].varval <= MAXVALIDPORT)
 				{
-					unsigned int j  = 0;
+					unsigned int j = 0;
 					while (j < numports && portlist[j].port_num != query[i].varval) j++;
 					// if this customport is not one of the ports already destined for checking then
 					// add it to the port list
@@ -904,6 +907,10 @@ int main(void)
 							return(EXIT_SUCCESS);
 						}
 					}
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: custom port %s port is out of range %d =< %"PRId64" <= %d\n", cpnum, MINVALIDPORT, query[i].varval, MAXVALIDPORT );
 				}
 			}
 			customport++;
@@ -979,26 +986,26 @@ int main(void)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: nowtimeref out of range before timedifference calculation, time(NULL) returned %d(%s)\n", errno, strerror(errno) );
 		}
-                int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numqueries = %d\n", numqueries);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numqueries = %d\n", numqueries);
 		#if (TEXTMODE != 1)
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: querysession = %"PRIu64" querystarttime = %"PRIu64" diff = %"PRId64"\n", querysession, querystarttime, timedifference );
+                int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: querysession = %"PRIu64" querystarttime = %"PRIu64" diff = %"PRId64"\n", querysession, querystarttime, timedifference );
 		if (1 != qsf || 1 != qstf)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: qsf = %d qstf = %d\n", qsf, qstf );
+			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: qsf = %d qstf = %d\n", qsf, qstf );
 		}
 		#else
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", \
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", \
 				(uint64_t)session, (uint64_t)starttime, numports);
 		#endif
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: reconstituted query string = %s\n", reconquery );
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: reconstituted query string = %s\n", reconquery );
 		#endif
 		#ifdef QUERYDEBUG
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: portlist contents, numports = %d:\n", numports);
-		for ( j = 0 ; j < numports ; j++ )
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: portlist contents, numports = %d:\n", numports);
+		for ( unsigned int j = 0 ; j < numports ; j++ )
 		{
 			IPSCAN_LOG (LOGPREFIX "ipscan: DEBUG : port_num = %d, special = %d\n", portlist[j].port_num, portlist[j].special);
 		}
@@ -1499,15 +1506,13 @@ int main(void)
 			char fintimeresult[32]; // ctime requires 26 bytes
 			char * ftptr = NULL;
 			time_t nowtime = time(NULL);
-			errsv = errno;
-			ftptr = ctime_r(&nowtime, fintimeresult);
-
 			if (nowtime < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for nowtime %d (%s)\n", errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for nowtime %d (%s)\n", errno, strerror(errno));
 			}
 			else
 			{
+				ftptr = ctime_r(&nowtime, fintimeresult);
 				if (NULL == ftptr)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: finish time ctime_r() returned NULL\n");
@@ -1525,10 +1530,9 @@ int main(void)
 
 			#if (1 <= IPSCAN_LOGVERBOSITY)
 			time_t scancomplete = time(NULL);
-			errsv = errno;
 			if (scancomplete < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for scancomplete %d (%s)\n", errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for scancomplete %d (%s)\n", errno, strerror(errno));
 			}
 			IPSCAN_LOG( LOGPREFIX "ipscan: port scan and HTML document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
@@ -1626,12 +1630,20 @@ int main(void)
 				 querystarttime, querysession );
 			if (1 != qsf || 1 != qstf)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: info: qsf = %d qstf = %d\n", qsf, qstf );
+				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: qsf = %d qstf = %d\n", qsf, qstf );
 			}
+
 			// Calculate and report time-difference
+			#ifdef QUERYDEBUG
+                        nowtimeref = time(NULL);
+			#else
                         time_t nowtimeref = time(NULL);
-			errsv = errno;
+			#endif
+			#if (TEXTMODE != 1)
+                        timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+			#else
                         int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+			#endif
 
                         if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
@@ -1656,7 +1668,7 @@ int main(void)
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
 				if (1 != qsf || 1 != qstf)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR info: qsf = %d qstf = %d\n", qsf, qstf );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR INFO: qsf = %d qstf = %d\n", qsf, qstf );
 				}
 				// report error but allow execution to continue - return(EXIT_SUCCESS);
 			}
@@ -1785,8 +1797,16 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "ipscan: qsf = %d qstf = %d\n", qsf, qstf );
 			}
 			// Calculate and report time-difference
+			#ifdef QUERYDEBUG
+                        nowtimeref = time(NULL);
+			#else
                         time_t nowtimeref = time(NULL);
+			#endif
+			#if (TEXTMODE != 1)
+                        timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+			#else
                         int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+			#endif
                         if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
@@ -1881,8 +1901,16 @@ int main(void)
 				 ipscan_web_ver(), ipscan_h_ver(), ipscan_portlist_ver());
         		#endif
 			// Calculate and report time-difference
+			#ifdef QUERYDEBUG
+			nowtimeref = time(NULL);
+			#else
 			time_t nowtimeref = time(NULL);
+			#endif
+			#if (TEXTMODE != 1)
+			timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+			#else
 			int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+			#endif
 			if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
@@ -2314,10 +2342,9 @@ int main(void)
 
 			#if (1 <= IPSCAN_LOGVERBOSITY)
 			time_t scancomplete = time(NULL);
-			errsv = errno;
 			if (scancomplete < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for scancomplete %d (%s)\n", errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for scancomplete %d (%s)\n", errno, strerror(errno));
 			}
 			IPSCAN_LOG( LOGPREFIX "ipscan: port scan and HTML document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
@@ -2367,11 +2394,9 @@ int main(void)
 			unsigned int client_finished = 0;
 			time_t timeouttime = (scanstart + IPSCAN_DELETE_TIMEOUT);
 			time_t deletenowtime = time(NULL);
-			errsv = errno;
-
 			if (deletenowtime < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for first deletenowtime %d (%s)\n", errsv, strerror(errsv));
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for first deletenowtime %d (%s)\n", errno, strerror(errno));
 				deletenowtime = timeouttime;
 			}
 
@@ -2427,10 +2452,9 @@ int main(void)
 				}
 
 				deletenowtime = time(NULL);
-				errsv = errno;
 				if (deletenowtime < 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for deletenowtime %d (%s)\n", errsv, strerror(errsv));
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for deletenowtime %d (%s)\n", errno, strerror(errno));
 					deletenowtime = timeouttime;
 				}
 			} // end of wait for client to signal test complete or timeout

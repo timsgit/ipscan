@@ -303,6 +303,7 @@
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 3
 		#define CLIENTDEBUG 1
+		#define QUERYDEBUG 1
 	#endif
 	//
 	// database (NOT port scan results)  related debug:

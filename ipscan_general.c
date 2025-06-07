@@ -37,9 +37,10 @@
 // 0.17 - added flag values
 // 0.18 - added report_ipscan_versions()
 // 0.19 - CodeQL improvements
+// 0.20 - add querystring checkers
 
 //
-#define IPSCAN_GENERAL_VER "0.19"
+#define IPSCAN_GENERAL_VER "0.20"
 //
 
 #include "ipscan.h"
@@ -526,3 +527,46 @@ void report_ipscan_versions(const char *mainver, const char *generalver, const c
 	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: IPSCAN_TCP_VER       = %-4s, IPSCAN_UDP_VER     = %-4s, IPSCAN_ICMPV6_VER = %-4s, IPSCAN_DB_VER = %-4s\n", tcpver, udpver, icmpv6ver, dbver);
 	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: IPSCAN_PORTLIST_VER  = %-4s\n", plver);
 }
+
+//
+// -----------------------------------------------------------------------------
+//
+int querystring_is_alphanum(char check)
+{
+	int retval = 0;
+	// allow a-z,0-9
+	if ((check >= 'a' && check <= 'z') || (check >= '0' && check <= '9'))
+	{
+		retval = 1;
+	}
+	return (retval);
+}
+
+//
+// -----------------------------------------------------------------------------
+//
+int querystring_is_valid(char check)
+{
+	int retval = 0;
+	// allow &,=,a-z,0-9,+,-
+	if (check == '&' || check == '=' || (check >= 'a' && check <= 'z') || (check >= '0' && check <= '9') || check == '+' || check == '-')
+	{
+		retval = 1;
+	}
+	return (retval);
+}
+
+//
+// -----------------------------------------------------------------------------
+//
+int querystring_is_number(char check)
+{
+	int retval = 0;
+	// allow 0-9,+,-
+	if ( (check >= '0' && check <= '9') || check == '+' || check == '-' )
+	{
+		retval = 1;
+	}
+	return (retval);
+}
+
