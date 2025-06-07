@@ -100,9 +100,10 @@
 // 0.77 - rewrite running state if a normal fetch completes successfully
 // 0.78 - CodeQL improvements
 // 0.79 - incorporate new tidy_up_db() using server defined timestamp
+// 0.80 - various code quality improvements (scope reductions)
 
 //
-#define IPSCAN_MAIN_VER "0.79"
+#define IPSCAN_MAIN_VER "0.80"
 //
 
 #include "ipscan.h"
@@ -267,18 +268,14 @@ int main(void)
 	// List of ports to be tested and their results
 	struct portlist_struc portlist[MAXPORTS];
 
-	int result;
-
 	// Default for unused database entries
 
 	// Only necessary if we're including ping support
 	#if (1 == IPSCAN_INCLUDE_PING)
-	int pingresult;
 	// Storage for indirecthost address, in case required
 	// Note that indirecthost value validation is performed twice below
 	// It may need changing if the declaration of this variable is adjusted
 	char indirecthost[INET6_ADDRSTRLEN+1];
-	char indirecthost2[INET6_ADDRSTRLEN+1];
 	#endif
 
 	char remoteaddrstring[INET6_ADDRSTRLEN+1];
@@ -287,13 +284,10 @@ int main(void)
 	// the session starttime, used as an unique index for the database
 	time_t starttime;
 
-	uint16_t port;
-
 	// Parallel scanning related
 	int childstatus;
 
 	// Ports to be tested
-	uint16_t numports;
 	#if (1 == IPSCAN_INCLUDE_UDP)
 	uint16_t numudpports = NUMUDPPORTS;
 	#endif
@@ -818,6 +812,7 @@ int main(void)
 		}
 
 		// Determine whether existing ports are to be included in the tested list or not:
+		uint16_t numports;
 		if (1 == includeexisting)
 		{
 			// custom ports will be appended to the default ports list
@@ -980,10 +975,9 @@ int main(void)
 		#ifdef QUERYDEBUG
 		// Calculate and report time-difference
                 time_t nowtimeref = time(NULL);
-		int errsv = errno;
 		if (nowtimeref < 0)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: nowtimeref out of range before timedifference calculation, time(NULL) returned %d(%s)\n", errsv, strerror(errsv) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: nowtimeref out of range before timedifference calculation, time(NULL) returned %d(%s)\n", errno, strerror(errno) );
 		}
                 int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG info: numqueries = %d\n", numqueries);
@@ -1111,12 +1105,13 @@ int main(void)
 			// Only included if ping is compiled in ...
 			#if (1 == IPSCAN_INCLUDE_PING)
 			// Ping the remote host and store the result ...
-			pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)starttime, (uint64_t)session, &indirecthost[0] );
+			int pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)starttime, (uint64_t)session, &indirecthost[0] );
 
 			// Ensure the indirecthost returned is valid
 			// NOTE: this validation may require adjustment if the declaration of indirecthost changes
 			int ih_adjusted = 0;
 			indirecthost[INET6_ADDRSTRLEN] = 0;
+			char indirecthost2[INET6_ADDRSTRLEN+1];
 			for ( i = 0 ; i < INET6_ADDRSTRLEN ; i++ ) indirecthost2[i] = indirecthost[i] ;
 			for ( i = 0 ; i < INET6_ADDRSTRLEN && indirecthost[i] > 0 ; i++ )
 			{
@@ -1137,7 +1132,7 @@ int main(void)
 
 			}
 
-			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
+			int result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 
 			#if (0 < IPSCAN_LOGVERBOSITY)
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
@@ -1259,7 +1254,7 @@ int main(void)
 			printf("<table border=\"1\">\n");
 			for (uint16_t portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
-				port = udpportlist[portindex].port_num;
+				uint16_t port = udpportlist[portindex].port_num;
 				uint8_t special = udpportlist[portindex].special;
 				last = (portindex == (NUMUDPPORTS-1)) ? 1 : 0 ;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
@@ -1416,7 +1411,7 @@ int main(void)
 			position = 0;
 			for (uint16_t portindex= 0; portindex < numports ; portindex++)
 			{
-				port = portlist[portindex].port_num;
+				uint16_t port = portlist[portindex].port_num;
 				uint8_t special = portlist[portindex].special;
 				last = (portindex == (numports-1)) ? 1 : 0 ;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
@@ -1681,7 +1676,7 @@ int main(void)
 			}
 		
 			// Fetch running state result from database so it can be updated
-			result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
+			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
 			if ( PORTUNKNOWN == result )
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: fetching running state\n" );
@@ -1844,7 +1839,7 @@ int main(void)
 			}
 			// Check the current running state and if it's NOT running then update it to running
 			// effectively clear timeout bit, etc. if we've had a successful fetch
-			result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
                                         (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
 			if (IPSCAN_TESTSTATE_RUNNING_BIT != result)
 			{
@@ -1982,11 +1977,12 @@ int main(void)
 
 			// Only include this section if ping is compiled in ...
 			#if (IPSCAN_INCLUDE_PING == 1)
-			pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, &indirecthost[0] );
+			int pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, &indirecthost[0] );
 			// Ensure the indirecthost returned is valid
                         // NOTE: this validation may require adjustment if the declaration of indirecthost changes
 			int ih_adjusted = 0;
                         indirecthost[INET6_ADDRSTRLEN] = 0;
+			char indirecthost2[INET6_ADDRSTRLEN+1];
 			for ( i = 0 ; i < INET6_ADDRSTRLEN ; i++ ) indirecthost2[i] = indirecthost[i] ;
                         for ( i = 0 ; i < INET6_ADDRSTRLEN && indirecthost[i] > 0 ; i++ )
                         {
@@ -2007,7 +2003,7 @@ int main(void)
 
                         }
 
-			result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
+			int result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (0 < IPSCAN_LOGVERBOSITY)
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",remoteaddrstring,\
 					pingresult, resultsstruct[result].label, indirecthost);
@@ -2206,7 +2202,7 @@ int main(void)
 			// Generate the stats
 			for (uint16_t portindex= 0; portindex < NUMUDPPORTS ; portindex++)
 			{
-				port = udpportlist[portindex].port_num;
+				uint16_t port = udpportlist[portindex].port_num;
 				uint8_t special = udpportlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
 					(uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
@@ -2258,7 +2254,7 @@ int main(void)
 
 			for (uint16_t portindex= 0; portindex < numports ; portindex++)
 			{
-				port = portlist[portindex].port_num;
+				uint16_t port = portlist[portindex].port_num;
 				uint8_t special = portlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
 				 (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));

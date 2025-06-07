@@ -302,11 +302,7 @@
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 3
-		#define DBDEBUG 1
 		#define CLIENTDEBUG 1
-		// #define DBPSRDEBUG 1
-		#define TUDBPSRDEBUG 1
-		// #define IPSCAN_NO_TIDY_UP_DB 1
 	#endif
 	//
 	// database (NOT port scan results)  related debug:

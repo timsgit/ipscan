@@ -80,9 +80,10 @@
 // 0.59 - add missing table name quotea for consistency
 // 0.60 - add timestamp to database (for reliable tidy_up_db deletions)
 // 0.61 - update to simplify tidy_up_db() and delete based on server timestamp entries
+// 0.62 - various code quality improvements (scope reductions)
 
 //
-#define IPSCAN_DB_VER "0.61"
+#define IPSCAN_DB_VER "0.62"
 //
 
 #include "ipscan.h"
@@ -870,7 +871,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 int tidy_up_db(int8_t deleteall)
 {
 	int retval = 0;
-	int qrylen;
 	MYSQL *connection;
 
 	int rc = mysql_library_init(0, NULL, NULL);
@@ -906,7 +906,7 @@ int tidy_up_db(int8_t deleteall)
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-                                qrylen = snprintf(query, MAXDBQUERYSIZE, "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+                                int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE");
                                 if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
                                 {
                                         rc = mysql_real_query(connection, query, (unsigned long)qrylen);

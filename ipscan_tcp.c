@@ -104,9 +104,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 {
 	struct addrinfo *res, *aip;
 	struct addrinfo hints;
-	// delete int sock = -1, timeo = -1, conn = -1, cl = -1;
 	int error;
-	// delete int i;
 	struct timeval timeout;
 	char portnum[8];
 
@@ -267,7 +265,6 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist)
 {
 	int rc,result;
-	// delete unsigned int i;
 	pid_t childpid = fork();
 	if (childpid > 0)
 	{
