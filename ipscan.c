@@ -988,12 +988,13 @@ int main(void)
 
 		#if (TEXTMODE != 1)
 		// javascript mode only
-                int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+                int64_t timedifference;
 		#endif
 
 		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numqueries = %d\n", numqueries);
 		#if (TEXTMODE != 1)
+                timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: querysession = %"PRIu64" querystarttime = %"PRIu64" diff = %"PRId64"\n", querysession, querystarttime, timedifference );
 		if (1 != qsf || 1 != qstf)
