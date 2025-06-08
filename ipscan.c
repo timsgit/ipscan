@@ -475,15 +475,15 @@ int main(void)
 				int finished = 0;
 
 				// Loop around while we haven't exceeded MAXQUERYSTRLEN, the next character is valid, and we haven't found too many query strings
-				while (MAXQUERYSTRLEN > queryindex && 0 != querystring_is_alphanum(querystring[queryindex]) && 0 == finished && MAXQUERIES > numqueries)
+				while (MAXQUERYSTRLEN > queryindex && 0 == finished && MAXQUERIES > numqueries && 0 != querystring_is_alphanum(querystring[queryindex]))
 				{
 					int varnameindex = 0;
 					query[numqueries].valid = 0;
 
 					// Determine the querystring variable name
 					// Loop around while the character is an alphanumeric and we haven't reached the allowed querystring or variable name length
-					while ( 0 != querystring_is_alphanum(querystring[queryindex])\
-							&& MAXQUERYSTRLEN > queryindex && MAXQUERYNAMELEN > varnameindex && 0 == finished)
+					while ( MAXQUERYSTRLEN > queryindex && MAXQUERYNAMELEN > varnameindex && 0 == finished\
+						 && 0 != querystring_is_alphanum(querystring[queryindex]) )
 					{
 						query[numqueries].varname[varnameindex] = querystring[queryindex];
 						varnameindex ++;
