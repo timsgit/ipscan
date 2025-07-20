@@ -76,7 +76,7 @@
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 
-//Poll support
+// Poll support
 #include <poll.h>
 
 // Define offset into ICMPv6 packet where user-defined data resides

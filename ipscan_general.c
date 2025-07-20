@@ -159,7 +159,7 @@ void proto_to_string(uint32_t proto, char * retstring)
 //
 // -----------------------------------------------------------------------------
 //
-void fetch_to_string(int fetchnum, char * retstring)
+void fetch_to_string(uint32_t fetchnum, char * retstring)
 {
 	int rc;
 	if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
@@ -215,7 +215,7 @@ void fetch_to_string(int fetchnum, char * retstring)
 //
 // -----------------------------------------------------------------------------
 //
-char * state_to_string(int statenum, char * retstringptr, int retstringfree)
+char * state_to_string(uint32_t statenum, char * retstringptr, int retstringfree)
 {
 	if (0 >= retstringfree) return (char *)NULL;
 	char * retstringptrstart = retstringptr;
@@ -307,7 +307,7 @@ char * state_to_string(int statenum, char * retstringptr, int retstringfree)
 //
 // -----------------------------------------------------------------------------
 //
-void result_to_string(int result, char * retstring)
+void result_to_string(uint32_t result, char * retstring)
 {
 	int rc;
 	char hosttype[16];

@@ -205,6 +205,13 @@ void create_json_header(void)
 	printf("%s%c%c\n","Content-type:application/json;charset=utf-8",13,10);
 }
 
+void create_redirect_header(const char * location)
+{
+	printf ("Status: 302 Moved Temporarily\r\n");
+        printf ("Location: %s\r\n", location);
+        printf ("\r\n");
+}
+
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery)
 {
 	uint16_t i;

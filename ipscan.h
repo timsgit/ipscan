@@ -264,7 +264,16 @@
 	// MySQL - maximum number of rows expected per unique client session (IP/session/starttime)
 	// expected maximum is TCP+UDP+ICMP+state
 	// MUST be less than INT_MAX (so can add one futher) to return successfully from count_rows_db()
+	//
 	#define IPSCAN_DB_MAX_EXPECTED_ROWS (999)
+	//
+	// Some database accesses use locks - allow up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+	//
+	#define IPSCAN_DB_ACCESS_ATTEMPTS (3)
+	//
+	// Wait between DB ACCESS ATTEMPTS - in microseconds
+	//
+	#define IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US (333000)
 
 	// MySQL - use the InnoDB engine type by default
 	// You can verify the engine type using:
@@ -303,9 +312,10 @@
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 3
 		#define CLIENTDEBUG 1
+		#define DBDEBUG 1
 	#endif
 	//
-	// database (NOT port scan results)  related debug:
+	// database (NOT port scan results) related debug:
 	// #define DBDEBUG 1
 	//
 	// database (port scan results) related debug:
@@ -332,6 +342,9 @@
 	// Client (remote) debug - signalling, etc.
 	// Primarily for troublesome Javascript clients.
 	// #define CLIENTDEBUG 1
+
+	// debug option to only use tidy_up_only() - do NOT use in production
+	// #define IPSCAN_TIDY_UP_ONLY 1
 
 	// Decide whether to include ping support (requires setuid which some servers don't allow)
 	// Do not modify this statement - adjust SETUID_AVAILABLE in the Makefile instead
@@ -635,6 +648,7 @@
 	#define IPSCAN_DELETE_MINIMUM_TIME (1746449000)
 
 	// TIDY UP - either delete everything in the database or 'just' results
+	//
 	#define IPSCAN_DELETE_EVERYTHING (1)
 	#define IPSCAN_DELETE_RESULTS_ONLY (0)
 
@@ -669,11 +683,6 @@
 	// TESTSTATE browser-signalled values - helps to debug javascript failures
 	// Mapped to high values so they are all out of range of PORTSTATE
 	//
-	// Size of buffer holding the flag descriptions
-	// Typically each flag is 11 characturs including trailing comma and space
-	//
-	#define IPSCAN_FLAGSBUFFER_SIZE (128)
-	//
 	#define IPSCAN_TESTSTATE_IDLE (0)
 	#define IPSCAN_TESTSTATE_RUNNING_BIT (32)
 	#define IPSCAN_TESTSTATE_COMPLETE_BIT (64)
@@ -684,6 +693,13 @@
 	#define IPSCAN_TESTSTATE_UNEXPCHANGE_BIT (2048)
 	#define IPSCAN_TESTSTATE_BADCOMPLETE_BIT (4096)
 	#define IPSCAN_TESTSTATE_DATABASE_ERROR_BIT (8192)
+
+	//
+	// Size of buffer holding the flag textual descriptions
+	// Typically each flag is 11 characters including trailing comma and space
+	//
+	#define IPSCAN_FLAGSBUFFER_SIZE (128)
+	//
 
 	// Mapping for connection attempt results
 	// To add a new entry first insert a new internal state in the PORTSTATE enumeration and then add a

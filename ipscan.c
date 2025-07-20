@@ -102,9 +102,15 @@
 // 0.79 - incorporate new tidy_up_db() using server defined timestamp
 // 0.80 - various code quality improvements (scope reductions)
 // 0.81 - querystring parsing improvements
+// 0.82 - add debug-only option to disable delete_from_db and rely on tidy_up_db
+// 0.83 - better error handling
+// 0.84 - report read_db_result return codes
+// 0.85 - check for multiple teststate entries
+// 0.86	- only rewrite running state if we haven't already finished the scan
+// 0.87 - Navigate away sets complete bit too
 
 //
-#define IPSCAN_MAIN_VER "0.81"
+#define IPSCAN_MAIN_VER "0.87"
 //
 
 #include "ipscan.h"
@@ -146,17 +152,19 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost);
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result, const char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port);
 int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, int8_t deleteall);
 int tidy_up_db(int8_t deleteall);
-int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost);
+int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result, const char *indirecthost);
 int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
+int count_teststate_rows_db(uint64_t timestamp, uint64_t session);
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *udpportlist);
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *portlist);
 void create_json_header(void);
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery);
+void create_redirect_header(const char * location);
 // starttime is of type time_t in create_html_body() calls:
 void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
 void report_useragent_strings(char *uavar, char *secchuavar, char *secchuaarchvar, char *secchuaarchplatvar);
@@ -394,7 +402,7 @@ int main(void)
 	// ensure length OK
 	if (NULL == reqmethodvar)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : REQUEST_METHOD variable lookup returned NULL.\n");
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: REQUEST_METHOD variable lookup returned NULL.\n");
 	}
 	else if ( strnlen(reqmethodvar, (MAXREQMETHODLEN+1)) > MAXREQMETHODLEN )
 	{
@@ -926,7 +934,7 @@ int main(void)
 		while (i < numqueries && strncmp("starttime",query[i].varname,9)!= 0) i++;
 		if (i < numqueries && query[i].valid == 1)
 		{
-			if (query[i].varval >= 0)
+			if (query[i].varval > 0)
 			{
 				querystarttime = (uint64_t)query[i].varval;
 				#if (TEXTMODE != 1)
@@ -947,7 +955,7 @@ int main(void)
 		while (i < numqueries && strncmp("session",query[i].varname,7)!= 0) i++;
 		if (i < numqueries && query[i].valid == 1)
 		{
-			if (query[i].varval >= 0)
+			if (query[i].varval > 0)
 			{
 				querysession = (uint64_t)query[i].varval;
 				#if (TEXTMODE != 1)
@@ -1008,11 +1016,13 @@ int main(void)
 		#endif
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: reconstituted query string = %s\n", reconquery );
+		#if (3 < IPSCAN_LOGVERBOSITY)
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: portlist contents, numports = %d:\n", numports);
 		for ( unsigned int j = 0 ; j < numports ; j++ )
 		{
 			IPSCAN_LOG (LOGPREFIX "ipscan: DEBUG INFO: port_num = %d, special = %d\n", portlist[j].port_num, portlist[j].special);
 		}
+		#endif
 		#endif
 
 		//
@@ -1056,20 +1066,39 @@ int main(void)
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 
+			int num_rows;
 			//
 			// Record TESTSTATE as RUNNING even though not necessary for text-mode
 			//
                         const char unusedfield[] = "unused";
                         // Generate database entry for test state - indicate test running
-                        rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			rc = -1;
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+			{
+                        	rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
                                          (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
-                        if (rc != 0)
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE RUNNING text-mode returned non-zero: %d\n", rc);
-                        }
+                        	if (rc != 0)
+                        	{
+                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING attempt %d returned non-zero: %d\n", (z+1), rc);
+					// Wait to improve chances of missing a database deadlock
+                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+                        	}
+			}
+			if (0 != rc)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+			}
+
 			// Check we know about this client
-                        int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned error: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+			}
+                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -1097,7 +1126,7 @@ int main(void)
 			stptr = ctime_r(&starttime,stimeresult);
 			if (NULL == stptr)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR - text-mode ctime_r() failed\n");
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode ctime_r() failed\n");
 			}
 			else
 			{
@@ -1155,16 +1184,34 @@ int main(void)
 
 			portsstats[result]++ ;
 
-			rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
-					(uint32_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
-			if (rc != 0)
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			rc = -1;
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : write_db for ping result returned : %d\n", rc);
+				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+					(uint32_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
+				if (rc != 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db() for ping result returned : %d\n", rc);
+					// Wait to improve chances of missing a database deadlock
+                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+				}
 			}
+			if (0 != rc)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db pingstate loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+			}
+
 
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned error: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+			}
+                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -1242,7 +1289,13 @@ int main(void)
 
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned error: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+			}
+                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -1269,6 +1322,11 @@ int main(void)
 				uint8_t special = udpportlist[portindex].special;
 				last = (portindex == (NUMUDPPORTS-1)) ? 1 : 0 ;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
+				if (0 > result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode UDP results read_db_result() returned error value: %d\n", result);
+					result = PORTUNKNOWN;
+				}
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result() returned UNKNOWN: UDP port scan results table\n" );
@@ -1390,17 +1448,32 @@ int main(void)
 
 			// Update test state to reflect complete, even though we don't use it for text-mode case
 			result = IPSCAN_TESTSTATE_COMPLETE_BIT;
-                        // Write the new value back to the database
-                        rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			rc = -1;
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+			{
+                        	// Write the new value back to the database
+                        	rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
                                  (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
-                        if (0 != rc)
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for text-mode IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
-                        }
+                        	if (0 != rc)
+                        	{
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for text-mode IPSCAN_TESTSTATE UPDATE attempt %d returned non-zero: %d\n", (z+1), rc);
+                        	}
+			}
+			if (0 != rc)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+			}
 
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned error: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+			}
+                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -1426,6 +1499,11 @@ int main(void)
 				uint8_t special = portlist[portindex].special;
 				last = (portindex == (numports-1)) ? 1 : 0 ;
 				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
+				if (0 > result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode TCP read_db_result() returned error value: %d\n", result );
+					result = PORTUNKNOWN;
+				}
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result() returned UNKNOWN: TCP port scan results table\n" );
@@ -1577,30 +1655,40 @@ int main(void)
 			}
 
 			// Delete our results now that we're done
-			// have up to two attempts in case of deadlock
+			// have up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			rc = -1;
-			for (i = 0 ; i<2 && rc != 0; i++)
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
+				#ifndef IPSCAN_TIDY_UP_ONLY
 				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_DELETE_RESULTS_ONLY);
+				#else
+				IPSCAN_LOG( LOGPREFIX "ipscan: WARN: text-only delete_from_db DISABLED\n");
+				rc = 0;
+				#endif
 				if (0 != rc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db attempt %d return code was %d (expected 0)\n", (i+1), rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db attempt %d return code was %d (expected 0)\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
-                                	sleep( IPSCAN_DELETE_WAIT_PERIOD );
+					usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
 				}
 			}
                         if (0 != rc)
                         {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db loop exited after two attempts with non-zero rc: %d\n", rc);
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
                         }
-			// Mark test as completed successfully
-			result = IPSCAN_TESTSTATE_COMPLETE_BIT;
-			rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
-                                (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
-                        if (0 != rc)
-                        {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
-                        }
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			rc = -1;
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+			{
+				// Mark test as completed successfully
+				result = IPSCAN_TESTSTATE_COMPLETE_BIT;
+				rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+                                	(uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+                        	if (0 != rc)
+                        	{
+                        		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db for IPSCAN_TESTSTATE UPDATE attempt %d returned non-zero: %d\n", (z+1), rc);
+                        	}
+			}
 			return(EXIT_SUCCESS);
 		}
 
@@ -1657,16 +1745,29 @@ int main(void)
 
 			// Check we know about this client
 			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-			if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+			if (num_rows < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
+			else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
 				if (1 != qsf || 1 != qstf)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR INFO: qsf = %d qstf = %d\n", qsf, qstf );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: qsf = %d qstf = %d\n", qsf, qstf );
 				}
-				// report error but allow execution to continue - return(EXIT_SUCCESS);
+			}
+			else if (num_rows == 0)
+			{
+				// see if non-0 for same session but another host
+				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
 			}
 			else
 			{
@@ -1685,6 +1786,11 @@ int main(void)
 		
 			// Fetch running state result from database so it can be updated
 			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
+			if (0 > result)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned bad value: %d\n", result);
+				result = PORTUNKNOWN;
+			}
 			if ( PORTUNKNOWN == result )
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: fetching running state\n" );
@@ -1701,67 +1807,94 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: running state changed to indicate DATABASE error\n" );
 				// Default for unused database entries
 				const char unusedfield[] = "unused";
-				rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
-				if (rc != 0)
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE rewrite returned non-zero: %d\n", rc);
+					rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+					 	(uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+					if (rc != 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE rewrite returned non-zero: %d\n", rc);
+						// Wait to improve chances of missing a database deadlock
+                				usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+					}
+				}
+				if (0 != rc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE rewrite loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
 				}
 			}
 
-			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
+			//
+			// Only update the result if we haven't already finished the scan
+			//
+			if (0 == (result & IPSCAN_TESTSTATE_COMPLETE_BIT))
 			{
-				// Overwrite any other bits in this ONE case
-				result = IPSCAN_TESTSTATE_COMPLETE_BIT;
-			}
-			else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
-			{
-				result |= IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
-			}
-			else if (IPSCAN_EVAL_ERROR == fetchnum)
-			{
-				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
-			}
-			else if (IPSCAN_OTHER_ERROR == fetchnum)
-			{
-				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
-			}
-			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
-			{
-				result |= IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
-			}
-			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
-			{
-				result |= IPSCAN_TESTSTATE_NAVAWAY_BIT; 
-			}
-			else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
-			{
-				result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
-			}
-			else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
-			{
-				result |= IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
-			}
-			else
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: fetch included unexpected value %d for protected client address (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-						fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-						(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
-				if (1 != qsf || 1 != qstf)
+				if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: qsf = %d qstf = %d\n", qsf, qstf );
+					// Overwrite any other bits in this ONE case
+					result = IPSCAN_TESTSTATE_COMPLETE_BIT;
 				}
-				result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: state changed to indicate OTHER error\n" );
-			}
-			// Default for unused database entries
-			const char unusedfield[] = "unused";
-			// Write the new value back to the database
-			rc = update_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-				 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
-			if (0 != rc)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
+				else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
+				{
+					result |= IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT; 
+				}
+				else if (IPSCAN_EVAL_ERROR == fetchnum)
+				{
+					result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
+				}
+				else if (IPSCAN_OTHER_ERROR == fetchnum)
+				{
+					result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
+				}
+				else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
+				{
+					result |= IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
+				}
+				else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
+				{
+					// Mark test as complete, noting that it ended because client navigated away
+					result = IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT; 
+				}
+				else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
+				{
+					result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
+				}
+				else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
+				{
+					result |= IPSCAN_TESTSTATE_UNEXPCHANGE_BIT; 
+				}
+				else
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: fetch included unexpected value %d for protected client address (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+							fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+							(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+					if (1 != qsf || 1 != qstf)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: qsf = %d qstf = %d\n", qsf, qstf );
+					}
+					result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: state changed to indicate OTHER error\n" );
+				}
+				// Default for unused database entries
+				const char unusedfield[] = "unused";
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+				{	
+					// Write the new value back to the database
+					rc = update_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+						 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+					if (0 != rc)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: javascript-mode ERROR: update_db for IPSCAN_TESTSTATE UPDATE attempt %d returned non-zero: %d\n", (z+1), rc);
+					}
+				}
+				if (0 != rc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+				}
 			}
 			// Replacement for dummy output
 			// Simplified header in which to wrap array of results
@@ -1811,7 +1944,13 @@ int main(void)
 
 			// Check we know about this client
                         int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
+                        else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					 num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -1822,6 +1961,14 @@ int main(void)
 				}
                                 // still return results return(EXIT_SUCCESS);
                         }
+			else if (num_rows == 0)
+			{
+				// see if non-0 for same session but another host
+				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
                         else
                         {
 				#ifdef CLIENTDEBUG
@@ -1849,7 +1996,13 @@ int main(void)
 			// effectively clear timeout bit, etc. if we've had a successful fetch
 			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
                                         (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
-			if (IPSCAN_TESTSTATE_RUNNING_BIT != result)
+			if (0 > result)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript fetch read_db_result() returned bad value: %d forcing to IPSCAN_TESTSTATE_IDLE\n", result);
+				result = IPSCAN_TESTSTATE_IDLE;
+			}
+			// if teststate is not running and its not complete then set it to running
+			if (((IPSCAN_TESTSTATE_RUNNING_BIT & result) != IPSCAN_TESTSTATE_RUNNING_BIT) && ((IPSCAN_TESTSTATE_COMPLETE_BIT & result) != IPSCAN_TESTSTATE_COMPLETE_BIT))
 			{
 				#ifdef CLIENTDEBUG
 				IPSCAN_LOG( LOGPREFIX "ipscan: javascript fetch attempting to rewrite result from %d to %d\n", result, IPSCAN_TESTSTATE_RUNNING_BIT );
@@ -1857,12 +2010,23 @@ int main(void)
 				result = IPSCAN_TESTSTATE_RUNNING_BIT;
                         	// Write the new value back to the database
 				const char unusedfield[] = "unused";
-                        	rc = update_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-                                 	(uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
-                        	if (0 != rc)
-                        	{
-                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for javascript-mode fetch IPSCAN_TESTSTATE UPDATE returned non-zero: %d\n", rc);
-                        	}
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+				{
+                        		rc = update_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+                                 		(uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), result, unusedfield);
+                        		if (0 != rc)
+                        		{
+                               			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for javascript-mode fetch IPSCAN_TESTSTATE UPDATE attempt %d returned non-zero: %d\n", (z+1), rc);
+						// Wait to improve chances of missing a database deadlock
+                				usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+                        		}
+				}
+				if (0 != rc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode fetch update_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+				}
 			}
 		}
 
@@ -1904,15 +2068,65 @@ int main(void)
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, timedifference );
 			}
 			#endif
+// needs indents fixing
+		// Start of check for existing test with same parameters
+                int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
+		if (num_rows < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode count_rows_db() at duplicate initiation test returned error: %d\n", num_rows);
+		}
+		else if (num_rows > 0)
+		{
+			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
+			if (0 > result)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode read_db_result() at duplicate initiation test returned bad value: %d\n", result);
+				result = PORTUNKNOWN;
+			}
+			if ( PORTUNKNOWN != result )
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode test with these session parameters is already running, attempting redirect\n" );
+				// attempt redirect to cause query session parameters to be dropped
+				create_redirect_header(URIPATH"/"EXENAME);
+				return(EXIT_SUCCESS);
+			}
+		}
+		else if (num_rows == 0)
+		{
+			// see if non-0 for same session but another host
+			int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
+			if (0 != other_num_rows)
+			{
+                               IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+				 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                 (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+				// attempt redirect to cause query session parameters to be dropped
+				create_redirect_header(URIPATH"/"EXENAME);
+				return(EXIT_SUCCESS);
+			}
+		}
+		// End of check for existing test with same parameters
+// needs indents fixing
 
 			// Default for unused database entries
 			const char unusedfield[] = "unused";
-			// Generate database entry for test state - indicate test running
-			rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
-			if (rc != 0)
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			rc = -1;
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
+				// Generate database entry for test state - indicate test running
+				rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+					 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
+				if (rc != 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
+					// Wait to improve chances of missing a database deadlock
+                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+				}
+			}
+			if (0 != rc)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
 			}
 
 			time_t scanstart = time(NULL);
@@ -1923,8 +2137,14 @@ int main(void)
 			}
 
 			// Check we know about this client
-                        int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (init) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
+                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (init) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -2021,11 +2241,22 @@ int main(void)
 					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
 			#endif
 			portsstats[result]++ ;
-			rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					(uint32_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
-			if (rc != 0)
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			rc = -1;
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for ping result returned non-zero: %d\n", rc);
+				rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+					(uint32_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingresult, indirecthost);
+				if (rc != 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for ping result returned non-zero: %d\n", rc);
+					// Wait to improve chances of missing a database deadlock
+                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+				}
+			}
+			if (0 != rc)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for ping result loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
 				create_html_body_end();
 				return(EXIT_SUCCESS);
 			}
@@ -2033,7 +2264,13 @@ int main(void)
 
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
+                        else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -2044,6 +2281,14 @@ int main(void)
 				}
                                 // return(EXIT_SUCCESS);
                         }
+			else if (num_rows == 0)
+			{
+				// see if non-0 for same session but another host
+				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
                         else
                         {
 				#ifdef CLIENTDEBUG
@@ -2108,7 +2353,13 @@ int main(void)
 
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
+                        else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -2119,6 +2370,14 @@ int main(void)
 				}
                                 // return(EXIT_SUCCESS);
                         }
+			else if (num_rows == 0)
+			{
+				// see if non-0 for same session but another host
+				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
                         else
                         {
 				#ifdef CLIENTDEBUG
@@ -2179,7 +2438,13 @@ int main(void)
 
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-                        if (num_rows <= 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
+			if (num_rows < 0)
+			{
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
+                        else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
@@ -2190,6 +2455,14 @@ int main(void)
 				}
                                 // return(EXIT_SUCCESS);
                         }
+			else if (num_rows == 0)
+			{
+				// see if non-0 for same session but another host
+				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
+                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			}
                         else
                         {
 				#ifdef CLIENTDEBUG
@@ -2214,6 +2487,11 @@ int main(void)
 				uint8_t special = udpportlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
 					(uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
+				if (0 > result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript UDP stats read_db_result() returned bad value: %d\n", result );
+					result = PORTUNKNOWN;
+				}
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result() returned UNKNOWN: UDP creating stats\n" );
@@ -2266,6 +2544,11 @@ int main(void)
 				uint8_t special = portlist[portindex].special;
 				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
 				 (uint32_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
+				if (0 > result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript TCP stats read_db_result() returned bad value: %d\n", result );
+					result = PORTUNKNOWN;
+				}
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: TCP creating stats\n" );
@@ -2387,6 +2670,11 @@ int main(void)
 			{
 				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
 						 (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT) ) );
+				if (0 > result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript waiting read_db_result() returned bad value: %d\n", result);
+					result = PORTUNKNOWN;
+				}
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: waiting for test end\n" );
@@ -2463,20 +2751,27 @@ int main(void)
 			// If the client finished successfully then delete the results now, otherwise cleanup will delete them later
 			if (1 == client_finished)
 			{
-				// Have two attempts in case of database deadlock
+				// Make IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of database deadlock
 				rc = -1;
-                        	for (i = 0 ; i<2 && rc != 0; i++)
+                        	for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
                         	{
-					// Wait so that errant/delayed XHR fetches are likely to subside and deadlocks less likely
-					sleep( IPSCAN_DELETE_WAIT_PERIOD );
-
 					// Delete the results
 					//
+					#ifndef IPSCAN_TIDY_UP_ONLY
 					rc = delete_from_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_DELETE_RESULTS_ONLY);
+                                	#else  
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: WARN: javascript delete_from_db DISABLED\n");
+                                	rc = 0;
+                                	#endif
 					if (0 != rc)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript delete_from_db attempt %d return code was %d (expected 0)\n", (i+1),  rc);
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript delete_from_db attempt %d return code was %d (expected 0)\n", (z+1),  rc);
+						usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
 					}
+				}
+				if (0 != rc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
 				}
 			}
 		}
@@ -2603,14 +2898,42 @@ int main(void)
 	}
 
 	#ifdef IPSCAN_NO_TIDY_UP_DB
-	IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: tidy_up_db() calls disabled\n");
+	IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) calls disabled\n");
 	#else
-	// Call tidy_up_db() to purge any expired results 
-	rc = tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY);
-	if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) returned %d\n", rc);
-	rc = tidy_up_db(IPSCAN_DELETE_EVERYTHING);
-	if (0 != rc) IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) returned %d\n", rc);
+	// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+	rc = -1;
+	for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+	{
+		// delete everything
+		rc = tidy_up_db(IPSCAN_DELETE_EVERYTHING);
+		if (0 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) attempt %d returned %d\n", (z+1), rc);
+			// Wait to improve chances of missing a database deadlock
+                	usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+		}
+	}
+	if (0 != rc)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+	}
 	#endif
-
+	// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+	rc = -1;
+	for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+	{
+		// Always purge expired results 
+		rc = tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY);
+		if (0 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) attempt %d returned %d\n", (z+1), rc);
+			// Wait to improve chances of missing a database deadlock
+                	usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+		}
+	}
+	if (0 != rc)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+	}
 	return(EXIT_SUCCESS);
 }

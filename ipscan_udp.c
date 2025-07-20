@@ -54,9 +54,10 @@
 // 0.34			Update copyright year
 // 0.35			Improvements to reduce scope of multiple variables
 // 0.36			Update copyright year and DNS target
+// 0.37 		Add write_db loop to account for deadlocks
 
 //
-#define IPSCAN_UDP_VER "0.36"
+#define IPSCAN_UDP_VER "0.37"
 //
 
 #include "ipscan.h"
@@ -96,7 +97,7 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost );
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result, const char *indirecthost );
 
 // Others that FreeBSD highlighted
 #include <netinet/in.h>
@@ -107,7 +108,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 
-//Poll support
+// Poll support
 #include <poll.h>
 
 // Parallel processing related
@@ -2041,8 +2042,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist)
 {
-	int rc,result;
-	unsigned int i;
 	pid_t childpid = fork();
 	if (childpid > 0)
 	{
@@ -2058,16 +2057,27 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		#endif
 		// child - actually do the work here - and then exit successfully
 		const char unusedfield[8] = "unused\0";
-		for (i = 0 ; i <todo ; i++)
+		for (unsigned int i = 0 ; i <todo ; i++)
 		{
 			uint16_t port = udpportlist[(unsigned int)(portindex+i)].port_num;
 			uint8_t special = udpportlist[(unsigned int)(portindex+i)].special;
-			result = check_udp_port(hostname, port, special);
+			int result = check_udp_port(hostname, port, special);
 			// Put results into database
-			rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
-			if (rc != 0)
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			int rc = -1;
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db returned %d\n", rc);
+				rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
+				if (rc != 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db attempt %d returned %d\n", (z+1), rc);
+					// Wait to improve chances of missing a database deadlock
+                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+				}
+			}
+			if (0 != rc)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_port_parll(): ERROR: write_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()

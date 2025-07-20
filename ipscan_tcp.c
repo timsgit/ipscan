@@ -36,9 +36,10 @@
 // 0.16			update copyright year
 // 0.17			update copyright year
 // 0.18			reduce scope of multiple variables
+// 0.19			add write_db loop to account for deadlocks
 
 //
-#define IPSCAN_TCP_VER "0.18"
+#define IPSCAN_TCP_VER "0.19"
 //
 
 #include "ipscan.h"
@@ -74,7 +75,7 @@
 #include <netinet/ip6.h>
 #include <netinet/icmp6.h>
 
-//Poll support
+// Poll support
 #include <poll.h>
 
 // Parallel processing related
@@ -86,7 +87,7 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, int32_t result, const char *indirecthost );
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result, const char *indirecthost );
 
 //
 // report version
@@ -264,7 +265,6 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *portlist)
 {
-	int rc,result;
 	pid_t childpid = fork();
 	if (childpid > 0)
 	{
@@ -286,14 +286,25 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			uint8_t special = portlist[portindex+i].special;
 			#ifdef TCPDEBUG
 			IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): DEBUG: portindex = %d, i = %d, port_num = %d, special = %d\n", portindex, i, portlist[portindex+i].port_num, portlist[portindex+i].special);
-			IPSCAN_LOG ( LOGPREFIX "check_tcp_ports_parll(): DEBUG: hostname = %s, port = %d, special = %d\n", hostname, port, special);
+			IPSCAN_LOG ( LOGPREFIX "check_tcp_ports_parll(): DEBUG: hostname = %s, port = %u, special = %u\n", hostname, port, special);
 			#endif
-			result = check_tcp_port(hostname, port, special);
+			int result = check_tcp_port(hostname, port, special);
 			// Put results into database
-			rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
-			if (rc != 0)
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			int rc = -1;
+			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: check_tcp_port_parll() write_db returned %d\n", rc);
+				rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
+				if (rc != 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: check_tcp_port_parll() write_db attempt %d returned %d\n", (z+1), rc);
+					// Wait to improve chances of missing a database deadlock
+                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+				}
+			}
+			if (0 != rc)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(): ERROR: write_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()
