@@ -108,9 +108,10 @@
 // 0.85 - check for multiple teststate entries
 // 0.86	- only rewrite running state if we haven't already finished the scan
 // 0.87 - Navigate away sets complete bit too
+// 0.88 - move to nanosleep() from deprecated usleep()
 
 //
-#define IPSCAN_MAIN_VER "0.87"
+#define IPSCAN_MAIN_VER "0.88"
 //
 
 #include "ipscan.h"
@@ -1082,7 +1083,13 @@ int main(void)
                         	{
                                		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING attempt %d returned non-zero: %d\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
-                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+					struct timespec rem;
+					const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                			int rc2 = nanosleep( &req, &rem);
+					if (0 != rc2)
+					{
+                               			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+					}
                         	}
 			}
 			if (0 != rc)
@@ -1194,7 +1201,13 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db() for ping result returned : %d\n", rc);
 					// Wait to improve chances of missing a database deadlock
-                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+					struct timespec rem;
+                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        int rc2 = nanosleep( &req, &rem);
+                                        if (0 != rc2)
+                                        {
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db ping nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                        }
 				}
 			}
 			if (0 != rc)
@@ -1669,7 +1682,13 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db attempt %d return code was %d (expected 0)\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
-					usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+					struct timespec rem;
+                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        int rc2 = nanosleep( &req, &rem);
+                                        if (0 != rc2)
+                                        {
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode delete_from_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                        }
 				}
 			}
                         if (0 != rc)
@@ -1817,7 +1836,13 @@ int main(void)
 					{
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE rewrite returned non-zero: %d\n", rc);
 						// Wait to improve chances of missing a database deadlock
-                				usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+						struct timespec rem;
+                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db nanosleep() rewrite returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
 					}
 				}
 				if (0 != rc)
@@ -2020,7 +2045,13 @@ int main(void)
                         		{
                                			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for javascript-mode fetch IPSCAN_TESTSTATE UPDATE attempt %d returned non-zero: %d\n", (z+1), rc);
 						// Wait to improve chances of missing a database deadlock
-                				usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+						struct timespec rem;
+                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_db fetch nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
                         		}
 				}
 				if (0 != rc)
@@ -2121,7 +2152,13 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
 					// Wait to improve chances of missing a database deadlock
-                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+					struct timespec rem;
+                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        int rc2 = nanosleep( &req, &rem);
+                                        if (0 != rc2)
+                                        {
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                        }
 				}
 			}
 			if (0 != rc)
@@ -2251,7 +2288,13 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for ping result returned non-zero: %d\n", rc);
 					// Wait to improve chances of missing a database deadlock
-                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+					struct timespec rem;
+                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        int rc2 = nanosleep( &req, &rem);
+                                        if (0 != rc2)
+                                        {
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db ping nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                        }
 				}
 			}
 			if (0 != rc)
@@ -2766,7 +2809,13 @@ int main(void)
 					if (0 != rc)
 					{
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript delete_from_db attempt %d return code was %d (expected 0)\n", (z+1),  rc);
-						usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+						struct timespec rem;
+                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode delete_from_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
 					}
 				}
 				if (0 != rc)
@@ -2910,7 +2959,13 @@ int main(void)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) attempt %d returned %d\n", (z+1), rc);
 			// Wait to improve chances of missing a database deadlock
-                	usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+			struct timespec rem;
+                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                        int rc2 = nanosleep( &req, &rem);
+                        if (0 != rc2)
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                        }
 		}
 	}
 	if (0 != rc)
@@ -2928,7 +2983,13 @@ int main(void)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) attempt %d returned %d\n", (z+1), rc);
 			// Wait to improve chances of missing a database deadlock
-                	usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+			struct timespec rem;
+                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                        int rc2 = nanosleep( &req, &rem);
+                        if (0 != rc2)
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                        }
 		}
 	}
 	if (0 != rc)

@@ -271,9 +271,10 @@
 	//
 	#define IPSCAN_DB_ACCESS_ATTEMPTS (3)
 	//
-	// Wait between DB ACCESS ATTEMPTS - in microseconds
+	// Wait between DB ACCESS ATTEMPTS - in seconds and nanoseconds
 	//
-	#define IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US (333000)
+	#define IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S (0)
+	#define IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS (333333000)
 
 	// MySQL - use the InnoDB engine type by default
 	// You can verify the engine type using:

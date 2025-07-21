@@ -55,9 +55,10 @@
 // 0.35			Improvements to reduce scope of multiple variables
 // 0.36			Update copyright year and DNS target
 // 0.37 		Add write_db loop to account for deadlocks
+// 0.38			move to nanosleep() from deprecated usleep()
 
 //
-#define IPSCAN_UDP_VER "0.37"
+#define IPSCAN_UDP_VER "0.38"
 //
 
 #include "ipscan.h"
@@ -2072,7 +2073,13 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db attempt %d returned %d\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
-                			usleep( IPSCAN_DB_DEADLOCK_WAIT_PERIOD_US );
+					struct timespec rem;
+                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        int rc2 = nanosleep( &req, &rem);
+                                        if (0 != rc2)
+                                        {
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: check_udp_port_parll() write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                        }
 				}
 			}
 			if (0 != rc)
