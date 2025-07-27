@@ -311,7 +311,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" const timeoutURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
 	printf(" clearTimeout(myHTTPTimeout);");
-//	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", timeoutURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");

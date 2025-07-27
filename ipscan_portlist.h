@@ -43,9 +43,10 @@
 // 0.19 - add TCP/20005 (for KCodes NetUSB - see CVE-2021-45608)
 // 0.20 - update copyright year
 // 0.21 - const portlist structs
+// 0.22 - add MongoDB ports
 
 //
-#define IPSCAN_PORTLIST_VER "0.21"
+#define IPSCAN_PORTLIST_VER "0.22"
 //
 
 #include "ipscan.h"
@@ -60,9 +61,11 @@
 const struct portlist_struc defportlist[] =
 {
 		{    7, 0, "Echo"},\
+		{   20, 0, "FTP-data" },\
 		{   21, 0, "FTP" },\
 		{   22, 0, "SSH" },\
 		{   23, 0, "Telnet" },\
+		{   24, 0, "Private Mail system" },\
 		{   25, 0, "SMTP" },\
 		{   37, 0, "Time" },\
 		{   43, 0, "WHOIS" },\
@@ -74,29 +77,37 @@ const struct portlist_struc defportlist[] =
 		{  113, 0, "Ident, Auth" },\
 		{  119, 0, "NNTP" },\
 		{  135, 0, "Microsoft-EPMAP" },\
+		{  137, 0, "NetBIOS name server" },\
+		{  138, 0, "NetBIOS Datagram server" },\
 		{  139, 0, "NetBIOS Session" },\
 		{  143, 0, "IMAP" },\
 		{  179, 0, "BGP" },\
+		{  194, 0, "IRC" },\
 		{  311, 0, "Apple-WebAdmin" },\
 		{  389, 0, "LDAP" },\
 		{  427, 0, "SLP" },\
 		{  443, 0, "HTTPS" },\
-		{  445, 0, "Microsoft-DS" },\
+		{  465, 0, "SMTPS RFC8314" },\
 		{  515, 0, "LPD" },\
 		{  543, 0, "Kerberos Login" },\
 		{  544, 0, "Kerberos RSH" },\
 		{  548, 0, "Apple-File" },\
+		{  563, 0, "NNTPS" },\
 		{  587, 0, "ESMTP" },\
 		{  631, 0, "IPP" },\
 		{  749, 0, "Kerberos Admin" },\
+		{  853, 0, "DNS over TLS" },\
 		{  873, 0, "Rsync" },\
 		{  993, 0, "IMAPS" },\
 		{  995, 0, "POP3S" },\
+		{  989, 0, "FTPS-data" },\
+		{  990, 0, "FTPS" },\
 		{ 1025, 0, "Blackjack, NFS, IIS or RFS" },\
 		{ 1026, 0, "CAP, Microsoft DCOM" },\
 		{ 1029, 0, "Microsoft DCOM" },\
 		{ 1030, 0, "BBN IAD" },\
 		{ 1080, 0, "Socks" },\
+		{ 1433, 0, "Microsoft-SQL server" },\
 		{ 1720, 0, "H323, Microsoft Netmeeting" },\
 		{ 1723, 0, "PPTP" },\
 		{ 1801, 0, "MSMQ" },\
@@ -105,23 +116,30 @@ const struct portlist_struc defportlist[] =
 		{ 2107, 0, "MSMQ-Mgmt" },\
 		{ 2869, 0, "SSDP Event Notification" },\
 		{ 3128, 0, "Active API, or Squid Proxy" },\
-		{ 3306, 0, "MySQL" },\
+		{ 3306, 0, "MySQL server" },\
 		{ 3389, 0, "Microsoft RDP" },\
 		{ 3689, 0, "DAAP, iTunes" },\
 		{ 5000, 0, "UPNP" },\
+		{ 5432, 0, "PostgreSQL server" },\
 		{ 5060, 0, "SIP" },\
 		{ 5100, 0, "Service Mux, Yahoo Messenger" },\
 		{ 5357, 0, "WSDAPI HTTP" },\
 		{ 5900, 0, "VNC" },\
+		{ 6379, 0, "Redis" },\
+		{ 6697, 0, "IRC via TLS/SSL" },\
 		{ 8080, 0, "HTTP alternate" },\
 		{ 9090, 0, "WebSM" },\
 		{10243, 0, "Microsoft WMP HTTP"},\
-		{11211, 0, "memcache" },\
+		{11211, 0, "Memory Cache server" },\
 		{16992, 0, "Intel AMT SOAP/HTTP"},\
 		{16993, 0, "Intel AMT SOAP/HTTPS"},\
 		{16994, 0, "Intel AMT Redir/TCP"},\
 		{16995, 0, "Intel AMT Redir/TLS"},\
 		{20005, 0, "Router KCodes NetUSB port, see CVE-2021-45608"},\
+		{27017, 0, "MongoDB server"},\
+		{27018, 0, "MongoDB shard server"},\
+		{27019, 0, "MongoDB config server"},\
+		{27020, 0, "MongoDB crypt server"},\
 		{32764, 0, "Router Backdoor"}\
 };
 
