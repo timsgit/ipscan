@@ -87,6 +87,7 @@ const struct portlist_struc defportlist[] =
 		{  389, 0, "LDAP" },\
 		{  427, 0, "SLP" },\
 		{  443, 0, "HTTPS" },\
+		{  445, 0, "Microsoft-DS" },\
 		{  465, 0, "SMTPS RFC8314" },\
 		{  515, 0, "LPD" },\
 		{  543, 0, "Kerberos Login" },\
