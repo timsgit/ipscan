@@ -38,9 +38,10 @@
 // 0.18			reduce scope of multiple variables
 // 0.19			add write_db loop to account for deadlocks
 // 0.20			move to nanosleep() from deprecated usleep()
+// 0.21			improve various format strings
 
 //
-#define IPSCAN_TCP_VER "0.20"
+#define IPSCAN_TCP_VER "0.21"
 //
 
 #include "ipscan.h"
@@ -88,7 +89,7 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result, const char *indirecthost );
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost );
 
 //
 // report version
@@ -290,15 +291,18 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			IPSCAN_LOG ( LOGPREFIX "check_tcp_ports_parll(): DEBUG: hostname = %s, port = %u, special = %u\n", hostname, port, special);
 			#endif
 			int result = check_tcp_port(hostname, port, special);
+			uint64_t write_result = 0;
+			if (result >= 0) write_result = (uint64_t)result;
+
 			// Put results into database
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			int rc = -1;
 			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
+				rc = write_db(host_msb, host_lsb, timestamp, session, (uint64_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), write_result, unusedfield );
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: check_tcp_port_parll() write_db attempt %d returned %d\n", (z+1), rc);
+					IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: check_tcp_port_parll() write_db attempt %u returned %d\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
                                         const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };

@@ -38,9 +38,10 @@
 // 0.18 - added report_ipscan_versions()
 // 0.19 - CodeQL improvements
 // 0.20 - add querystring checkers
+// 0.21 - tidy various format strings
 
 //
-#define IPSCAN_GENERAL_VER "0.20"
+#define IPSCAN_GENERAL_VER "0.21"
 //
 
 #include "ipscan.h"
@@ -200,7 +201,7 @@ void fetch_to_string(uint32_t fetchnum, char * retstring)
 	}  
 	else
 	{
-		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s:%d", "UNKNOWN", fetchnum);
+		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s:%u", "UNKNOWN", fetchnum);
 	}
 	// Report error - does IPSCAN_FETCHNUM_STRING_MAX need increasing?
 	if (rc < 0 || rc >= IPSCAN_FETCHNUM_STRING_MAX)
@@ -215,91 +216,94 @@ void fetch_to_string(uint32_t fetchnum, char * retstring)
 //
 // -----------------------------------------------------------------------------
 //
-char * state_to_string(uint32_t statenum, char * retstringptr, int retstringfree)
+// TJC - put restringfree back to signed so that calcs work correctly?
+char * state_to_string(uint64_t statenum, char * retstringptr, int retstringstart)
 {
-	if (0 >= retstringfree) return (char *)NULL;
+	if (0 >= retstringstart) return (char *)NULL;
 	char * retstringptrstart = retstringptr;
 	int rc = 0;
+	size_t retstringfree = (size_t)retstringstart;
+
 	rc = snprintf(retstringptr, retstringfree, "%s", "flags: ");
-	if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+	if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 	retstringptr += rc;
-	retstringfree -= rc;
+	retstringfree -= (size_t)rc;
 
 	if (0 != (statenum & PORTUNKNOWN))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "UNKNOWN, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_RUNNING_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "RUNNING, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_COMPLETE_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "COMPLETE, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "TIMEOUT, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_EVALERROR_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "EVALERROR, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_OTHERERROR_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "OTHERERROR, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_NAVAWAY_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "NAVAWAY, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_UNEXPCHANGE_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "UNEXPECTED, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_BADCOMPLETE_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "BADCOMPLETE, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_DATABASE_ERROR_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "DB ERROR, ");
-		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= rc;
+		retstringfree -= (size_t)rc;
 	}
 	rc = snprintf(retstringptr, retstringfree, "%s", "<EOL>\n\0");
-	if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+	if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 	retstringptr += rc;
-	retstringfree -= rc;
-	if (0 > retstringfree) return (char *)NULL;
+	retstringfree -= (size_t)rc;
+	if (0 == retstringfree) return (char *)NULL;
 	return retstringptrstart;
 }
 
@@ -399,7 +403,7 @@ void result_to_string(uint32_t result, char * retstring)
 	}
 	else
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s-%s:%d", "<MISSING>", hosttype, result);
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s-%s:%u", "<MISSING>", hosttype, result);
 	}
 	// Report error - does IPSCAN_RESULT_STRING_MAX need increasing?
 	if (rc < 0 || rc >= IPSCAN_RESULT_STRING_MAX)

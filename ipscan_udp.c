@@ -56,9 +56,10 @@
 // 0.36			Update copyright year and DNS target
 // 0.37 		Add write_db loop to account for deadlocks
 // 0.38			move to nanosleep() from deprecated usleep()
+// 0.39			improve various format strings
 
 //
-#define IPSCAN_UDP_VER "0.38"
+#define IPSCAN_UDP_VER "0.39"
 //
 
 #include "ipscan.h"
@@ -98,7 +99,7 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result, const char *indirecthost );
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost );
 
 // Others that FreeBSD highlighted
 #include <netinet/in.h>
@@ -381,7 +382,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			}
 			else
 			{
-				len += rc;
+				len += (unsigned int)rc;
 			}
 
 			// Only add new octets if no internal error has been encountered
@@ -399,7 +400,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 				else
 				{
-					len += rc;
+					len += (unsigned int)rc;
 				}
 			}
 
@@ -418,7 +419,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 				else
 				{
-					len += rc;
+					len += (unsigned int)rc;
 				}
 			}
 
@@ -437,7 +438,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 				else
 				{
-					len += rc;
+					len += (unsigned int)rc;
 				}
 			}
 
@@ -599,7 +600,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 				else
 				{
-					len += rc;
+					len += (unsigned int)rc;
 				}
 
 				// MIB - check there's enough room before adding
@@ -670,7 +671,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 				else if (PORTUNKNOWN == retval && (len >= (unsigned int)(UDP_BUFFER_SIZE-24-miblen)))
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: Insufficient room to add OID, len = %d\n", len);
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Insufficient room to add OID, len = %u\n", len);
 					retval = PORTINTERROR;
 				}
 			}
@@ -1791,7 +1792,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				}
 				else
 				{
-					len += rc;
+					len += (unsigned int)rc;
 				}
 			}
 			else
@@ -1870,7 +1871,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			}
 			else
 			{
-				len += rc;
+				len += (unsigned int)rc;
 			}
 			break;
 		}
@@ -1879,7 +1880,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	if (PORTUNKNOWN == retval)
 	{
-		rc = write(fd,&txmessage,(size_t)len);
+		rc = (int)write(fd,&txmessage,(size_t)len);
 		if (rc < 0)
 		{
 			if (0 != special)
@@ -1909,7 +1910,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	if (PORTUNKNOWN == retval)
 	{
-		rc = read(fd,&rxmessage,UDP_BUFFER_SIZE);
+		rc = (int)read(fd,&rxmessage,UDP_BUFFER_SIZE);
 		int errsv = errno ;
 		if (rc < 0)
 		{
@@ -2063,15 +2064,17 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			uint16_t port = udpportlist[(unsigned int)(portindex+i)].port_num;
 			uint8_t special = udpportlist[(unsigned int)(portindex+i)].special;
 			int result = check_udp_port(hostname, port, special);
+			uint64_t write_result = 0;
+                        if (result >= 0) write_result = (uint64_t)result;
 			// Put results into database
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			int rc = -1;
 			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				rc = write_db(host_msb, host_lsb, timestamp, session, (uint32_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), result, unusedfield );
+				rc = write_db(host_msb, host_lsb, timestamp, session, (uint64_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), write_result, unusedfield );
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db attempt %d returned %d\n", (z+1), rc);
+					IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db attempt %u returned %d\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
                                         const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };

@@ -38,9 +38,10 @@
 // 0.18			update copyright year
 // 0.19			update copyright year
 // 0.20			add (potentially) missing length check
+// 0.21			add pragmas to hide gcc warnings
 
 //
-#define IPSCAN_ICMPV6_VER "0.20"
+#define IPSCAN_ICMPV6_VER "0.21"
 //
 
 #include "ipscan.h"
@@ -94,7 +95,7 @@ const char* ipscan_icmpv6_ver(void)
 // Send an ICMPv6 ECHO-REQUEST and see whether we receive an ECHO-REPLY in response
 //
 
-uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router)
+int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router)
 {
 	struct addrinfo *res;
 	struct addrinfo hints;
@@ -135,9 +136,9 @@ uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t
 
 	struct pollfd pollfiledesc[1];
 
-	unsigned int txid = (unsigned int)(session & 0xFFFF); // Maximum 16 bits
+	short unsigned int txid = (unsigned int)(session & 0xFFFF); // Maximum 16 bits
 	unsigned int rxid;
-	unsigned int txseqno = ICMPV6_MAGIC_SEQ; // MAGIC number - assume no reason to start at 1?
+	short unsigned int txseqno = ICMPV6_MAGIC_SEQ; // MAGIC number - assume no reason to start at 1?
 	unsigned int rxseqno;
 
 	unsigned int rxicmp6_type, rxicmp6_code;
@@ -247,11 +248,16 @@ uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t
 			// Filter out everything except the responses we're looking for
 			// taken from RFC3542
 			ICMP6_FILTER_SETBLOCKALL(&myfilter);
+			// Start-of-pragma to prevent gcc sign-conversion warnings ...
+			#pragma GCC diagnostic push
+			#pragma GCC diagnostic ignored "-Wsign-conversion"
 			ICMP6_FILTER_SETPASS(ICMP6_ECHO_REPLY, &myfilter);
 			ICMP6_FILTER_SETPASS(ICMP6_DST_UNREACH, &myfilter);
 			ICMP6_FILTER_SETPASS(ICMP6_PARAM_PROB, &myfilter);
 			ICMP6_FILTER_SETPASS(ICMP6_TIME_EXCEEDED, &myfilter);
 			ICMP6_FILTER_SETPASS(ICMP6_PACKET_TOO_BIG, &myfilter);
+			#pragma GCC diagnostic pop
+			// End-of-pragma
 			rc = setsockopt(sock, IPPROTO_ICMPV6, ICMP6_FILTER, &myfilter, sizeof(myfilter));
 			errsv = errno;
 			if (rc < 0)
@@ -352,7 +358,7 @@ uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t
 	smsghdr.msg_iov = txiov;
 	smsghdr.msg_iovlen = 1;
 
-	rc = sendmsg(sock, &smsghdr, 0);
+	rc = (int)sendmsg(sock, &smsghdr, 0);
 	errsv = errno;
 
 	if (rc < 0)
@@ -365,7 +371,7 @@ uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t
 
 	if (rc != (int)sendsize)
 	{
-		IPSCAN_LOG( LOGPREFIX"check_icmpv6_echoresponse: requested sendmsg sent %d chars to %s but sendmsg returned %d\n", sendsize, hostname, rc);
+		IPSCAN_LOG( LOGPREFIX"check_icmpv6_echoresponse: requested sendmsg sent %u chars to %s but sendmsg returned %d\n", sendsize, hostname, rc);
 		retval = PORTINTERROR;
 		if (-1 != sock) close(sock); // close socket if appropriate
 		return(retval);
@@ -442,7 +448,7 @@ uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t
 		rmsghdr.msg_control = (caddr_t)rxbuf;
 		rmsghdr.msg_controllen = sizeof(rxbuf);
 		rmsghdr.msg_flags = 0; // filled on receive
-		rc = recvmsg(sock, &rmsghdr, 0);
+		rc = (int)recvmsg(sock, &rmsghdr, 0);
 		errsv = errno;
 		if (rc < 0)
 		{
@@ -804,7 +810,7 @@ uint32_t check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t
 			}
 			else
 			{
-				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: RESTART: unhandled ICMPv6 packet TYPE was %d CODE was %d\n", rxicmp6_type, rxicmp6_code);
+				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: RESTART: unhandled ICMPv6 packet TYPE %u CODE %u\n", rxicmp6_type, rxicmp6_code);
 				continue;
 			}
 

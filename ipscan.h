@@ -557,8 +557,8 @@
 	// Magic constants intended to uniquify our packets;
 	// process id and session start time are also included
 	#define ICMPV6_MAGIC_SEQ 12478
-	#define ICMPV6_MAGIC_VALUE1 1289
-	#define ICMPV6_MAGIC_VALUE2 12569
+	#define ICMPV6_MAGIC_VALUE1 ((unsigned int)1289)
+	#define ICMPV6_MAGIC_VALUE2 ((unsigned int)12569)
 
 	// UDP buffer size
 	#define UDP_BUFFER_SIZE 512
@@ -611,6 +611,9 @@
 	#define IPSCAN_PROTO_ICMPV6 (1)
 	#define IPSCAN_PROTO_UDP (2)
 	#define IPSCAN_PROTO_TESTSTATE (3)
+
+	// Define value of portnum used to hold TESTSTATE 
+	#define IPSCAN_TESTSTATE_AS_PORTNUM ((uint64_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)))
 
 	// Maximum length of string holding protocol name
 	#define IPSCAN_PROTO_STRING_MAX (16)

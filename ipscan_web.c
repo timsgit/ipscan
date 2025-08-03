@@ -83,8 +83,9 @@
 // 0.63 - further CodeQL improvements
 // 0.64 - even more CodeQL improvements
 // 0.65 - various code quality improvements (scope reductions)
+// 0.66 - improve various format strings
 
-#define IPSCAN_WEB_VER "0.65"
+#define IPSCAN_WEB_VER "0.66"
 
 #include "ipscan.h"
 
@@ -477,7 +478,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// >>> is unsigned shift right
 	printf(" proto = ((psp >>> %u) & %u);", IPSCAN_PROTO_SHIFT, IPSCAN_PROTO_MASK);
 	printf(" special = ((psp >>> %u) & %u);", IPSCAN_SPECIAL_SHIFT, IPSCAN_SPECIAL_MASK);
-	printf(" port = ((psp >>> %d) & %u);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
+	printf(" port = ((psp >>> %u) & %u);", IPSCAN_PORT_SHIFT, IPSCAN_PORT_MASK);
 	printf(" result = latestState[i+1];");
 	printf(" host = latestState[i+2];");
 

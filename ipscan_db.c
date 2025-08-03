@@ -87,9 +87,10 @@
 // 0.66 - add unique key
 // 0.67 - add count_teststate_rows_db()
 // 0.68 - introduce 'LOCK TABLES' for INSERTS/DELETES
+// 0.69 - tidy various format strings
 
 //
-#define IPSCAN_DB_VER "0.68"
+#define IPSCAN_DB_VER "0.69"
 //
 
 #include "ipscan.h"
@@ -130,8 +131,8 @@
 // Prototype functions from ipscan_general.c
 //
 void proto_to_string(uint32_t proto, char * retstring);
-char * state_to_string(uint32_t statenum, char * retstringptr, int retstringfree);
-void result_to_string(uint32_t result, char * retstring);
+char * state_to_string(uint64_t statenum, char * retstringptr, int retstringfree);
+void result_to_string(uint64_t result, char * retstring);
 // ----------------------------------------------------------------------------------------
 
 //
@@ -319,7 +320,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 							}
 							else
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to execute insert query \"%s\" %d (%s)\n",\
+								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to execute insert query \"%s\" %u (%s)\n",\
 										query, mysql_errno(connection), mysql_error(connection) );
 								retval = 7;
 							}
@@ -352,7 +353,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to execute create_table query \"%s\" %d (%s)\n",\
+						IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to execute create_table query \"%s\" %u (%s)\n",\
 								query, mysql_errno(connection), mysql_error(connection) );
 						retval = 6;
 					}
@@ -469,7 +470,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							uint64_t num_rows = mysql_num_rows(result);
 							if (0 == num_rows)
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: INFO: 0 rows returned, num_fields = %d, query = \"%s\"\n", num_fields, query);
+								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: INFO: 0 rows returned, num_fields = %u, query = \"%s\"\n", num_fields, query);
 							}
 
 							
@@ -546,7 +547,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								else // original approach
 								{
 									printf("%s, ", row[num_fields-1]);
-									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: MySQL returned num_fields : %d expecting 9\n", num_fields);
+									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: MySQL returned num_fields : %u expecting 9\n", num_fields);
 									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
 									#ifdef RESULTSDEBUG
 									#if (IPSCAN_LOGVERBOSITY >= 1)
@@ -559,7 +560,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							if (0 == dumped_running_state)
 							{
 								// default  - in case TESTSTATE was missing from database
-								port = (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT));
+								port = IPSCAN_TESTSTATE_AS_PORTNUM; 
 								res =  (uint32_t)(IPSCAN_TESTSTATE_DATABASE_ERROR_BIT);
 								printf("%u, %u, \"%s\", ", port, res, "::1");
 								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: TESTSTATE missing, so reported IPSCAN_TESTSTATE_DATABASE_ERROR_BIT to client.\n");
@@ -593,7 +594,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: Failed to execute select query \"%s\" %d (%s)\n",\
+						IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = 5;
 					}
@@ -708,7 +709,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				else
 				{
 					// delete everything for this test except the test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %u) ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 				}
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -722,9 +723,9 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					}
 					else
 					{
-					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: DELETE FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %d) ORDER BY id\n",\
+					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: DELETE FROM `%s` WHERE ( host = %x:%x:%x:%x:%x:%x:%x:%x AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %"PRIu64") ORDER BY id\n",\
 						 MYSQL_TBLNAME, (unsigned int)((host_msb>>48)&0xFFFF), (unsigned int)((host_msb>>32)&0xFFFF), (unsigned int)((host_msb>>16)&0xFFFF), (unsigned int)(host_msb & 0xFFFF),\
-						(unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF), (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
+						(unsigned int)((host_lsb>>48)&0xFFFF), (unsigned int)((host_lsb>>32)&0xFFFF), (unsigned int)((host_lsb>>16)&0xFFFF), (unsigned int)(host_lsb & 0xFFFF), timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 					}
 					#endif
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
@@ -852,7 +853,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
                                         }
                                 }
 				// SELECT x FROM t1 WHERE ( a = b ) ORDER BY x DESC;
-				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port
+				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u) ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -866,8 +867,8 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 							uint64_t num_rows = mysql_num_rows(result);
 							if (0 == num_rows)
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: 0 rows returned, num_fields = %d, query = \"%s\"\n", num_fields, query);
-								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: protected client address (/48): %x:%x:%x:: session = %"PRIu64" timestamp = %"PRIu64" port = %d\n",\
+								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: 0 rows returned, num_fields = %u, query = \"%s\"\n", num_fields, query);
+								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: protected client address (/48): %x:%x:%x:: session = %"PRIu64" timestamp = %"PRIu64" port = %u\n",\
                                       					(unsigned int)((host_msb>>48) & 0xFFFF), (unsigned int)((host_msb>>32) & 0xFFFF),\
                                     					(unsigned int)((host_msb>>16) & 0xFFFF), session, timestamp, port);
 							}
@@ -896,7 +897,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 										{
 											char statestring[IPSCAN_FLAGSBUFFER_SIZE+1];
                                                                                         char * staterc;
-                                                                                        staterc = state_to_string(retres, &statestring[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
+                                                                                        staterc = state_to_string((uint64_t)retres, &statestring[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
                                                                                         if (NULL != staterc)
                                                                                         {
 												IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: INFO: protected client address (/48): %x:%x:%x:: timestamp %"PRIu64" session %"PRIu64" TESTSTATE returned %d (%s)\n",\
@@ -948,7 +949,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Unexpected num_fields results - num_fields() = %d, not 9\n", num_fields);
+									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Unexpected num_fields results - num_fields() = %u, not 9\n", num_fields);
 									retres = -21;
 								}
 							}
@@ -972,7 +973,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Failed to execute select query \"%s\" %d (%s)\n",\
+						IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retres = -7;
 					}
@@ -1088,8 +1089,8 @@ int tidy_up_db(int8_t deleteall)
 				else
 				{
 					// delete based on time and row is not test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %u AND ts <= NOW() - INTERVAL %u SECOND ) ORDER BY id",\
-						 MYSQL_TBLNAME, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)), (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= NOW() - INTERVAL %u SECOND ) ORDER BY id",\
+						 MYSQL_TBLNAME, IPSCAN_TESTSTATE_AS_PORTNUM, (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET );
 				}
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1335,7 +1336,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 							}
 							else
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to execute update query \"%s\" %d (%s)\n",\
+								IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to execute update query \"%s\" %u (%s)\n",\
 										query, mysql_errno(connection), mysql_error(connection) );
 								retval = 7;
 							}
@@ -1368,7 +1369,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to execute create_table query \"%s\" %d (%s)\n",\
+						IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to execute create_table query \"%s\" %u (%s)\n",\
 								query, mysql_errno(connection), mysql_error(connection) );
 						retval = 6;
 					}
@@ -1500,7 +1501,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: Failed to execute select query \"%s\" %d (%s)\n",\
+						IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = -5;
 					}
@@ -1584,7 +1585,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
                                 }
 				// uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u) ORDER BY id", MYSQL_TBLNAME, timestamp, session, (uint32_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)) );
+				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1625,7 +1626,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: Failed to execute select query \"%s\" %d (%s)\n",\
+						IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = -5;
 					}
