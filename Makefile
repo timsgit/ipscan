@@ -62,7 +62,7 @@ CFLAGS+= -fstack-protector-all -fstack-clash-protection -Wstack-protector --para
 CFLAGS+= -Wconversion -Wimplicit-fallthrough -fstack-protector-strong -Wl,-z,noexecstack -Wsign-compare
 CFLAGS+= -Wformat-signedness
 # CFLAGS+= -ftrapv -fexceptions -fPIE -fpie -Wl,-pie -Wl,-z,relro -Wl,-z,now -Werror=implicit-function-declaration 
-# CFLAGS+= -D_TIME_BITS=64
+# CFLAGS+= -D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64
 
 # Install location for the CGI files
 TARGETDIR=/var/www/cgi-bin6
