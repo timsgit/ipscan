@@ -109,7 +109,7 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 	struct addrinfo hints;
 	int error;
 	struct timeval timeout;
-	char portnum[8];
+	char portnumstr[8];
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_INET6;
@@ -119,14 +119,14 @@ int check_tcp_port(char * hostname, uint16_t port, uint8_t special)
 	// set return value to a known default
 	int retval = PORTUNKNOWN;
 
-	error = snprintf(portnum, 8,"%d", port);
+	error = snprintf(portnumstr, 8,"%d", port);
 	if (error < 0 || error >= 8)
 	{
-		IPSCAN_LOG( LOGPREFIX "check_tcp_port: Failed to write portnum, rc was %d\n", error);
+		IPSCAN_LOG( LOGPREFIX "check_tcp_port: Failed to write portnumstr, rc was %d\n", error);
 		retval = PORTINTERROR;
 	}
 
-	error = getaddrinfo(hostname, portnum, &hints, &res);
+	error = getaddrinfo(hostname, portnumstr, &hints, &res);
 	if (error != 0)
 	{
 		IPSCAN_LOG( LOGPREFIX "check_tcp_port: getaddrinfo: %s for host %s port %d\n", gai_strerror(error), hostname, port);

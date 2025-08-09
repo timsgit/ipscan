@@ -395,7 +395,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 	//
 
 	int retval = 0;
-	uint32_t port, res;
+	uint32_t port = 0;
+	uint32_t res = 0;
 	MYSQL *connection;
 	MYSQL_ROW row;
 
@@ -483,8 +484,27 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								if (9 == num_fields) // database includes indirect host and timestamp fields
 								{
 									char hostind[INET6_ADDRSTRLEN+1];
-									int rcport = sscanf(row[5], "%u", &port);
-									int rcres = sscanf(row[6], "%u", &res);
+									uint64_t ui64_port, ui64_res;
+									int rcport = sscanf(row[5], "%"SCNu64, &ui64_port);
+									int rcres = sscanf(row[6], "%"SCNu64, &ui64_res);
+									if (1 == rcport && ui64_port <= INT_MAX)
+									{
+										port = (uint32_t)ui64_port;
+									}
+									else
+									{
+										IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: sscanf() failed - rcport %d, ui64_port %"PRIu64"\n", rcport, ui64_port);
+										rcport = 0;
+									}
+									if (1 == rcres && ui64_res <= INT_MAX)
+									{
+										res = (uint32_t)ui64_res;
+									}
+									else
+									{
+										IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: sscanf() failed - rcres %d, ui64_res %"PRIu64"\n", rcres, ui64_res);
+										rcres = 0;
+									}
 									int rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
 									if ( 1 == rcres && 1 == rchost && 1 == rcport )
 									{

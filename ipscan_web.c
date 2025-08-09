@@ -725,7 +725,7 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 		IPSCAN_LOG( LOGPREFIX "ipscan_web: ERROR: ctime_r() in create_html_body() returned NULL\n");
 	}
 
-	printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", starttime, (int)ESTIMATEDTIMETORUN );
+	printf("<p>Scan beginning at: %s, expected to take around %d seconds ...</p>\n", starttime, (int)ESTIMATEDTIMETORUN );
 
 	printf("<table border=\"1\">\n");
 	// ongoing status ROW
@@ -824,7 +824,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, const struct port
 	printf("<body>\n");
 	printf("<h3 style=\"color:blue\">IPv6 Port Scanner Version %s by Tim Chappell</h3>\n", IPSCAN_VER);
 
-	printf("<p>Please note that this test may take up to %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
+	printf("<p>Please note that this test may take around %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
 
 	if (0 < numudpports)
@@ -930,7 +930,7 @@ void create_html5_form(uint16_t numports, uint16_t numudpports, const struct por
 
 	printf("<h3 style=\"color:blue\">IPv6 Port Scanner Version %s by Tim Chappell</h3>\n", IPSCAN_VER);
 
-	printf("<p>Please note that this test may take up to %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
+	printf("<p>Please note that this test may take around %d seconds to complete.</p>\n", (int) ESTIMATEDTIMETORUN);
 	// Useful source http://www.w3.org/TR/1999/REC-html401-19991224/interact/forms.html#successful-controls
 
 	if (numudpports > 0)

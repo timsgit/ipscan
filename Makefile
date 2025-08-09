@@ -59,10 +59,9 @@ LIBS=
 CC=gcc
 CFLAGS=-Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wwrite-strings -Wformat=2 -Wformat-security -O2 -D_FORTIFY_SOURCE=2
 CFLAGS+= -fstack-protector-all -fstack-clash-protection -Wstack-protector --param ssp-buffer-size=4
-CFLAGS+= -Wconversion -Wimplicit-fallthrough -fstack-protector-strong -Wl,-z,noexecstack -Wsign-compare
-CFLAGS+= -Wformat-signedness
-# CFLAGS+= -ftrapv -fexceptions -fPIE -fpie -Wl,-pie -Wl,-z,relro -Wl,-z,now -Werror=implicit-function-declaration 
-# CFLAGS+= -D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64
+CFLAGS+= -Wconversion -Wimplicit-fallthrough -fstack-protector-strong -Wl,-z,noexecstack -Wsign-compare -Wformat-signedness
+CFLAGS+= -ftrapv -fexceptions -fPIE -fpie -Wl,-pie -Wl,-z,relro -Wl,-z,now -Werror=implicit-function-declaration 
+CFLAGS+= -D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64
 
 # Install location for the CGI files
 TARGETDIR=/var/www/cgi-bin6

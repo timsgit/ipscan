@@ -138,6 +138,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	int la_update = 0;
 
 	int rc = 0;
+	size_t rc_st = 0;
 	unsigned int i = 0;
 	int fd = -1;
 
@@ -370,8 +371,17 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			// Question section
 
 			const char * dnsquery1 = "www66";
-			txmessage[len] = (char)strlen(dnsquery1);
-			len++;
+			rc_st = strnlen(dnsquery1,(size_t)(UDP_BUFFER_SIZE-len));
+			if (rc_st == (UDP_BUFFER_SIZE-len))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad strnlen() for DNS query1, returned %lu\n", rc_st);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				txmessage[len] = (char)(rc_st & 0xff);
+				len++;
+			}
 			// Need one extra octet for trailing 0, however this will be overwritten
 			// by the length of the next part of the host name in standard DNS format
 			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery1);
@@ -390,8 +400,17 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			if (PORTUNKNOWN == retval)
 			{
 				const char * dnsquery2 = "chappell-family";
-				txmessage[len]= (char)strlen(dnsquery2);
-				len++;
+				rc_st = strnlen(dnsquery2,(size_t)(UDP_BUFFER_SIZE-len));
+				if (rc_st == (UDP_BUFFER_SIZE-len))
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad strnlen() for DNS query2, returned %lu\n", rc_st);
+					retval = PORTINTERROR;
+				}
+				else
+				{
+					txmessage[len] = (char)(rc_st & 0xff);
+					len++;
+				}
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 				{
@@ -409,8 +428,17 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			if (PORTUNKNOWN == retval)
 			{
 				const char * dnsquery3 = "co";
-				txmessage[len]= (char)strlen(dnsquery3);
-				len++;
+				rc_st = strnlen(dnsquery3,(size_t)(UDP_BUFFER_SIZE-len));
+				if (rc_st == (UDP_BUFFER_SIZE-len))
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad strnlen() for DNS query3, returned %lu\n", rc_st);
+					retval = PORTINTERROR;
+				}
+				else
+				{
+					txmessage[len] = (char)(rc_st & 0xff);
+					len++;
+				}
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 				{
@@ -427,9 +455,18 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			//
 			if (PORTUNKNOWN == retval)
 			{
-				const char  * dnsquery4 = "uk";
-				txmessage[len]= (char)strlen(dnsquery4);
-				len++;
+				const char * dnsquery4 = "uk";
+				rc_st = strnlen(dnsquery4,(size_t)(UDP_BUFFER_SIZE-len));
+				if (rc_st == (UDP_BUFFER_SIZE-len))
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad strnlen() for DNS query4, returned %lu\n", rc_st);
+					retval = PORTINTERROR;
+				}
+				else
+				{
+					txmessage[len] = (char)(rc_st & 0xff);
+					len++;
+				}
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 				{
@@ -578,8 +615,18 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// SNMP packet start
 				txmessage[len] = 0x30;
 				len++;
-				txmessage[len] = (char)(29 + strlen(community[special]) + miblen);
-				len++;
+				// was txmessage[len] = (char)(29 + strlen(community[special]) + miblen);
+				rc_st = strnlen(community[special],(size_t)(UDP_BUFFER_SIZE-len));
+				if (rc_st == (UDP_BUFFER_SIZE-len))
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad strnlen() for SNMP community, returned %lu\n", rc_st);
+					retval = PORTINTERROR;
+				}
+				else
+				{
+					txmessage[len] = (char)((29 + rc_st + miblen) & 0xff);
+					len++;
+				}
 				// SNMP version 1
 				txmessage[len] = 0x02; //int
 				len++;
@@ -590,8 +637,18 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// Community name
 				txmessage[len] = 0x04; //string
 				len++;
-				txmessage[len] = (char)strlen(community[special]);
-				len++;
+				// was txmessage[len] = (char)strlen(community[special]);
+				rc_st = strnlen(community[special],(size_t)(UDP_BUFFER_SIZE-len));
+				if (rc_st == (UDP_BUFFER_SIZE-len))
+				{
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad strnlen() for SNMP community, returned %lu\n", rc_st);
+					retval = PORTINTERROR;
+				}
+				else
+				{
+					txmessage[len] = (char)(rc_st & 0xff);
+					len++;
+				}
 				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", community[special]);
 				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-(int)len))
 				{

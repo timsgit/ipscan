@@ -193,7 +193,6 @@ void create_html_body_end(void);
 #if (1 == TEXTMODE)
 uint64_t get_session(void);
 #endif
-void proto_to_string(int proto, char * retstring);
 void fetch_to_string(int fetchnum, char * retstring);
 char * state_to_string(int statenum, char * retstringptr, size_t retstringfree);
 // create_results_key_table is only referenced if creating the text-only version of the scanner
@@ -1142,7 +1141,7 @@ int main(void)
 			}
 			else
 			{
-				printf("<p>Scan beginning at: %s, expected to take up to %d seconds ...</p>\n", \
+				printf("<p>Scan beginning at: %s, expected to take around %d seconds ...</p>\n", \
 						stimeresult, (int)ESTIMATEDTIMETORUN );
 			}
 
@@ -1799,13 +1798,12 @@ int main(void)
 		
 			// Fetch running state result from database so it can be updated
 			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM );
-			uint64_t write_result = 0;
 			if (0 > result)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned bad value: %d\n", result);
 				result = PORTUNKNOWN;
 			}
-			write_result = (uint64_t)result;
+			uint64_t write_result = (uint64_t)result;
 			if ( PORTUNKNOWN == result )
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: fetching running state\n" );
@@ -2770,11 +2768,11 @@ int main(void)
 			#if (IPSCAN_INCLUDE_UDP == 1)
 			// starttime is of type time_t in create_html_body() calls:
 			create_html_header(numports, numudpports, reconquery);
-			create_html_body(remoteaddrstring, starttime, numports, numudpports, portlist, udpportlist);
+			create_html_body(remoteaddrstring, (time_t)starttime, numports, numudpports, portlist, udpportlist);
 			#else
 			// starttime is of type time_t in create_html_body() calls:
 			create_html_header(numports, 0, reconquery);
-			create_html_body(remoteaddrstring, starttime, numports, 0, portlist, udpportlist);
+			create_html_body(remoteaddrstring, (time_t)starttime, numports, 0, portlist, udpportlist);
 			#endif
 			// Create the main html body
 			create_html_body_end();
