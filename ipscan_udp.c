@@ -138,7 +138,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	int la_update = 0;
 
 	int rc = 0;
-	size_t rc_st = 0;
 	unsigned int i = 0;
 	int fd = -1;
 
@@ -312,6 +311,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 
 	if (PORTUNKNOWN == retval)
 	{
+		size_t rc_st = 0;
 		// Fill the txmessage with the appropriate message (depends on service)
 		switch (port)
 		{

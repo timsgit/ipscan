@@ -395,8 +395,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 	//
 
 	int retval = 0;
-	uint32_t port = 0;
-	uint32_t res = 0;
 	MYSQL *connection;
 	MYSQL_ROW row;
 
@@ -474,6 +472,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: INFO: 0 rows returned, num_fields = %u, query = \"%s\"\n", num_fields, query);
 							}
 
+							uint32_t port = 0;
+							uint32_t res = 0;
 							
 							// Start of json array
 							int dumped_running_state = 0;
@@ -484,7 +484,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								if (9 == num_fields) // database includes indirect host and timestamp fields
 								{
 									char hostind[INET6_ADDRSTRLEN+1];
-									uint64_t ui64_port, ui64_res;
+									uint64_t ui64_port;
+									uint64_t ui64_res;
 									int rcport = sscanf(row[5], "%"SCNu64, &ui64_port);
 									int rcres = sscanf(row[6], "%"SCNu64, &ui64_res);
 									if (1 == rcport && ui64_port <= INT_MAX)
