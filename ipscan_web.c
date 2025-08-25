@@ -84,8 +84,9 @@
 // 0.64 - even more CodeQL improvements
 // 0.65 - various code quality improvements (scope reductions)
 // 0.66 - improve various format strings
+// 0.67 - add code to support client address change detection
 
-#define IPSCAN_WEB_VER "0.66"
+#define IPSCAN_WEB_VER "0.67"
 
 #include "ipscan.h"
 
@@ -234,6 +235,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" let myHTTPTimeout;");
 	printf(" let fetches = 0;");
 	printf(" let statusresult = 0;");
+	printf(" let myInitIpv6Addr = \"::\";"); // client's IPv6 address logged at the start of the test. '::' used as undefined value
+	printf(" let myIpv6AddrFetchStart = -1;"); // logs the fetchnum that client's IPv6 address fetch began (-1 not started)
 	printf(" let lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
 
 	// Use Date().now() as our timestamp to ensure all runs are unique
@@ -243,19 +246,29 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// mySession becomes the session query parameter - multiple runs on the same browser should each be unique
 	printf(" const mySession = getSessionNumber();");
 
+	//
 	// Main initialisation ... It sets the scanstate to RUNNING to give the user confidence that things are happening.
 	// then the initial GET is performed to request that the server begins the scan.
 	// finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
+	//
 	printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
 	printf(" document.getElementById(\"scanstate\").title = 0;");
 	printf(" myBlink = setInterval(function(){blink(); }, 1000);");
 	printf(" let curTimeStamp = new Date().now();");
+	//
+	// create the various XML HTTP requestors
+	//
+	printf(" const myXmlHttpReqObj = makeHttpObject();"); // for regular/frequent update fetches
+	printf(" const myXmlHttpInitObj = makeHttpObject();");// one-off initialisation fetch (begins the test)
+	printf(" const myXmlHttpIp6Obj = makeHttpObject();"); // for client IPv6 lookup (from server)
+	printf(" const myXmlHttpErrObj = makeHttpObject();"); // for error/done reporting
+	//
+	// call test initiation URL with appropriate query parameters - will take duration of test to complete/return
+	// so don't reuse myXmlHttpInitObj object for other transfers
 	printf(" const startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
-	printf(" const myXmlHttpReqObj = makeHttpObject();");
-	printf(" const myXmlHttpErrObj = makeHttpObject();");
-	printf(" myXmlHttpReqObj.open(\"GET\", startURL, true);");
-	printf(" myXmlHttpReqObj.send(null);");
+	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
+	printf(" myXmlHttpInitObj.send(null);");
 	printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
 
 	// create a prefilled array containing the potential states returned for each port
@@ -348,6 +361,71 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myXmlHttpErrObj.send(null);");
 	printf(" }\n");
 
+	// function to fetch client's IPv6 address from server
+	// used to support check of client IPv6 address change (privacy address issue)
+	// fetchnum is used to schedule fetch on odd periods and process returned information on even periods
+	printf(" function HTTPGetIpv6Address(fetchnum)");
+	printf(" {");
+	printf(" var ip6URL = \""URIPATH"/"EXENAME"?ipv6addrquery=%d&termsaccepted=1&addrfetch=\" + fetchnum;", MAGICIP6QUERY);
+	printf(" var Ip6Addr = '::';"); // dummy value (no valid IPv6 address returned)
+	#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('fetchnum: ',fetchnum);");
+	printf(" console.log('myXmlHttpIp6Obj.readyState: ',myXmlHttpIp6Obj.readyState);");
+	printf(" console.log('myXmlHttpIp6Obj.status    : ',myXmlHttpIp6Obj.status);");
+	#endif
+	printf(" if (fetchnum %% 2 == 0)"); // even fetchnum - so check whether previous transfer has finished
+	printf(" {");
+	printf(" if (myXmlHttpIp6Obj.readyState == 4 && myXmlHttpIp6Obj.status == 200)");
+	printf(" {"); // myXmlHttpIp6Obj fetch completed successfully
+	printf(" let Ip6JsonArray = [];"); // empty array
+	// returned array should be of the form '[ "address" ]'
+	printf(" if (myXmlHttpIp6Obj.responseText[0] === '[')"); // check first letter is '['
+        printf(" { try {");
+        printf(" Ip6JsonArray = JSON.parse(myXmlHttpIp6Obj.responseText);"); // try parsing the returned array
+        printf(" }");
+        printf(" catch (e) {");
+	printf(" console.log('JSON.parse failure: ',e.toString());"); // only log to local browser console
+        printf(" }");
+	#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('typeof(Ip6JsonArray[0]): ',typeof(Ip6JsonArray[0]));");
+	printf(" console.log('Ip6JsonArray[0]: ',Ip6JsonArray[0]);");
+	#endif
+        printf(" }");
+	printf(" myIpv6AddrFetchStart = -1;"); // flag fetch as complete
+	printf(" if (Ip6JsonArray[0] !== undefined)"); // should be string
+        printf(" { ");
+	printf(" Ip6Addr = Ip6JsonArray[0];"); // Ip6JsonArray array is zero-based. [0] should be the client address
+        printf(" }");
+	printf(" }");
+	printf(" else"); // previous fetch hasn't completed
+	printf(" {");
+	// report status locally
+	#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('unfinished fetch:');");
+	printf(" console.log('myXmlHttpIp6Obj.readyState: ',myXmlHttpIp6Obj.readyState);");
+	printf(" console.log('myXmlHttpIp6Obj.status:',myXmlHttpIp6Obj.status);");
+	#endif
+        printf(" }");
+        printf(" }");
+	printf(" else");
+        printf(" { "); // odd fetchnum - initiate a new fetch
+	// check if this is a later fetchnum period than when we started
+	printf(" if (fetchnum > myIpv6AddrFetchStart)");
+	printf(" {");
+	// if previous fetch is unfinished then abort it
+	printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
+	printf(" myIpv6AddrFetchStart = fetchnum;"); // log this fetchnum as the start
+	// initiate the fetch/GET
+	printf(" myXmlHttpIp6Obj.open(\"GET\", ip6URL, true);");
+	printf(" myXmlHttpIp6Obj.send(null);");
+        printf(" }");
+        printf(" }");
+	#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('Returning Ip6Addr: ', Ip6Addr);");
+	#endif
+	printf(" return Ip6Addr;");
+	printf(" }\n"); // end of HTTPGetIpv6Address
+
 	// function to report bad JSON parse
         printf("function badJSONParse(es)");
         printf(" {");
@@ -376,6 +454,16 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" const dbErrorURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_DB_ERROR);
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", dbErrorURL, true);");
+	printf(" myXmlHttpErrObj.send(null);");
+	printf(" }\n");
+
+	// function to report Ipv6 address changed
+	printf("function HTTPAddrChanged(first, second)");
+	printf(" {");
+        printf(" const addressString = \"ONE:\" + first + \"TWO:\" + second;");
+        printf(" const addrChangeURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(addressString);", reconquery, IPSCAN_CLIENT_ADDR_CHANGED);
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+	printf(" myXmlHttpErrObj.open(\"GET\", addrChangeURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");
 	printf(" }\n");
 
@@ -429,13 +517,55 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	// function to handle GET state change
 	//
-	printf("function myStateChange(request)");
+	printf("function myStateChange(request, fetchnum)");
 	printf(" {");
 	printf(" let i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
+	printf(" let reloadPage = false;");
+	printf(" let myIpv6now = '::1';");
+	//  odd fetchnum - initiate a new fetch - return nothing useful
+	// even fetchnum - check whether transfer has finished and return address
+	//
+	// always call HTTPGetIpv6Address() for both odd/even fetchnum
+	//
+	printf(" let temporary = HTTPGetIpv6Address(fetchnum);");
+	printf(" if (fetchnum == 2)");
+	printf(" {"); // latch the initial client address
+	printf(" myInitIpv6Addr = temporary;");
+	printf(" }");
+	printf(" else if (fetchnum > 2)");
+	printf(" {"); // normal process - initiate address fetch (odd fetchnum) and then capture address (even fetchnum)
+	printf(" myIpv6now = temporary;");
+	printf(" }");
 	printf(" if (request.readyState == 4 && request.status == 200)");
 	printf(" {");
 	printf(" clearTimeout(myHTTPTimeout);");
-
+	// Check whether Client's IPv6 address has changed, or not.
+	// even fetchnum - hopefully transfer has finished and the returned address is the client's
+	// check fetchnum > 2 - so both myInitIpv6Add and myIpv6now have (hopefully) been filled with valid addresses
+	//
+	printf(" if ((fetchnum %% 2) == 0 && fetchnum > 2 && myIpv6now != '::' && myInitIpv6Addr != '::' && myIpv6now != myInitIpv6Addr)");
+	printf(" {");
+	// attempt to send an indication to the server
+	printf(" HTTPAddrChanged(myInitIpv6Addr, myIpv6now);");
+	// ask the user whether they want to restart the test, or not
+	printf(" if (window.confirm(\"Client IPv6 address change detected. Restart the test to ensure accurate results. Restart now?\") == true)");
+	printf(" {"); 
+	printf(" reloadPage = true;");
+	printf(" }");
+#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('Client address mismatch');");
+	printf(" console.log('Client fetchnum   : ',fetchnum);");
+	printf(" console.log('Client fetchnum %% 2: ',(fetchnum %% 2));");
+	printf(" console.log('Client init address: ',myInitIpv6Addr);");
+	printf(" console.log('Client  now address: ',myIpv6now);");
+	printf(" console.log('Client reloadPage  : ',reloadPage);");
+#endif
+	printf(" if (reloadPage == true)");
+	printf(" {");
+	printf(" window.location.reload();");
+	printf(" }");
+	printf(" }");
+	// 
 	// if response.length >0 and first character is "[" then
 	// parse the response, assuming it is a valid update
 	printf(" if (request.responseText.length > 0 && request.responseText[0] == \"[\")");
@@ -630,7 +760,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }"); // abort if previous transfer still in progress
 	printf(" myXmlHttpReqObj.open(\"GET\", updateURL, true);");
 	// the myStateChange() function waits for the asynchronous HTTP 200 code to be received and then evaluates the returned JSON array.
-	printf(" myXmlHttpReqObj.onreadystatechange = function(){myStateChange(myXmlHttpReqObj); };");
+	printf(" myXmlHttpReqObj.onreadystatechange = function(){myStateChange(myXmlHttpReqObj, fetches); };");
 	printf(" myXmlHttpReqObj.ontimeout = function() {HTTPTimedOut(); };");
 	printf(" myXmlHttpReqObj.timeout = %d;", ((JSONFETCHEVERY*1000) - 500) );
 	printf(" myXmlHttpReqObj.send(null);");

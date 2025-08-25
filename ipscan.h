@@ -224,7 +224,11 @@
 	//
 
 	//
-	#define IPSCAN_H_VER IPSCAN_VERNUM
+	// ipscan.h version (separate from overall IPscan version (IPSCAN_VER)
+	// 0.01	- initial version when separated from IPSCAN_VER
+	//
+	#define IPSCAN_H_VER "0.01"
+	//
 	//
 
 	// Email address
@@ -344,6 +348,9 @@
 	// Primarily for troublesome Javascript clients.
 	// #define CLIENTDEBUG 1
 
+	// Client JavaScript Console logging
+	// #define IPSCAN_JS_CONSOLE_LOGGING 1
+
 	// debug option to only use tidy_up_only() - do NOT use in production
 	// #define IPSCAN_TIDY_UP_ONLY 1
 
@@ -375,6 +382,9 @@
 
 	// Magic number requesting the start of a scan
 	#define MAGICBEGIN 123456
+
+	// Magic number requesting the client IPv6 address
+	#define MAGICIP6QUERY 456789
 
 	// Maximum number of ports to be tested - this should exceed the sum of the default port list
 	// and the allowed user-defined ports
@@ -684,6 +694,7 @@
 		IPSCAN_NAVIGATE_AWAY,
 		IPSCAN_BAD_JSON_ERROR,
 		IPSCAN_DB_ERROR,
+		IPSCAN_CLIENT_ADDR_CHANGED,
 		IPSCAN_UNEXPECTED_CHANGE,
 	};
 
@@ -701,6 +712,7 @@
 	#define IPSCAN_TESTSTATE_UNEXPCHANGE_BIT (2048)
 	#define IPSCAN_TESTSTATE_BADCOMPLETE_BIT (4096)
 	#define IPSCAN_TESTSTATE_DATABASE_ERROR_BIT (8192)
+	#define IPSCAN_TESTSTATE_CLIENT_ADDRCHANGE_BIT (16384)
 
 	//
 	// Size of buffer holding the flag textual descriptions

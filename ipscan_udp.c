@@ -615,7 +615,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// SNMP packet start
 				txmessage[len] = 0x30;
 				len++;
-				// was txmessage[len] = (char)(29 + strlen(community[special]) + miblen);
 				rc_st = strnlen(community[special],(size_t)(UDP_BUFFER_SIZE-len));
 				if (rc_st == (UDP_BUFFER_SIZE-len))
 				{
@@ -637,7 +636,6 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 				// Community name
 				txmessage[len] = 0x04; //string
 				len++;
-				// was txmessage[len] = (char)strlen(community[special]);
 				rc_st = strnlen(community[special],(size_t)(UDP_BUFFER_SIZE-len));
 				if (rc_st == (UDP_BUFFER_SIZE-len))
 				{

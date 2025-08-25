@@ -111,9 +111,10 @@
 // 0.88 - move to nanosleep() from deprecated usleep()
 // 0.89 - remove some unneeded qsf/qstf logging
 // 0.90 - tidy various format strings
+// 0.91 - add client IPv6 address reporting
 
 //
-#define IPSCAN_MAIN_VER "0.90"
+#define IPSCAN_MAIN_VER "0.91"
 //
 
 #include "ipscan.h"
@@ -129,6 +130,7 @@
 #include <time.h>
 #include <inttypes.h>
 #include <stdint.h>
+#include <stdbool.h>
 // toupper/tolower routines
 #include <ctype.h>
 
@@ -182,6 +184,7 @@ const char* ipscan_udp_ver(void);
 const char* ipscan_icmpv6_ver(void);
 const char* ipscan_db_ver(void);
 const char* ipscan_web_ver(void);
+bool ipv6_address_to_string( uint64_t msb, uint64_t lsb, char * buffer, unsigned char bufflen, bool slash48 );
 #ifdef IPSCAN_HTML5_ENABLED
 void create_html5_common_header(void);
 void create_html5_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
@@ -267,6 +270,9 @@ int main(void)
 	int fetchnum = 0;
 	#endif
 
+	// Client IPv6 address fetchnum
+	int addrfetchnum = 0;
+
 	// List of ports to be tested and their results
 	struct portlist_struc portlist[MAXPORTS];
 
@@ -281,6 +287,7 @@ int main(void)
 	#endif
 
 	char remoteaddrstring[INET6_ADDRSTRLEN+1];
+	char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
 	char *remoteaddrvar;
 
 	// the session starttime, used as an unique index for the database
@@ -568,7 +575,7 @@ int main(void)
 					finished = (0 == querystring_is_valid(querystring[queryindex]) ||  MAXQUERYSTRLEN <= queryindex) ? 1 : 0;
 				}
 				#ifdef QUERYDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %d\n", numqueries);
+				IPSCAN_LOG( LOGPREFIX "ipscan: Number of query pairs found is : %u\n", numqueries);
 				#endif
 			}
 		}
@@ -666,6 +673,17 @@ int main(void)
 				}
 				remotehost_lsb |= value;
 			}
+			#if (1 < IPSCAN_LOGVERBOSITY)
+			// report host addresses as full 128-bit addresses
+			bool convertedok = ipv6_address_to_string( remotehost_msb, remotehost_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
+			#else
+			// report host addresses as 48-bit addresses
+			bool convertedok = ipv6_address_to_string( remotehost_msb, remotehost_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), true );
+			#endif
+			if (false == convertedok)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: failed to convert remote host address to a safe variant\n" );
+			}
 		}
 	}
 
@@ -676,9 +694,7 @@ int main(void)
 	{
 		#ifdef CLIENTDEBUG
 		#if (1 < IPSCAN_LOGVERBOSITY)
-		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host protected client address (/48): %x:%x:%x:: 0 queries\n",\
-				(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-				(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address: %s 0 queries\n", saferemoteaddrstring);
 		#endif
 		#endif
 
@@ -705,9 +721,7 @@ int main(void)
 		int includeexisting = 0;
 		#ifdef CLIENTDEBUG
 		#if (1 < IPSCAN_LOGVERBOSITY)
-		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host protected client address (/48): %x:%x:%x:: %u queries\n",\
-				(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-				(unsigned int)((remotehost_msb>>16) & 0xFFFF), numqueries );
+		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address: %s : %u queries\n", saferemoteaddrstring, numqueries);
 		#endif
 		#endif
 
@@ -757,7 +771,6 @@ int main(void)
 		if (16 < rc && 19 > rc)
 		{
 			reconptr += rc;
-			// was reconquerysize -= (size_t)rc;
 			reconquerysize -= rc;
 			if (0 >= reconquerysize)
 			{
@@ -794,7 +807,6 @@ int main(void)
 		if (16 == rc)
 		{
 			reconptr += rc;
-			// was reconquerysize -= (size_t)rc;
 			reconquerysize -= rc;
 			if (reconquerysize <= 0)
 			{
@@ -888,7 +900,6 @@ int main(void)
 						if (rc >= 14 && rc <= 22)
 						{
 							reconptr += rc;
-							// was reconquerysize -= (size_t)rc;
 							reconquerysize -= rc;
 							if (reconquerysize <= 0)
 							{
@@ -979,6 +990,15 @@ int main(void)
 			beginscan = (query[i].varval == MAGICBEGIN ) ? 1 : 0;
 		}
 
+		// Look for the ipv6addrquery query string, return 0 if not present or incorrect value
+		i = 0;
+		int ipv6addrquery = 0;
+		while (i < numqueries && strncmp("ipv6addrquery",query[i].varname,13)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
+		{
+			ipv6addrquery = (query[i].varval == MAGICIP6QUERY ) ? 1 : 0;
+		}
+
 		// Look for the fetch query string
 		i = 0;
 		int fetch = 0;
@@ -989,6 +1009,16 @@ int main(void)
 			#if (TEXTMODE != 1)
 			if (1 == fetch && (int)(query[i].varval < 4096)) fetchnum = (int)query[i].varval;
 			#endif
+		}
+
+		// Look for the addrfetch query string
+		i = 0;
+		int addrfetch = 0;
+		while (i < numqueries && strncmp("addrfetch",query[i].varname,9)!= 0) i++;
+		if (i < numqueries && query[i].valid == 1)
+		{
+			addrfetch = (query[i].varval >0) ? 1 : 0;
+			if (1 == addrfetch && (int)(query[i].varval < 4096)) addrfetchnum = (int)query[i].varval;
 		}
 
 		// Dump the variables resulting from the query-string parsing
@@ -1005,8 +1035,10 @@ int main(void)
 		#endif
 
 		#ifdef QUERYDEBUG
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numqueries = %d\n", numqueries);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numqueries = %u\n", numqueries);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: ipv6addrquery = %d, addrfetch = %d, addrfetchnum = %d\n", ipv6addrquery, addrfetch, addrfetchnum);
 		#if (TEXTMODE != 1)
+		// javascript mode only
                 timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: querysession = %"PRIu64" querystarttime = %"PRIu64" diff = %"PRId64"\n", querysession, querystarttime, timedifference );
@@ -1016,10 +1048,9 @@ int main(void)
 		}
 		#else
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", \
-				(uint64_t)session, (uint64_t)starttime, numports);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", (uint64_t)session, (uint64_t)starttime, numports);
 		#endif
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numcustomports = %d NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numcustomports = %u NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: reconstituted query string = %s\n", reconquery );
 		#if (3 < IPSCAN_LOGVERBOSITY)
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: portlist contents, numports = %d:\n", numports);
@@ -1066,9 +1097,7 @@ int main(void)
 			report_ipscan_versions(ipscan_main_ver(), ipscan_general_ver(), ipscan_tcp_ver(), ipscan_udp_ver(), ipscan_icmpv6_ver(), ipscan_db_ver(),\
 				 ipscan_web_ver(), ipscan_h_ver(), ipscan_portlist_ver());
         		#endif
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host protected client address (/48): %x:%x:%x:: text-mode, initiate scan\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address : %s text-mode, initiate scan\n", saferemoteaddrstring);
 			#endif
 
 			int num_rows;
@@ -1105,23 +1134,20 @@ int main(void)
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned error: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned error: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                         }
                         else
                         {  
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after init) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after init) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                                 #endif
                                 #endif
                         }
@@ -1146,9 +1172,7 @@ int main(void)
 			}
 
 			// Log termsaccepted
-			IPSCAN_LOG( LOGPREFIX "ipscan: protected client address (/48): %x:%x:%x:: beginning text-mode scan with termsaccepted = %d\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: remote address : %s beginning text-mode scan with termsaccepted = %d\n", saferemoteaddrstring, termsaccepted );
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: at time %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
 			#endif
@@ -1185,13 +1209,7 @@ int main(void)
 
 			int result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 
-			#if (0 < IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",remoteaddrstring, pingresult, resultsstruct[result].label, indirecthost);
-			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of protected client address (/48): %x:%x:%x::\n",\
-				(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-				(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			#endif
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of remote address: %s\n", saferemoteaddrstring);
 
 			portsstats[result]++ ;
 
@@ -1227,23 +1245,20 @@ int main(void)
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned error: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned error: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                         }
                         else
                         {  
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after ping) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after ping) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                                 #endif
                                 #endif
                         }
@@ -1264,13 +1279,7 @@ int main(void)
 
 			#if (1 == IPSCAN_INCLUDE_UDP)
 			// Log UDP start of scan
-			#if (2 < IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
-			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on protected client address (/48): %x:%x:%x::\n",\
-					numudpports, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			#endif
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on remote address: %s\n", numudpports, saferemoteaddrstring );
 
 			// Scan the UDP ports in parallel
 			int remaining = numudpports;
@@ -1311,23 +1320,20 @@ int main(void)
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned error: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned error: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                         }
                         else
                         {  
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after UDP) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after UDP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                                 #endif
                                 #endif
                         }
@@ -1350,9 +1356,7 @@ int main(void)
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result() returned UNKNOWN: UDP port scan results table\n" );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for protected client address (/48): %x:%x:%x::\n",\
-							(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-							(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address: %s\n", saferemoteaddrstring);
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at starttime %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
 				}
 
@@ -1422,13 +1426,7 @@ int main(void)
 			//
 			// TCP scan is always included
 			//
-			#if (2 < IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
-			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on protected client address (/48): %x:%x:%x::\n",\
-					numports, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			#endif
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on remote address: %s\n", numports, saferemoteaddrstring) ; 
 			printf("<p>Individual TCP port scan results:</p>\n");
 
 			// Scan the TCP ports in parallel
@@ -1467,7 +1465,6 @@ int main(void)
 			}
 
 			// Update test state to reflect complete, even though we don't use it for text-mode case
-			// was result = (uint64_t)IPSCAN_TESTSTATE_COMPLETE_BIT;
 			const uint64_t write_state_complete = (uint64_t)IPSCAN_TESTSTATE_COMPLETE_BIT;
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			rc = -1;
@@ -1489,23 +1486,20 @@ int main(void)
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned error: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned error: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                         }
                         else
                         {  
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after TCP) returned rows: %d, %x:%x:%x:: starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after TCP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                                 #endif
                                 #endif
                         }
@@ -1527,9 +1521,7 @@ int main(void)
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result() returned UNKNOWN: TCP port scan results table\n" );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for protected client address (/48): %x:%x:%x::\n",\
-							(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-							(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at starttime %"PRIu64", session %"PRIu64"\n",\
 							(uint64_t)starttime, (uint64_t)session);
 				}
@@ -1741,9 +1733,8 @@ int main(void)
 			#ifdef CLIENTDEBUG
 			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
 			fetch_to_string(fetchnum, &fetchstring[0]);
-			IPSCAN_LOG( LOGPREFIX "ipscan: Fetch indicated %s completion for (/48): %x:%x:%x:: at querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-				 fetchstring, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF), (unsigned int)((remotehost_msb>>16) & 0xFFFF),\
-				 querystarttime, querysession );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Fetch indicated %s completion for remote host: %s at querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+				 fetchstring, saferemoteaddrstring, querystarttime, querysession );
 			#endif
 
 			// Calculate and report time-difference
@@ -1752,46 +1743,40 @@ int main(void)
 
                         if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                        (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, fetchnum, timedifference );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                        saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
                         }  
                         else
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                        (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, fetchnum, timedifference );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                        saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
                         }
 
 			// Check we know about this client
 			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned error: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
 			else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
 			else if (num_rows == 0)
 			{
 				// see if non-0 for same session but another host
 				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (done/error) returned 0, count_teststate_rows_db() returned %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
 			else
 			{
 				#ifdef CLIENTDEBUG
 				#if (1 <= IPSCAN_LOGVERBOSITY)
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (done/error) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (done/error) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
 				#endif
 				#endif
 			}
@@ -1807,9 +1792,7 @@ int main(void)
 			if ( PORTUNKNOWN == result )
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: fetching running state\n" );
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for protected client address (/48): %x:%x:%x::\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at querystarttime %"PRIu64", querysession %"PRIu64"\n", querystarttime, querysession);
 				// Set state to running but flag that database returned something unexpected
 				write_result = (uint64_t)( IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_DATABASE_ERROR_BIT );
@@ -1858,6 +1841,10 @@ int main(void)
 				{
 					result |= IPSCAN_TESTSTATE_EVALERROR_BIT;
 				}
+				else if (IPSCAN_CLIENT_ADDR_CHANGED == fetchnum)
+				{
+					result |= IPSCAN_TESTSTATE_CLIENT_ADDRCHANGE_BIT;
+				}
 				else if (IPSCAN_OTHER_ERROR == fetchnum)
 				{
 					result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
@@ -1881,9 +1868,8 @@ int main(void)
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: fetch included unexpected value %d for protected client address (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-							fetchnum, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-							(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: fetch included unexpected value %d for remote address : %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+							fetchnum, saferemoteaddrstring, querystarttime, querysession );
 					result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: state changed to indicate OTHER error\n" );
 				}
@@ -1928,23 +1914,20 @@ int main(void)
 				&& termsaccepted == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote protected client address (/48):  %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, query database fetch\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address :  %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, query database fetch\n",\
+					saferemoteaddrstring, querystarttime, querysession );
 			// Calculate and report time-difference
                         nowtimeref = time(NULL);
                         timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
                         if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                        (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, fetchnum, timedifference );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                        saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
                         }  
                         else
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                        (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, fetchnum, timedifference );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                        saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
                         }
 			#endif
 
@@ -1952,31 +1935,27 @@ int main(void)
                         int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					 num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned error: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned too many rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					 num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned too many rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 num_rows, saferemoteaddrstring, querystarttime, querysession );
                         }
 			else if (num_rows == 0)
 			{
 				// see if non-0 for same session but another host
 				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned 0 rows, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query) returned 0 rows, count_teststate_rows_db() returned %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else
                         {
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (query) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (query) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
                                 #endif
                         }
@@ -2042,9 +2021,8 @@ int main(void)
 				&& termsaccepted == 1 && includeexisting != 0 && fetch == 0)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote protected client address (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, initiate scan\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, initiate scan\n",\
+					saferemoteaddrstring, querystarttime, querysession );
 			#if (1 <= IPSCAN_LOGVERBOSITY)
 		        // Handle reporting of USER AGENT string
         		report_useragent_strings(useragentvar, secchuavar, secchuaarchvar, secchuaplatvar);
@@ -2056,15 +2034,13 @@ int main(void)
 			timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 			if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, timedifference );
+				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
+					saferemoteaddrstring, querystarttime, querysession, timedifference );
 			}
 			else
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, timedifference );
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
+					saferemoteaddrstring, querystarttime, querysession, timedifference );
 			}
 			#endif
 // needs indents fixing
@@ -2084,9 +2060,8 @@ int main(void)
 			}
 			if ( PORTUNKNOWN != result )
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode test with these session parameters is already running, attempting redirect\n" );
-				// attempt redirect to cause query session parameters to be dropped
-				create_redirect_header(URIPATH"/"EXENAME);
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode test with these session parameters is already running\n" );
+				// ideally we'd cause the browser window to reload but there's no way to achieve it
 				return(EXIT_SUCCESS);
 			}
 		}
@@ -2096,11 +2071,9 @@ int main(void)
 			int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
 			if (0 != other_num_rows)
 			{
-                               IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-				 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                 (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
-				// attempt redirect to cause query session parameters to be dropped
-				create_redirect_header(URIPATH"/"EXENAME);
+                               IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test returned 0, count_teststate_rows_db() returned %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+				 other_num_rows, saferemoteaddrstring, querystarttime, querysession );
+				// ideally we'd cause the browser window to reload but there's no way to achieve it
 				return(EXIT_SUCCESS);
 			}
 		}
@@ -2145,23 +2118,20 @@ int main(void)
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (init) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (init) returned error: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (init) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (init) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                         }
                         else
                         {
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (init) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (init) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
                                 #endif
                         }
@@ -2178,16 +2148,14 @@ int main(void)
 
 			#ifdef CLIENTDEBUG
 			#if (1 <= IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: write_db to set IPSCAN_PROTO_TESTSTATE RUNNING for protected client address (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+			IPSCAN_LOG( LOGPREFIX "ipscan: write_db to set IPSCAN_PROTO_TESTSTATE RUNNING for remote address : %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					saferemoteaddrstring, querystarttime, querysession );
 			#endif
 			#endif
 
 			// Log terms accepted
-			IPSCAN_LOG( LOGPREFIX "ipscan: protected client address (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", beginning with termsaccepted = %d\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", beginning with termsaccepted = %d\n",\
+					saferemoteaddrstring, querystarttime, querysession, termsaccepted );
 			#ifdef CLIENTDEBUG
 			if (1 != qsf || 1 != qstf)
 			{
@@ -2228,9 +2196,7 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",remoteaddrstring,\
 					pingresult, resultsstruct[result].label, indirecthost);
 			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of protected client address (/48): %x:%x:%x::\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of remote address : %s\n", saferemoteaddrstring);
 			#endif
 			portsstats[result]++ ;
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
@@ -2265,45 +2231,34 @@ int main(void)
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned error: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 // return(EXIT_SUCCESS);
                         }
 			else if (num_rows == 0)
 			{
 				// see if non-0 for same session but another host
 				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after ping) returned 0, count_teststate_rows_db() returned %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else
                         {
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after ping) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after ping) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
                                 #endif
                         }
 			// Only included if UDP is compiled in ...
 			#if (IPSCAN_INCLUDE_UDP == 1)
-
-			#if (2 < IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on client : %s\n", numudpports, remoteaddrstring);
-			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on protected client address (/48): %x:%x:%x::\n",\
-					numudpports, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			#endif
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on remote address : %s\n", numudpports, saferemoteaddrstring );
 
 			// Scan the UDP ports in parallel
 			int remaining = (int)numudpports;
@@ -2346,43 +2301,33 @@ int main(void)
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned error: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 // return(EXIT_SUCCESS);
                         }
 			else if (num_rows == 0)
 			{
 				// see if non-0 for same session but another host
 				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after UDP) returned 0, count_teststate_rows_db() returned %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else
                         {
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after UDP) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after UDP) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
                                 #endif
                         }
 
-			#if (2 < IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on client : %s\n", numports, remoteaddrstring);
-			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on protected client address (/48): %x:%x:%x::\n",\
-					numports, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			#endif
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on remote address : %s\n", numports, saferemoteaddrstring); 
 
 			// Scan the TCP ports in parallel
 			remaining = (int)numports;
@@ -2423,32 +2368,28 @@ int main(void)
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned error: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned error: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else if (num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 // return(EXIT_SUCCESS);
                         }
 			else if (num_rows == 0)
 			{
 				// see if non-0 for same session but another host
 				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned 0, count_teststate_rows_db() returned %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					 other_num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (after TCP) returned 0, count_teststate_rows_db() returned %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					 other_num_rows, saferemoteaddrstring, querystarttime, querysession );
 			}
                         else
                         {
 				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after TCP) returned rows: %d, %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-					num_rows, (unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-                                        (unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after TCP) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
                                 #endif
                         }
@@ -2470,9 +2411,7 @@ int main(void)
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result() returned UNKNOWN: UDP creating stats\n" );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for protected client address (/48): %x:%x:%x::\n",\
-						(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-						(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at querystarttime %"PRIu64", querysession %"PRIu64"\n", querystarttime, querysession);
 				}
 
@@ -2523,9 +2462,7 @@ int main(void)
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: TCP creating stats\n" );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for protected client address (/48): %x:%x:%x::\n",\
-							(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-							(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at querystarttime %"PRIu64", querysession %"PRIu64"\n", querystarttime, querysession);
 				}
 
@@ -2562,9 +2499,7 @@ int main(void)
 			}
 
 			#if (1 < IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: rmthost protected client address (/48): %x:%x:%x::\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: rmthost address : %s\n", saferemoteaddrstring); 
 			IPSCAN_LOG( LOGPREFIX "ipscan: querystarttime %"PRIu64" querysession %"PRIu64" numcustomports %u\n",\
 					 querystarttime, querysession, numcustomports);
 			#endif
@@ -2645,9 +2580,7 @@ int main(void)
 				if ( PORTUNKNOWN == result )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: waiting for test end\n" );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for protected client address (/48): %x:%x:%x::\n",\
-							(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-							(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at querystarttime %"PRIu64", querysession %"PRIu64"\n", querystarttime, querysession);
 					result = ( IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_DATABASE_ERROR_BIT );
 				}
@@ -2661,9 +2594,8 @@ int main(void)
 
 				if (NULL != flagsrc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: IPSCAN_TESTSTATE for protected client address (/48): %x:%x:%x:: querystarttime %"PRIu64", querysession %"PRIu64", '%s'\n",\
-							(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-							(unsigned int)((remotehost_msb>>16) & 0xFFFF), querystarttime, querysession, flagsrc );
+					IPSCAN_LOG( LOGPREFIX "ipscan: IPSCAN_TESTSTATE for remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", '%s'\n",\
+							saferemoteaddrstring, querystarttime, querysession, flagsrc );
 				}
 				#endif
 
@@ -2749,19 +2681,11 @@ int main(void)
 				&& termsaccepted == 1 && fetch == 0)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host protected client address (/48): %x:%x:%x:: javascript-mode, create start page\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address : %s javascript-mode, create start page\n", saferemoteaddrstring);
 			#endif
 
 			#if (1 <= IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: Creating the standard web results page start point\n");
-
-			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: for protected client address (/48): %x:%x:%x::\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
-			#endif
+			IPSCAN_LOG( LOGPREFIX "ipscan: Creating the standard web results page start point for remote address : %s\n", saferemoteaddrstring);
 			#endif
 
 			// Create the header and body
@@ -2792,12 +2716,19 @@ int main(void)
 		//
 		// ----------------------------------------------------------------------
 
+		else if ( numqueries == 3 && beginscan == 0 && fetch == 0 && ipv6addrquery == 1 && termsaccepted == 1 && addrfetch == 1)
+		{
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Client address fetch, returning address %s, addrfetchnum = %d\n", remoteaddrstring, addrfetchnum);
+			#endif
+			// report IPv6 address in json array format
+			create_json_header();
+			printf("[ \"%s\" ]\n",remoteaddrstring);
+		}
 		else if (termsaccepted == 0)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host protected client address (/48): %x:%x:%x:: common-mode, terms not accepted\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s common-mode, terms not accepted\n", saferemoteaddrstring);
 			#endif
 
 			// Tell the user that they haven't accepted the terms and conditions
@@ -2822,20 +2753,15 @@ int main(void)
 			// Finish the output
 			create_html_body_end();
 			IPSCAN_LOG( LOGPREFIX "ipscan: Something untoward happened, numqueries = %u\n", numqueries);
-			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
+			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d, ipv6addrquery = %d\n", includeexisting, beginscan, fetch, ipv6addrquery);
 			IPSCAN_LOG( LOGPREFIX "ipscan: querysession = %"PRIu64" querystarttime = %"PRIu64" numports = %d and numcustomports = %u.\n", \
 					querysession, querystarttime, numports, numcustomports);
-			IPSCAN_LOG( LOGPREFIX "ipscan: protected client address (/48): %x:%x:%x:: beginning with termsaccepted = %d\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: remote address : %s beginning with termsaccepted = %d\n", saferemoteaddrstring, termsaccepted );
 		}
-
 		else
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host protected client address (/48): %x:%x:%x:: common-mode, final else - hack?\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF) );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s common-mode, final else - hack?\n", saferemoteaddrstring);
 			#endif
 
 			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
@@ -2852,13 +2778,11 @@ int main(void)
 			// Finish the output
 			create_html_body_end();
 			// Log information relevant to the event
-			IPSCAN_LOG( LOGPREFIX "ipscan: Something untoward happened, numqueries = %u\n", numqueries);
+			IPSCAN_LOG( LOGPREFIX "ipscan: Something untoward happened, numqueries = %u, ipv6addrquery = %d\n", numqueries, ipv6addrquery);
 			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d,\n", includeexisting, beginscan, fetch);
 			IPSCAN_LOG( LOGPREFIX "ipscan: querysession = %"PRIu64" querystarttime = %"PRIu64" numports = %d and numcustomports = %u.\n", \
 					querysession, querystarttime, numports, numcustomports);
-			IPSCAN_LOG( LOGPREFIX "ipscan: protected client address (/48): %x:%x:%x:: beginning with termsaccepted = %d\n",\
-					(unsigned int)((remotehost_msb>>48) & 0xFFFF), (unsigned int)((remotehost_msb>>32) & 0xFFFF),\
-					(unsigned int)((remotehost_msb>>16) & 0xFFFF), termsaccepted );
+			IPSCAN_LOG( LOGPREFIX "ipscan: remote address : %s beginning with termsaccepted = %d\n", saferemoteaddrstring, termsaccepted );
 		}
 	}
 

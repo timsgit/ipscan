@@ -39,9 +39,10 @@
 // 0.19 - CodeQL improvements
 // 0.20 - add querystring checkers
 // 0.21 - tidy various format strings
+// 0.22 - add ipv6_address_to_string()
 
 //
-#define IPSCAN_GENERAL_VER "0.21"
+#define IPSCAN_GENERAL_VER "0.22"
 //
 
 #include "ipscan.h"
@@ -69,6 +70,9 @@
 
 // errors
 #include <errno.h>
+
+// booleans
+#include <stdbool.h>
 
 // Logging with syslog requires additional include
 #if (LOGMODE == 1)
@@ -195,6 +199,10 @@ void fetch_to_string(uint32_t fetchnum, char * retstring)
 	{
 		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "DATABASE ERR");
 	}  
+	else if (IPSCAN_CLIENT_ADDR_CHANGED == fetchnum)
+	{
+		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "CLIENT ADDR CHANGED");
+	}
 	else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
 	{
 		rc = snprintf(retstring, IPSCAN_FETCHNUM_STRING_MAX, "%s", "UNEXP CHANGE");
@@ -295,6 +303,13 @@ char * state_to_string(uint64_t statenum, char * retstringptr, int retstringstar
 	if (0 != (statenum & IPSCAN_TESTSTATE_DATABASE_ERROR_BIT))
 	{
 		rc = snprintf(retstringptr, retstringfree, "%s", "DB ERROR, ");
+		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		retstringptr += rc;
+		retstringfree -= (size_t)rc;
+	}
+	if (0 != (statenum & IPSCAN_TESTSTATE_CLIENT_ADDRCHANGE_BIT))
+	{
+		rc = snprintf(retstringptr, retstringfree, "%s", "ADDRCHNG, ");
 		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
 		retstringfree -= (size_t)rc;
@@ -574,3 +589,27 @@ int querystring_is_number(char check)
 	return (retval);
 }
 
+//
+// -----------------------------------------------------------------------------
+//
+bool ipv6_address_to_string( uint64_t msb, uint64_t lsb, char * buffer, unsigned char bufflen, bool slash48 )
+{
+	int rc = 0;
+	memset (buffer, 0, bufflen);
+	
+	if (true == slash48)
+	{
+		rc = snprintf(buffer, bufflen, "%x:%x:%x::",\
+			(unsigned int)((msb>>48) & 0xFFFF), (unsigned int)((msb>>32) & 0xFFFF),\
+			(unsigned int)((msb>>16) & 0xFFFF));
+	}
+	else
+	{
+		rc = snprintf(buffer, bufflen, "%x:%x:%x:%x:%x:%x:%x:%x",\
+			(unsigned int)((msb>>48) & 0xFFFF), (unsigned int)((msb>>32) & 0xFFFF),\
+			(unsigned int)((msb>>16) & 0xFFFF), (unsigned int)(msb & 0xFFFF),\
+			(unsigned int)((lsb>>48) & 0xFFFF), (unsigned int)((lsb >>32) & 0xFFFF),\
+			(unsigned int)((lsb>>16) & 0xFFFF), (unsigned int)(lsb & 0xFFFF) );
+	}
+	return ( (rc >= 0 && rc < bufflen) ? true : false );
+}
