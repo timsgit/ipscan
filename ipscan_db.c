@@ -89,9 +89,10 @@
 // 0.68 - introduce 'LOCK TABLES' for INSERTS/DELETES
 // 0.69 - tidy various format strings
 // 0.70 - debug reporting now uses consistent remote address format
+// 0.71 - updates to ensure error conditions cause appropriate fall-through
 
 //
-#define IPSCAN_DB_VER "0.70"
+#define IPSCAN_DB_VER "0.71"
 //
 
 #include "ipscan.h"
@@ -185,7 +186,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 	// RETURNS 0 - write completed successfully, otherwise non-0
 	//
 
-	int retval = -1; // do not change this
+	int retval = -1; // default, set to positive values if an error condition occurs
 	MYSQL *connection;
 
 	int rc = mysql_library_init(0, NULL, NULL);
@@ -219,17 +220,17 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 			}
 			else
 			{
-				// retval defaults to -1, and is set to other values if an error condition occurs
 				char query[MAXDBQUERYSIZE];
 				// Use the default engine - sensitive data may persist until next tidy_up_db() call
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY `mykey` (hostmsb,hostlsb,createdate,session,portnum) ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to -1, and is set to positive values if an error condition occurs
+				if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 != rc)
@@ -239,7 +240,8 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 							}
 						}
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` WRITE", MYSQL_TBLNAME);
-						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						// retval defaults to -1, and is set to positive values if an error condition occurs
+						if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 != rc)
@@ -250,7 +252,8 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 						}
 						// SET AUTOCOMMIT=0;LOCK TABLES `%s` WRITE; INSERT .... ; COMMIT; UNLOCK TABLES
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indirecthost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %u, %u, '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
-						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						// retval defaults to -1, and is set to positive values if an error condition occurs
+						if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							#ifdef DBDEBUG
 							uint32_t proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
@@ -308,6 +311,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 == rc)
 							{
+								// retval set to 0 if INSERT completed successfully
 								retval = 0;
 							}
 							else
@@ -369,7 +373,11 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 	// finalise the MySQL library - frees resources
 	mysql_library_end();
 
-	if (0 != retval) IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: returning with non-zero retval = %d\n",retval);
+	// retval defaults to -1, set to 0 if INSERT completes successfully, and is set to positive values if an error condition occurs
+	if (0 != retval)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: returning with non-zero retval = %d\n",retval);
+	}
 	return (retval);
 }
 
@@ -424,7 +432,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			{
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to positive values if an error condition occurs
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -434,7 +443,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					}
 				}
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` READ", MYSQL_TBLNAME);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to positive values if an error condition occurs
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -446,7 +456,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to positive values if an error condition occurs
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
 					#ifdef DBDEBUG
@@ -670,6 +681,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 		}
 	}
 	mysql_library_end();
+	// retval defaults to 0, set to positive values if an error condition occurs
 	if (0 != retval) IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: INFO: returning with retval = %d\n",retval);
 	return (retval);
 }
@@ -726,7 +738,8 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			{
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to positive values if an error condition occurs
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -736,7 +749,8 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					}
 				}
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` WRITE", MYSQL_TBLNAME);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to positive values if an error condition occurs
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -757,7 +771,8 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					// delete everything for this test except the test state
 					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 				}
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to positive values if an error condition occurs
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
 					#if (defined DBDEBUG || defined CLIENTDEBUG)
@@ -843,6 +858,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 		}
 	}
 	mysql_library_end();
+	// retval defaults to 0, set to positive values if an error condition occurs
 	if (0 != retval) IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: INFO: returning with retval = %d\n",retval);
 	return (retval);
 }
@@ -851,21 +867,24 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 //
 // Fetch a single result
 //
-
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port)
 {
 
 	//
 	// RETURNS
-	//  < 0 			- error condition
+	//  < 0 		- error condition
 	//  0 =< x <= INT_MAX 	- portresult value from database
+	//                        NOTE: actually a uint64_t BUT values in excess of INT_MAX are unexpected
 	//
 
-	uint64_t dbres;
-	int retres = -1;
+	uint64_t dbres; // database result
+	int retres = -1; // retres defaults to -1, set to other negative values for error conditions
 	MYSQL *connection;
 	MYSQL_ROW row;
 
+	//
+	// calculate two forms of reportable host addresses - dependant on verbosity
+	//
 	char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
         #if (1 < IPSCAN_LOGVERBOSITY)
         // report host addresses as full 128-bit addresses
@@ -913,7 +932,8 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			{
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
+				if (-1 == retres && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -923,7 +943,8 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					}
 				}
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` READ", MYSQL_TBLNAME);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
+				if (-1 == retres && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -935,7 +956,8 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				// SELECT x FROM t1 WHERE ( a = b ) ORDER BY x DESC;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u) ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
+				if (-1 == retres && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
@@ -960,8 +982,12 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 									if (1 == rcres)
 									{
 										// Set the return result
+										// dbres holds the full uint64_t value, but shouldn't exceed INT_MAX
+										// retres defaults to -1, set to positive portresult value if no issues,
+										//  set to other negative values for error conditions
 										if ( INT_MAX >= dbres )
 										{
+											// retres will be >= 0
 											retres = (int)dbres;
 										}
 										else
@@ -1102,6 +1128,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 		}
 	}
 	mysql_library_end();
+	// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
 	if (0 > retres) IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: INFO: returning with retres = %d\n",retres);
 	return (retres);
 }
@@ -1118,7 +1145,7 @@ int tidy_up_db(int8_t deleteall)
 	//           0		- tidy_up_db() completed successfully
 	//
 
-	int retval = 0;
+	int retval = 0; // retval defaults to 0, set to non-0 for error conditions
 	MYSQL *connection;
 
 	int rc = mysql_library_init(0, NULL, NULL);
@@ -1155,7 +1182,8 @@ int tidy_up_db(int8_t deleteall)
 			{
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to non-0 for error conditions
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1165,7 +1193,8 @@ int tidy_up_db(int8_t deleteall)
 					}
 				}
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` WRITE", MYSQL_TBLNAME);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to non-0 for error conditions
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1190,7 +1219,8 @@ int tidy_up_db(int8_t deleteall)
 					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= NOW() - INTERVAL %u SECOND ) ORDER BY id",\
 						 MYSQL_TBLNAME, IPSCAN_TESTSTATE_AS_PORTNUM, (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET );
 				}
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to non-0 for error conditions
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
 					#if (DBDEBUG > 1)
@@ -1255,6 +1285,7 @@ int tidy_up_db(int8_t deleteall)
 		}
 	}
 	mysql_library_end();
+	// retval defaults to 0, set to non-0 for error conditions
 	if (0 != retval) IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: INFO: returning with retval = %d\n",retval);
 	return (retval);
 }
@@ -1340,7 +1371,8 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 					if (0 == rc)
 					{
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						// retval defaults to -1, set positive for error conditions
+						if (-1 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 != rc)
@@ -1350,7 +1382,8 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 							}
 						}
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` WRITE", MYSQL_TBLNAME);
-						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						// retval defaults to -1, set positive for error conditions
+						if (-1 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 != rc)
@@ -1361,7 +1394,8 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 						}
 						// SET AUTOCOMMIT=0;LOCK TABLES `%s` WRITE; INSERT .... ; COMMIT; UNLOCK TABLES
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` SET portresult = %u WHERE (hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u AND indirecthost = '%s')" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port, indirecthost);
-						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						// retval defaults to -1, set positive for error conditions
+						if (-1 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							#ifdef DBDEBUG
 							char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
@@ -1430,6 +1464,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 										IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR could not execute statement in multi-statement update\n");
 									}
 								} while (rc == 0);
+								// retval set to 0 if update completed successfully
 								retval = 0;
 							}
 							else
@@ -1490,7 +1525,11 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	}
 	mysql_library_end();
 
-	if (0 != retval) IPSCAN_LOG( LOGPREFIX "ipscan: update_db: INFO: returning with retval = %d\n",retval);
+	// retval defaults to -1, set to 0 if UPDATE completes successfully, set to positive values for error conditions
+	if (0 != retval)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: update_db: INFO: returning with retval = %d\n",retval);
+	}
 	return (retval);
 }
 
@@ -1507,7 +1546,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 	//         >=0 - number of rows present in database
 	//
 
-	int retval = 0;
+	int retval = 0; // defaults to 0, set to negative value for error condition
 	MYSQL *connection;
 
 	int rc = mysql_library_init(0, NULL, NULL);
@@ -1543,7 +1582,8 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 			{
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to negative value for error condition
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1553,7 +1593,8 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 					}
 				}
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` READ", MYSQL_TBLNAME);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to negative value for error condition
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1565,8 +1606,8 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
-
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to negative value for error condition
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
 					#ifdef DBDEBUG
@@ -1592,7 +1633,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 						if (result)
 						{
 							uint64_t num_rows = mysql_num_rows(result);
-							if (IPSCAN_DB_MAX_EXPECTED_ROWS < num_rows)
+							if (IPSCAN_DB_MAX_EXPECTED_ROWS <= num_rows)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: more than expected (%d) number of rows returned: %"PRIu64".\n", \
 									IPSCAN_DB_MAX_EXPECTED_ROWS, num_rows);
@@ -1663,6 +1704,8 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 		}
 	}
 	mysql_library_end();
+
+	// retval defaults to 0, set to negative value for error condition
 	if (0 > retval) IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: INFO: returning with retval = %d\n",retval);
 	return (retval);
 }
@@ -1680,7 +1723,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 	//         >=0 - number of rows present in database
 	//
 
-	int retval = 0;
+	int retval = 0; // retval defaults to 0, set to negative values for error conditions
 	MYSQL *connection;
 
 	int rc = mysql_library_init(0, NULL, NULL);
@@ -1716,7 +1759,8 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 			{
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to negative values for error conditions
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1726,7 +1770,8 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 					}
 				}
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` READ", MYSQL_TBLNAME);
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to negative values for error conditions
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1738,8 +1783,8 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 				// uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
 				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
-
-				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval defaults to 0, set to negative values for error conditions
+				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
@@ -1748,7 +1793,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 						if (result)
 						{
 							uint64_t num_rows = mysql_num_rows(result);
-							if (INT_MAX < num_rows)
+							if (INT_MAX <= num_rows)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: more than expected (%d) number of rows returned: %"PRIu64".\n", \
 									INT_MAX, num_rows);
@@ -1819,6 +1864,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 		}
 	}
 	mysql_library_end();
+	// retval defaults to 0, set to negative values for error conditions
 	if (0 > retval) IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: INFO: returning with retval = %d\n",retval);
 	return (retval);
 }

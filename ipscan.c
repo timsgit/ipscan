@@ -266,12 +266,11 @@ int main(void)
 	// last is only used in text-only mode
 	int last = 0;
 	#else
-	// fetchnum is only used in javascript-only mode
+	// fetchnums are only used in javascript-only mode
 	int fetchnum = 0;
-	#endif
-
 	// Client IPv6 address fetchnum
 	int addrfetchnum = 0;
+	#endif
 
 	// List of ports to be tested and their results
 	struct portlist_struc portlist[MAXPORTS];
@@ -1018,7 +1017,9 @@ int main(void)
 		if (i < numqueries && query[i].valid == 1)
 		{
 			addrfetch = (query[i].varval >0) ? 1 : 0;
+			#if (TEXTMODE != 1)
 			if (1 == addrfetch && (int)(query[i].varval < 4096)) addrfetchnum = (int)query[i].varval;
+			#endif
 		}
 
 		// Dump the variables resulting from the query-string parsing
@@ -1036,12 +1037,12 @@ int main(void)
 
 		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numqueries = %u\n", numqueries);
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: ipv6addrquery = %d, addrfetch = %d, addrfetchnum = %d\n", ipv6addrquery, addrfetch, addrfetchnum);
 		#if (TEXTMODE != 1)
 		// javascript mode only
                 timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: querysession = %"PRIu64" querystarttime = %"PRIu64" diff = %"PRId64"\n", querysession, querystarttime, timedifference );
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: ipv6addrquery = %d, addrfetch = %d, addrfetchnum = %d\n", ipv6addrquery, addrfetch, addrfetchnum);
 		if (1 != qsf || 1 != qstf)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: qsf = %d qstf = %d\n", qsf, qstf );
@@ -1049,6 +1050,7 @@ int main(void)
 		#else
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", (uint64_t)session, (uint64_t)starttime, numports);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: ipv6addrquery = %d, addrfetch = %d\n", ipv6addrquery, addrfetch);
 		#endif
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numcustomports = %u NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: reconstituted query string = %s\n", reconquery );
@@ -1725,9 +1727,9 @@ int main(void)
 		// *IF* we have everything we need to query the database ...
 		// (1)querysession, (2)querystarttime, (3)fetch, (4)includeexisting and (5)termsaccepted. 
 		// Could also have one or more customports. 
-		// This statement handles cases where fetch indicates completion/failure.
+		// This statement handles cases where fetch (contents of fetchnum) indicates completion/failure.
 
-		if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 0 && fetch == 1 \
+		if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 0 && fetch == 1 && addrfetch == 0 \
 				&& termsaccepted == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum)
 		{
 			#ifdef CLIENTDEBUG
@@ -1910,7 +1912,7 @@ int main(void)
 		// Could also have one or more customports.
 		// Check that fetch number is less than a value which indicates completion/failure
 
-		else if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 0 && fetch == 1 \
+		else if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 0 && fetch == 1 && addrfetch == 0 \
 				&& termsaccepted == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
 		{
 			#ifdef CLIENTDEBUG
@@ -2018,7 +2020,7 @@ int main(void)
 		// Check that there is no fetch query.
 
 		else if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 1 \
-				&& termsaccepted == 1 && includeexisting != 0 && fetch == 0)
+				&& termsaccepted == 1 && includeexisting != 0 && fetch == 0 && addrfetch == 0)
 		{
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, initiate scan\n",\
@@ -2678,7 +2680,7 @@ int main(void)
 		// i.e. (+1)includeexisting (either +1 or -1) and (+2)termsaccepted and NUMUSERDEFPORTS
 
 		else if (numqueries >= (NUMUSERDEFPORTS + 2) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 \
-				&& termsaccepted == 1 && fetch == 0)
+				&& termsaccepted == 1 && fetch == 0 && addrfetch == 0)
 		{
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address : %s javascript-mode, create start page\n", saferemoteaddrstring);
@@ -2701,6 +2703,15 @@ int main(void)
 			// Create the main html body
 			create_html_body_end();
 		}
+		else if ( numqueries == 3 && beginscan == 0 && fetch == 0 && ipv6addrquery == 1 && termsaccepted == 1 && addrfetch == 1 )
+		{
+			//#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Client address fetch, returning address %s, addrfetchnum = %d\n", remoteaddrstring, addrfetchnum);
+			//#endif
+			// report IPv6 address in json array format
+			create_json_header();
+			printf("[ \"%s\" ]\n",remoteaddrstring);
+		}
 
 		// ----------------------------------------------------------------------
 		//
@@ -2716,15 +2727,6 @@ int main(void)
 		//
 		// ----------------------------------------------------------------------
 
-		else if ( numqueries == 3 && beginscan == 0 && fetch == 0 && ipv6addrquery == 1 && termsaccepted == 1 && addrfetch == 1)
-		{
-			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Client address fetch, returning address %s, addrfetchnum = %d\n", remoteaddrstring, addrfetchnum);
-			#endif
-			// report IPv6 address in json array format
-			create_json_header();
-			printf("[ \"%s\" ]\n",remoteaddrstring);
-		}
 		else if (termsaccepted == 0)
 		{
 			#ifdef CLIENTDEBUG
@@ -2753,7 +2755,8 @@ int main(void)
 			// Finish the output
 			create_html_body_end();
 			IPSCAN_LOG( LOGPREFIX "ipscan: Something untoward happened, numqueries = %u\n", numqueries);
-			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d, ipv6addrquery = %d\n", includeexisting, beginscan, fetch, ipv6addrquery);
+			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d, addrfetch = %d, ipv6addrquery = %d\n", \
+					includeexisting, beginscan, fetch, addrfetch, ipv6addrquery);
 			IPSCAN_LOG( LOGPREFIX "ipscan: querysession = %"PRIu64" querystarttime = %"PRIu64" numports = %d and numcustomports = %u.\n", \
 					querysession, querystarttime, numports, numcustomports);
 			IPSCAN_LOG( LOGPREFIX "ipscan: remote address : %s beginning with termsaccepted = %d\n", saferemoteaddrstring, termsaccepted );
