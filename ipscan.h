@@ -226,8 +226,9 @@
 	//
 	// ipscan.h version (separate from overall IPscan version (IPSCAN_VER)
 	// 0.01	- initial version when separated from IPSCAN_VER
+	// 0.02	- introduce IPSCAN_TEST_CLIENT_ADDRCHANGE - for testing only
 	//
-	#define IPSCAN_H_VER "0.01"
+	#define IPSCAN_H_VER "0.02"
 	//
 	//
 
@@ -315,8 +316,9 @@
 	//
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
-		#define IPSCAN_LOGVERBOSITY 3
+		#define IPSCAN_LOGVERBOSITY 1
 		#define CLIENTDEBUG 1
+		#define DBDEBUG 1
 	#endif
 	//
 	// database (NOT port scan results) related debug:
@@ -349,6 +351,9 @@
 
 	// Client JavaScript Console logging
 	// #define IPSCAN_JS_CONSOLE_LOGGING 1
+
+	// TEST purposes only - do NOT enable
+	// #define IPSCAN_TEST_CLIENT_ADDRCHANGE 1
 
 	// debug option to only use tidy_up_only() - do NOT use in production
 	// #define IPSCAN_TIDY_UP_ONLY 1
@@ -605,9 +610,11 @@
 	#define NTP_PRECISION 2
 
 	// Protocol mappings (stored in database)
+	//
 	// Port number (0-65535) stored in lowest 16 bits, 15-0
 	// Special case tests indicated by value in bits 17-16
 	// This allows multiple tests to be targetted at the same port
+	// Protocol (protocol,teststate and signalling) stored in bits 21-18
 	#define IPSCAN_PORT_WIDTH (16U)
 	#define IPSCAN_SPECIAL_WIDTH (2U)
 	#define IPSCAN_PROTO_WIDTH (4U)
@@ -623,10 +630,12 @@
 	#define IPSCAN_PROTO_TCP (0)
 	#define IPSCAN_PROTO_ICMPV6 (1)
 	#define IPSCAN_PROTO_UDP (2)
-	#define IPSCAN_PROTO_TESTSTATE (3)
+	#define IPSCAN_PROTO_TESTSTATE (4)
+	#define IPSCAN_PROTO_SIGNALLING (8)
 
-	// Define value of portnum used to hold TESTSTATE 
+	// Define value of portnum used to hold TESTSTATE and SIGNALLING 
 	#define IPSCAN_TESTSTATE_AS_PORTNUM ((uint64_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)))
+	#define IPSCAN_SIGNALLING_AS_PORTNUM ((uint64_t)(0 + (IPSCAN_PROTO_SIGNALLING << IPSCAN_PROTO_SHIFT)))
 
 	// Maximum length of string holding protocol name
 	#define IPSCAN_PROTO_STRING_MAX (16)
@@ -652,13 +661,13 @@
 	#define IPSCAN_DELETE_WAIT_PERIOD (IPSCAN_TESTSTATE_COMPLETE_SLEEP + 2 * JSONFETCHEVERY)
 
 	// Offset from NOW in seconds. Results older than (NOW-this) are deleted
-	// Should hardly ever be used, but ensures tests which were in-progress when
-	// the server was shutdown/rebooted, or the client navigated away, etc. are deleted
+	// Ensures tests which were in-progress when the server was shutdown/rebooted,
+	// or the client navigated away, etc. are deleted in relatively short order.
 	// All results, apart from the running state, older than the following will be deleted
 	// NOTE: time must be in seconds and exceed the longest time that a test can take to execute (150s)
-	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (600)
+	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (360)
 	// Everything (results and running state) older than the following (in seconds) will be deleted
-	#define IPSCAN_DELETE_EVERYTHING_LONG_OFFSET (3600)
+	#define IPSCAN_DELETE_EVERYTHING_LONG_OFFSET (600)
 	//
 	// Delete minimum time - only delete from database if > this value
 	//

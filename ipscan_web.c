@@ -85,8 +85,10 @@
 // 0.65 - various code quality improvements (scope reductions)
 // 0.66 - improve various format strings
 // 0.67 - add code to support client address change detection
+// 0.68 - overwrite current history URL so that reload button causes a new test to run
+//	  rather than one using historical querystring and therefore previous session/starttime
 
-#define IPSCAN_WEB_VER "0.67"
+#define IPSCAN_WEB_VER "0.68"
 
 #include "ipscan.h"
 
@@ -237,6 +239,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" let statusresult = 0;");
 	printf(" let myInitIpv6Addr = \"::\";"); // client's IPv6 address logged at the start of the test. '::' used as undefined value
 	printf(" let myIpv6AddrFetchStart = -1;"); // logs the fetchnum that client's IPv6 address fetch began (-1 not started)
+	printf(" let myReloadDeclined = false;"); // flag - if true then a page reload  (test restart) has been offerred but declined - allow test to complete
 	printf(" let lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
 
 	// Use Date().now() as our timestamp to ensure all runs are unique
@@ -543,24 +546,31 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// even fetchnum - hopefully transfer has finished and the returned address is the client's
 	// check fetchnum > 2 - so both myInitIpv6Add and myIpv6now have (hopefully) been filled with valid addresses
 	//
-	printf(" if ((fetchnum %% 2) == 0 && fetchnum > 2 && myIpv6now != '::' && myInitIpv6Addr != '::' && myIpv6now != myInitIpv6Addr)");
+	#ifdef IPSCAN_TEST_CLIENT_ADDRCHANGE
+	printf(" myIpv6now = \"t\"+myIpv6now;");
+	#endif
+	printf(" if (myReloadDeclined == false && (fetchnum %% 2) == 0 && fetchnum > 2 && myIpv6now != '::' && myInitIpv6Addr != '::' && myIpv6now != myInitIpv6Addr)");
 	printf(" {");
 	// attempt to send an indication to the server
 	printf(" HTTPAddrChanged(myInitIpv6Addr, myIpv6now);");
 	// ask the user whether they want to restart the test, or not
-	printf(" if (window.confirm(\"Client IPv6 address change detected. Restart the test to ensure accurate results. Restart now?\") == true)");
-	printf(" {"); 
-	printf(" reloadPage = true;");
+	printf(" let reloadPage = window.confirm(\"Client IPv6 address change detected. Restart the test to ensure accurate results. Restart now?\");");
+	// if reload is declined then latch this feedback to ensure test completes with no further interruption
+	printf(" if (myReloadDeclined == false && reloadPage == false)");
+	printf(" {");
+	printf(" myReloadDeclined = true;");
 	printf(" }");
 #ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('Client address mismatch');");
-	printf(" console.log('Client fetchnum   : ',fetchnum);");
-	printf(" console.log('Client fetchnum %% 2: ',(fetchnum %% 2));");
-	printf(" console.log('Client init address: ',myInitIpv6Addr);");
-	printf(" console.log('Client  now address: ',myIpv6now);");
-	printf(" console.log('Client reloadPage  : ',reloadPage);");
+	printf(" console.log('Client fetchnum        : ',fetchnum);");
+	printf(" console.log('Client fetchnum %% 2   : ',(fetchnum %% 2));");
+	printf(" console.log('Client init address    : ',myInitIpv6Addr);");
+	printf(" console.log('Client  now address    : ',myIpv6now);");
+	printf(" console.log('Client reloadPage      : ',reloadPage);");
+	printf(" console.log('Client myReloadDeclined: ', myReloadDeclined);");
 #endif
-	printf(" if (reloadPage == true)");
+	// if we haven't declined the reload opportunity then cause a reload to happen
+	printf(" if (myReloadDeclined == false && reloadPage == true)");
 	printf(" {");
 	printf(" window.location.reload();");
 	printf(" }");
@@ -593,6 +603,18 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" clearInterval(myInterval);");
 	printf(" clearInterval(myBlink);");
 	printf(" HTTPFinished();");
+	//
+	// Rewrite history to prevent re-use of old querystring parameters
+	//
+#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('HREF before: ',window.location.href );");
+	printf(" console.log('window.history.state: ',window.history.state);");
+#endif
+	printf(" const restartURL = \""URIPATH"/"EXENAME"\";");
+	printf(" window.history.replaceState( {} , 'Restart IPscan', restartURL );");
+#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('HREF after: ',window.location.href );");
+#endif
 	printf(" }");
 	//
 	// go around the latest received state and update display as required

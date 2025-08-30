@@ -165,7 +165,9 @@ int tidy_up_db(int8_t deleteall);
 int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost);
 int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int count_teststate_rows_db(uint64_t timestamp, uint64_t session);
+// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *udpportlist);
+// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *portlist);
 void create_json_header(void);
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery);
@@ -673,10 +675,10 @@ int main(void)
 				remotehost_lsb |= value;
 			}
 			#if (1 < IPSCAN_LOGVERBOSITY)
-			// report host addresses as full 128-bit addresses
+			// report host addresses as (full)   128-bit addresses
 			bool convertedok = ipv6_address_to_string( remotehost_msb, remotehost_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
 			#else
-			// report host addresses as 48-bit addresses
+			// report host addresses as (private) 48-bit addresses
 			bool convertedok = ipv6_address_to_string( remotehost_msb, remotehost_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), true );
 			#endif
 			if (false == convertedok)
@@ -1161,7 +1163,7 @@ int main(void)
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
 			printf("</head>\n");
 			printf("<body>\n");
-			printf("<h3 style=\"color:blue\">IPv6 Port Scanner Version %s, results for host %s</h3>\n", IPSCAN_VER, remoteaddrstring);
+			printf("<h3 style=\"color:blue\">IPv6 Port Scanner Version %s, results for host %s</h3>\n", IPSCAN_VER, saferemoteaddrstring);
 			stptr = ctime_r(&starttime,stimeresult);
 			if (NULL == stptr)
 			{
@@ -1296,8 +1298,9 @@ int main(void)
 					{
 						unsigned int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef UDPPARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",saferemoteaddrstring,porti,todo);
 						#endif
+						// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
 						rc |= check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, &udpportlist[0]);
 						porti += todo;
 						numchildren ++;
@@ -1444,8 +1447,9 @@ int main(void)
 					{
 						unsigned int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef PARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",saferemoteaddrstring,porti,todo);
 						#endif
+						// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
 						rc |= check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, &portlist[0]);
 						porti += todo;
 						numchildren ++;
@@ -1620,7 +1624,7 @@ int main(void)
 			}
 
 			// Create results key table
-			create_results_key_table(remoteaddrstring, starttime);
+			create_results_key_table(saferemoteaddrstring, starttime);
 			// Finish the output
 			create_html_body_end();
 
@@ -2045,42 +2049,39 @@ int main(void)
 					saferemoteaddrstring, querystarttime, querysession, timedifference );
 			}
 			#endif
-// needs indents fixing
-		// Start of check for existing test with same parameters
-                int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-		if (num_rows < 0)
-		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode count_rows_db() at duplicate initiation test returned error: %d\n", num_rows);
-		}
-		else if (num_rows > 0)
-		{
-			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM );
-			if (0 > result)
+			// Start of check for existing test with same parameters
+			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
+			if (num_rows < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode read_db_result() at duplicate initiation test returned bad value: %d\n", result);
-				result = PORTUNKNOWN;
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode count_rows_db() at duplicate initiation test returned error: %d\n", num_rows);
 			}
-			if ( PORTUNKNOWN != result )
+			else if (num_rows > 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode test with these session parameters is already running\n" );
-				// ideally we'd cause the browser window to reload but there's no way to achieve it
-				return(EXIT_SUCCESS);
+				int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM );
+				if (0 > result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode read_db_result() at duplicate initiation test returned bad value: %d\n", result);
+					result = PORTUNKNOWN;
+				}
+				if ( PORTUNKNOWN != result )
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters is already running\n" );
+					return(EXIT_SUCCESS);
+				}
 			}
-		}
-		else if (num_rows == 0)
-		{
-			// see if non-0 for same session but another host
-			int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
-			if (0 != other_num_rows)
+			else if (num_rows == 0)
 			{
-                               IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test returned 0, count_teststate_rows_db() returned %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
-				 other_num_rows, saferemoteaddrstring, querystarttime, querysession );
-				// ideally we'd cause the browser window to reload but there's no way to achieve it
-				return(EXIT_SUCCESS);
+				// see if non-0 for same session parameters (starttime, session) but another host
+				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
+				if (0 != other_num_rows)
+				{
+       		                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test returned 0, count_teststate_rows_db() returned %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
+						 other_num_rows, saferemoteaddrstring, querystarttime, querysession );
+					// ideally we'd cause the browser window to reload but there's no way to achieve it
+					return(EXIT_SUCCESS);
+				}
 			}
-		}
-		// End of check for existing test with same parameters
-// needs indents fixing
+			// End of check for existing test with same parameters
 
 			// Default for unused database entries
 			const char unusedfield[] = "unused";
@@ -2195,7 +2196,7 @@ int main(void)
 
 			int result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (0 < IPSCAN_LOGVERBOSITY)
-			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",remoteaddrstring,\
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",saferemoteaddrstring,\
 					pingresult, resultsstruct[result].label, indirecthost);
 			#else
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of remote address : %s\n", saferemoteaddrstring);
@@ -2275,10 +2276,10 @@ int main(void)
 						unsigned int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef UDPPARLLDEBUG
 						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,querystarttime,querysession,portlist)\n",\
-							remoteaddrstring,porti,todo);
+							saferemoteaddrstring,porti,todo);
 						#endif
-						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, querystarttime,\
-							querysession, &udpportlist[0]);
+						// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
+						rc = check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, querystarttime, querysession, &udpportlist[0]);
 						porti += todo;
 						numchildren ++;
 						remaining = (int)(numudpports - porti);
@@ -2343,10 +2344,10 @@ int main(void)
 					{
 						unsigned int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef PARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,querystarttime,querysession,portlist)\n",remoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,querystarttime,querysession,portlist)\n",saferemoteaddrstring,porti,todo);
 						#endif
-						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb,\
-								 querystarttime, querysession, &portlist[0]);
+						// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
+						rc = check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, querystarttime, querysession, &portlist[0]);
 						porti += todo;
 						numchildren ++;
 						remaining = (int)(numports - porti);
@@ -2694,20 +2695,20 @@ int main(void)
 			#if (IPSCAN_INCLUDE_UDP == 1)
 			// starttime is of type time_t in create_html_body() calls:
 			create_html_header(numports, numudpports, reconquery);
-			create_html_body(remoteaddrstring, (time_t)starttime, numports, numudpports, portlist, udpportlist);
+			create_html_body(saferemoteaddrstring, (time_t)starttime, numports, numudpports, portlist, udpportlist);
 			#else
 			// starttime is of type time_t in create_html_body() calls:
 			create_html_header(numports, 0, reconquery);
-			create_html_body(remoteaddrstring, (time_t)starttime, numports, 0, portlist, udpportlist);
+			create_html_body(saferemoteaddrstring, (time_t)starttime, numports, 0, portlist, udpportlist);
 			#endif
 			// Create the main html body
 			create_html_body_end();
 		}
 		else if ( numqueries == 3 && beginscan == 0 && fetch == 0 && ipv6addrquery == 1 && termsaccepted == 1 && addrfetch == 1 )
 		{
-			//#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Client address fetch, returning address %s, addrfetchnum = %d\n", remoteaddrstring, addrfetchnum);
-			//#endif
+			#ifdef CLIENTDEBUG
+			IPSCAN_LOG( LOGPREFIX "ipscan: Client address fetch, returning address %s, addrfetchnum = %d\n", saferemoteaddrstring, addrfetchnum);
+			#endif
 			// report IPv6 address in json array format
 			create_json_header();
 			printf("[ \"%s\" ]\n",remoteaddrstring);
