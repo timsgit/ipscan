@@ -90,9 +90,11 @@
 // 0.69 - tidy various format strings
 // 0.70 - debug reporting now uses consistent remote address format
 // 0.71 - updates to ensure error conditions cause appropriate fall-through
+// 0.72 - update count_teststate_rows_db to dump rows that match session parameters
+// 0.73 - correct return values under certain circumstances
 
 //
-#define IPSCAN_DB_VER "0.71"
+#define IPSCAN_DB_VER "0.73"
 //
 
 #include "ipscan.h"
@@ -356,8 +358,12 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
-					retval = 5;
+					// two reasons we might get here - if (retval < 0) then query creation failure so report what happened and update retval
+					if (0 > retval)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+						retval = 5;
+					}
 				}
 			} // Matches with main else
 		} // MySQL options
@@ -667,8 +673,12 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: Failed to create select query\n");
-					retval = 4;
+					// two reasons we might get here - if (retval == 0) then select query failed, so report and update retval
+					if (0 == retval)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: Failed to create select query\n");
+						retval = 4;
+					}
 				}
 			}
 			mysql_commit(connection);
@@ -844,8 +854,12 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: Failed to create select query\n");
-					retval = 4;
+					// two reasons we might get here - if (retval == 0) then select query failed so report and update retval
+					if (0 == retval)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: Failed to create select query\n");
+						retval = 4;
+					}
 				}
 			}
 			mysql_commit(connection);
@@ -1114,8 +1128,12 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Failed to create select query\n");
-					retres = -8;
+					// two reasons we might reach here - if (retres == -1) then select query creation failed - report and update retres
+					if (retres == -1)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Failed to create select query\n");
+						retres = -8;
+					}
 				}
 			}
 			mysql_commit(connection);
@@ -1271,8 +1289,12 @@ int tidy_up_db(int8_t deleteall)
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: Failed to create select query\n");
-					retval = 4;
+					// we get here because select query snprintf failed or something else bad has happened (retval != 0)
+					if (0 == retval)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: Failed to create select query\n");
+						retval = 4;
+					}
 				}
 			}
 			mysql_commit(connection);
@@ -1690,8 +1712,12 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: Failed to create select query\n");
-					retval = -4;
+					// two reasons we might reach here - if (retval == 0) then select query creation failed - report and update retval
+					if (retval == 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: Failed to create select query\n");
+						retval = -4;
+					}
 				}
 			}
 			mysql_commit(connection);
@@ -1725,6 +1751,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 
 	int retval = 0; // retval defaults to 0, set to negative values for error conditions
 	MYSQL *connection;
+	MYSQL_ROW row;
 
 	int rc = mysql_library_init(0, NULL, NULL);
         if (0 != rc)
@@ -1790,6 +1817,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 					if (0 == rc)
 					{
 						MYSQL_RES * result = mysql_store_result(connection);
+						unsigned int num_fields = mysql_num_fields(result);
 						if (result)
 						{
 							uint64_t num_rows = mysql_num_rows(result);
@@ -1802,6 +1830,35 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 							else
 							{
 								retval = (int)num_rows;
+								while ((row = mysql_fetch_row(result)))
+								{
+									if (9 == num_fields) // only dump rows if it is a database format we understand
+									{
+										uint64_t ui64_hostmsb, ui64_hostlsb, dbresult;
+										char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+										int rchostmsb = sscanf(row[1], "%"SCNu64, &ui64_hostmsb);
+										int rchostlsb = sscanf(row[2], "%"SCNu64, &ui64_hostlsb);
+										int rcres = sscanf(row[6], "%"SCNu64, &dbresult);
+										if (1 == rcres && 1 == rchostmsb && 1 == rchostlsb)
+										{
+                                                        				#if (1 < IPSCAN_LOGVERBOSITY)
+                                                        				// report host addresses as full 128-bit addresses
+                                                        				bool convertedok = ipv6_address_to_string( ui64_hostmsb, ui64_hostlsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
+                                                        				#else
+                                                        				// report host addresses as 48-bit addresses
+                                                        				bool convertedok = ipv6_address_to_string( ui64_hostmsb, ui64_hostlsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), true );
+                                                        				#endif
+                                                        				if (false == convertedok)
+                                                        				{
+                                                        					IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: failed to convert remote host address to a safe variant\n" );
+                                                        				}
+											else
+											{
+												IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: host = %s, result = %"PRIu64"\n", saferemoteaddrstring, dbresult);
+											}
+										}
+									}
+								}
 							}
 							qrylen = snprintf(query, MAXDBQUERYSIZE, "COMMIT");
 							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -1850,8 +1907,12 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: Failed to create select query\n");
-					retval = -4;
+					// two reasons we might reach here - if (retval ==0) then select query creation failed - report and update retval
+					if (retval == 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: Failed to create select query\n");
+						retval = -4;
+					}
 				}
 			}
 			mysql_commit(connection);

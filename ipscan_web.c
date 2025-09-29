@@ -87,8 +87,9 @@
 // 0.67 - add code to support client address change detection
 // 0.68 - overwrite current history URL so that reload button causes a new test to run
 //	  rather than one using historical querystring and therefore previous session/starttime
+// 0.69 - add, then comment out reload after 302 redirect - debug required
 
-#define IPSCAN_WEB_VER "0.68"
+#define IPSCAN_WEB_VER "0.69"
 
 #include "ipscan.h"
 
@@ -209,11 +210,18 @@ void create_json_header(void)
 	printf("%s%c%c\n","Content-type:application/json;charset=utf-8",13,10);
 }
 
-void create_redirect_header(const char * location)
+void create_redirect_header(const int redirtype, const char * location)
 {
-	printf ("Status: 302 Moved Temporarily\r\n");
-        printf ("Location: %s\r\n", location);
-        printf ("\r\n");
+	printf("Content-Type: text/html; charset=UTF-8\n");
+	if (301 == redirtype)
+	{
+		printf ("Status: 301 Moved Permanently\n");
+	}
+	else
+	{
+		printf ("Status: 302 Found\n");
+	}
+        printf ("Location: %s\n\n", location);
 }
 
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery)
@@ -270,6 +278,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// call test initiation URL with appropriate query parameters - will take duration of test to complete/return
 	// so don't reuse myXmlHttpInitObj object for other transfers
 	printf(" const startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
+	// unused printf(" myXmlHttpInitObj.onreadystatechange = function(){myInitStateChange(myXmlHttpInitObj); };");
 	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
 	printf(" myXmlHttpInitObj.send(null);");
 	printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
@@ -516,9 +525,33 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
       	printf(" return ( (Math.floor(Math.random() * (Math.pow(2,31) - 1))).toString() );");
     	printf(" }");
   	printf(" }\n");
-
+	/* unused
 	//
-	// function to handle GET state change
+	// function to handle GET state change for Initialisation - possible reload
+	//
+	printf("function myInitStateChange(initRequest)");
+	printf(" {");
+	printf(" if (initRequest.readyState == 4 && initRequest.status > 300 && initRequest.status < 400)");
+	printf(" {");
+	printf(" console.log('Calling reload');");
+	printf(" clearTimeout(myHTTPTimeout);");
+	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+	printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
+	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+	printf(" clearInterval(myInterval);");
+	printf(" clearInterval(myBlink);");
+	printf(" window.location.reload();");
+	printf(" }");
+	printf(" else");
+	printf(" {");
+	printf(" console.log('readyState : ',initRequest.readyState);");
+	printf(" console.log('    status : ',initRequest.status);");
+	printf(" console.log('response   : ',initRequest.responseText);");
+	printf(" }");
+	printf(" }\n");
+	unused */
+	//
+	// Normal fetch handling
 	//
 	printf("function myStateChange(request, fetchnum)");
 	printf(" {");
