@@ -88,8 +88,9 @@
 // 0.68 - overwrite current history URL so that reload button causes a new test to run
 //	  rather than one using historical querystring and therefore previous session/starttime
 // 0.69 - add, then comment out reload after 302 redirect - debug required
+// 0.70 - 302 redirect for duplicate test (same session parameters)
 
-#define IPSCAN_WEB_VER "0.69"
+#define IPSCAN_WEB_VER "0.70"
 
 #include "ipscan.h"
 
@@ -252,10 +253,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 
 	// Use Date().now() as our timestamp to ensure all runs are unique
 	// myTimeStamp becomes the starttime query parameter
-	printf(" const myTimeStamp = new Date().now();");
+	printf(" let myTimeStamp = new Date().now();");
 	// Also create a random-ish session number
 	// mySession becomes the session query parameter - multiple runs on the same browser should each be unique
-	printf(" const mySession = getSessionNumber();");
+	printf(" let mySession = getSessionNumber();");
 
 	//
 	// Main initialisation ... It sets the scanstate to RUNNING to give the user confidence that things are happening.
@@ -278,7 +279,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// call test initiation URL with appropriate query parameters - will take duration of test to complete/return
 	// so don't reuse myXmlHttpInitObj object for other transfers
 	printf(" const startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
-	// unused printf(" myXmlHttpInitObj.onreadystatechange = function(){myInitStateChange(myXmlHttpInitObj); };");
+	printf(" myXmlHttpInitObj.onreadystatechange = function(){myInitStateChange(myXmlHttpInitObj); };");
 	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
 	printf(" myXmlHttpInitObj.send(null);");
 	printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
@@ -525,15 +526,14 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
       	printf(" return ( (Math.floor(Math.random() * (Math.pow(2,31) - 1))).toString() );");
     	printf(" }");
   	printf(" }\n");
-	/* unused
 	//
 	// function to handle GET state change for Initialisation - possible reload
 	//
 	printf("function myInitStateChange(initRequest)");
 	printf(" {");
-	printf(" if (initRequest.readyState == 4 && initRequest.status > 300 && initRequest.status < 400)");
+	printf(" if (initRequest.status === 302)"); // 302 redirect - IPscan triggers this if duplicate tests with same parameters detected
 	printf(" {");
-	printf(" console.log('Calling reload');");
+	// stop the timeouts, interval timersand any XML HTTP requests that are pending
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
@@ -542,14 +542,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" clearInterval(myBlink);");
 	printf(" window.location.reload();");
 	printf(" }");
-	printf(" else");
-	printf(" {");
-	printf(" console.log('readyState : ',initRequest.readyState);");
-	printf(" console.log('    status : ',initRequest.status);");
-	printf(" console.log('response   : ',initRequest.responseText);");
-	printf(" }");
 	printf(" }\n");
-	unused */
 	//
 	// Normal fetch handling
 	//
@@ -807,7 +800,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" let myTimeNow = new Date().now();");
 	printf(" const updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches;", reconquery);
 	// exit based on number of attempted fetches or time taken being too great
-	printf(" if (fetches >= %u || (Math.abs(myTimeNow - myTimeStamp) > %d))",(unsigned int)( 10 + ((12 + (numudpports*UDPTIMEOUTSECS) + (numports*TIMEOUTSECS)) / JSONFETCHEVERY )), IPSCAN_CLIENT_MAX_TIME_SECS );
+	printf(" const testMaxFetches = Math.max(%u,%u);", (unsigned int)(5+(24+(numudpports*UDPTIMEOUTSECS)+(numports*TIMEOUTSECS))/JSONFETCHEVERY), (unsigned int)(5+(IPSCAN_CLIENT_MAX_TIME_SECS / JSONFETCHEVERY)) );
+	printf(" if (fetches >= testMaxFetches || (Math.abs(myTimeNow - myTimeStamp) > %u))", (unsigned int)IPSCAN_CLIENT_MAX_TIME_SECS );
 	printf(" {");
 	printf(" clearInterval(myInterval);");
 	printf(" lastUpdate = 1;"); // flag we've attempted enough fetches or exceeded maximum time

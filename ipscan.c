@@ -113,9 +113,10 @@
 // 0.90 - tidy various format strings
 // 0.91 - add client IPv6 address reporting
 // 0.92 - reinclude redirects (needs further debug)
+// 0.93 - first operating redirect (ipscan_web update too)
 
 //
-#define IPSCAN_MAIN_VER "0.92"
+#define IPSCAN_MAIN_VER "0.93"
 //
 
 #include "ipscan.h"
@@ -2078,9 +2079,9 @@ int main(void)
 				{
 					// database held a valid IPSCAN_TESTSTATE_AS_PORTNUM entry, so a test is already running with these session parameters
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters is already running\n" );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
 					create_redirect_header(302, URIPATH"/"EXENAME);
-					exit(EXIT_SUCCESS);
+					return(EXIT_SUCCESS);
 				}
 			}
 			else if (num_rows == 0)
@@ -2091,9 +2092,9 @@ int main(void)
 				if (0 != other_num_rows)
 				{
        		                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test returned 0, BUT count_teststate_rows_db() returned %d\n", other_num_rows );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
 					create_redirect_header(302, URIPATH"/"EXENAME);
-					exit(EXIT_SUCCESS);
+					return(EXIT_SUCCESS);
 				}
 			}
 			// End of check for existing test with same parameters
