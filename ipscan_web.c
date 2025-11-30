@@ -89,8 +89,11 @@
 //	  rather than one using historical querystring and therefore previous session/starttime
 // 0.69 - add, then comment out reload after 302 redirect - debug required
 // 0.70 - 302 redirect for duplicate test (same session parameters)
+// 0.71 - convert some const back to var
+// 0.72 - improve the navigateaway function to clear more timers, disable more XML HTTP requests, etc.
+// 0.73 - incorporate check for 302 response code into all fetches - via modification to HTTPGetIpv6Address()
 
-#define IPSCAN_WEB_VER "0.70"
+#define IPSCAN_WEB_VER "0.73"
 
 #include "ipscan.h"
 
@@ -271,14 +274,14 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	// create the various XML HTTP requestors
 	//
-	printf(" const myXmlHttpReqObj = makeHttpObject();"); // for regular/frequent update fetches
-	printf(" const myXmlHttpInitObj = makeHttpObject();");// one-off initialisation fetch (begins the test)
-	printf(" const myXmlHttpIp6Obj = makeHttpObject();"); // for client IPv6 lookup (from server)
-	printf(" const myXmlHttpErrObj = makeHttpObject();"); // for error/done reporting
+	printf(" var myXmlHttpReqObj = makeHttpObject();"); // for regular/frequent update fetches
+	printf(" var myXmlHttpInitObj = makeHttpObject();");// one-off initialisation fetch (begins the test)
+	printf(" var myXmlHttpIp6Obj = makeHttpObject();"); // for client IPv6 lookup (from server)
+	printf(" var myXmlHttpErrObj = makeHttpObject();"); // for error/done reporting
 	//
 	// call test initiation URL with appropriate query parameters - will take duration of test to complete/return
 	// so don't reuse myXmlHttpInitObj object for other transfers
-	printf(" const startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
+	printf(" var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s\";", MAGICBEGIN, reconquery);
 	printf(" myXmlHttpInitObj.onreadystatechange = function(){myInitStateChange(myXmlHttpInitObj); };");
 	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
 	printf(" myXmlHttpInitObj.send(null);");
@@ -336,7 +339,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report a HTTP transfer timed out
 	printf("function HTTPTimedOut()");
 	printf(" {");
-	printf(" const timeoutURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
+	printf(" var timeoutURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_HTTPTIMEOUT_COMPLETION);
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", timeoutURL, true);");
@@ -346,7 +349,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report test never finished
 	printf("function HTTPUnfinished()");
 	printf(" {");
-	printf(" const unfinishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
+	printf(" var unfinishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_UNSUCCESSFUL_COMPLETION);
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", unfinishURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");
@@ -356,7 +359,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function HTTPFinished()");
 	printf(" {");
 	//If we get to here then we've managed to fetch all the results and the test is complete
-	printf(" const finishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
+	printf(" var finishURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_SUCCESSFUL_COMPLETION);
 	// Send indication that fetch is complete and results can be deleted.
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", finishURL, true);");
@@ -366,8 +369,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report HTTP transfer completed with unexpected state
 	printf("function HTTPUnexpected(myReadyState,myStatus)");
 	printf(" {");
-	printf(" const errorString = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
-	printf(" const unexpectedURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(errorString);", reconquery, IPSCAN_UNEXPECTED_CHANGE);
+	printf(" var errorString = \"STATUS:\" + myStatus + \"READYSTATE:\" + myReadyState;");
+	printf(" var unexpectedURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(errorString);", reconquery, IPSCAN_UNEXPECTED_CHANGE);
 	// HTTP GET completed, but with an unexpected HTTP status code (i.e. not 200 OK)
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", unexpectedURL, true);");
@@ -381,6 +384,17 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" var ip6URL = \""URIPATH"/"EXENAME"?ipv6addrquery=%d&termsaccepted=1&addrfetch=\" + fetchnum;", MAGICIP6QUERY);
 	printf(" var Ip6Addr = '::';"); // dummy value (no valid IPv6 address returned)
+	// ALWAYS check response status and disable timers, etc. and reload, if 302
+	printf(" if (myXmlHttpIp6Obj.status == 302)");
+	printf(" {");
+	printf(" clearTimeout(myHTTPTimeout);");
+        printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+        printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
+        printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+        printf(" clearInterval(myInterval);");
+        printf(" clearInterval(myBlink);");
+        printf(" window.location.reload();");
+	printf(" }");
 	#ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('fetchnum: ',fetchnum);");
 	printf(" console.log('myXmlHttpIp6Obj.readyState: ',myXmlHttpIp6Obj.readyState);");
@@ -442,8 +456,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report bad JSON parse
         printf("function badJSONParse(es)");
         printf(" {");
-        printf(" const exceptionString = \"EXCEPTION:\" + es;");
-        printf(" const badJSONParseURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(exceptionString);", reconquery, IPSCAN_BAD_JSON_ERROR);
+        printf(" var exceptionString = \"EXCEPTION:\" + es;");
+        printf(" var badJSONParseURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(exceptionString);", reconquery, IPSCAN_BAD_JSON_ERROR);
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
         printf(" myXmlHttpErrObj.open(\"GET\", badJSONParseURL, true);");
         printf(" myXmlHttpErrObj.send(null);");
@@ -452,11 +466,25 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report User chose to navigate away from the test, before completion
 	printf("function HTTPNavAway()");
 	printf(" {");
-	printf(" const navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
+	printf(" var navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
+	// set various global variables to out-of-range/non-sensical values
+	printf(" lastUpdate = 1;");
+	printf(" mySession = 0;");
+	printf(" myTimeStamp = 0;");
+	printf(" fetch = 900;");
+	// clear various timeouts and interval timers
 	printf(" clearTimeout(myHTTPTimeout);");
-	// abort current state fetches (if there are any in progress) since we're navigating away and don't care
-	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+        printf(" clearInterval(myInterval);");
+        printf(" clearInterval(myBlink);");
+	// update scanstate - although its likely it won't be on screen
+	printf(" document.getElementById(\"scanstate\").innerHTML = \"NAVAWAY\";");
+	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
+	// abort current XmlHttp fetches (if there are any in progress) since we're navigating away and don't care
+	printf(" if (myXmlHttpInitObj.readyState < 4) { myXmlHttpInitObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
+        printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
+	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+	// send an indication to the ipscan server that the user has navigated away
 	printf(" myXmlHttpErrObj.open(\"GET\", navAwayURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");
 	printf(" }\n");
@@ -464,7 +492,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report database error received
 	printf("function HTTPDBError()");
 	printf(" {");
-	printf(" const dbErrorURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_DB_ERROR);
+	printf(" var dbErrorURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d\";", reconquery, IPSCAN_DB_ERROR);
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", dbErrorURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");
@@ -473,8 +501,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report Ipv6 address changed
 	printf("function HTTPAddrChanged(first, second)");
 	printf(" {");
-        printf(" const addressString = \"ONE:\" + first + \"TWO:\" + second;");
-        printf(" const addrChangeURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(addressString);", reconquery, IPSCAN_CLIENT_ADDR_CHANGED);
+        printf(" var addressString = \"ONE:\" + first + \"TWO:\" + second;");
+        printf(" var addrChangeURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=%d&string=\" + encodeURIComponent(addressString);", reconquery, IPSCAN_CLIENT_ADDR_CHANGED);
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", addrChangeURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");
@@ -507,7 +535,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" bigsession = (bigsession << 32n);");
 	printf(" bigsession = bigsession + BigInt(sessres[0]);");
 	// BigInts are actually signed so rely on asUintN to return a suitable truncated unsigned number
-	printf(" const unsigntrunc = BigInt.asUintN(64, bigsession);");
+	printf(" var unsigntrunc = BigInt.asUintN(64, bigsession);");
       	printf(" return ( unsigntrunc.toString() );");
     	printf(" }");
     	printf(" else if(window.msCrypto && window.msCrypto.getRandomValues)"); 
@@ -518,7 +546,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" bigsession = (bigsession << 32n);");
 	printf(" bigsession = bigsession + BigInt(sessres[0]);");
 	// BigInts are actually signed so rely on asUintN to return a suitable truncated unsigned number
-	printf(" const unsigntrunc = BigInt.asUintN(64, bigsession);");
+	printf(" var unsigntrunc = BigInt.asUintN(64, bigsession);");
       	printf(" return ( unsigntrunc.toString() );");
     	printf(" }");
     	printf(" else"); // default to produce something if browser doesn't support crypt facility
@@ -555,6 +583,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// even fetchnum - check whether transfer has finished and return address
 	//
 	// always call HTTPGetIpv6Address() for both odd/even fetchnum
+	// NOTE: HTTPGetIpv6Address() checks for 302 return code and reloads page if its found
 	//
 	printf(" let temporary = HTTPGetIpv6Address(fetchnum);");
 	printf(" if (fetchnum == 2)");
@@ -586,7 +615,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" myReloadDeclined = true;");
 	printf(" }");
-#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	#ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('Client address mismatch');");
 	printf(" console.log('Client fetchnum        : ',fetchnum);");
 	printf(" console.log('Client fetchnum %% 2   : ',(fetchnum %% 2));");
@@ -594,7 +623,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" console.log('Client  now address    : ',myIpv6now);");
 	printf(" console.log('Client reloadPage      : ',reloadPage);");
 	printf(" console.log('Client myReloadDeclined: ', myReloadDeclined);");
-#endif
+	#endif
 	// if we haven't declined the reload opportunity then cause a reload to happen
 	printf(" if (myReloadDeclined == false && reloadPage == true)");
 	printf(" {");
@@ -632,15 +661,15 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	// Rewrite history to prevent re-use of old querystring parameters
 	//
-#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	#ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('HREF before: ',window.location.href );");
 	printf(" console.log('window.history.state: ',window.history.state);");
-#endif
+	#endif
 	printf(" const restartURL = \""URIPATH"/"EXENAME"\";");
 	printf(" window.history.replaceState( {} , 'Restart IPscan', restartURL );");
-#ifdef IPSCAN_JS_CONSOLE_LOGGING
+	#ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('HREF after: ',window.location.href );");
-#endif
+	#endif
 	printf(" }");
 	//
 	// go around the latest received state and update display as required
@@ -798,7 +827,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" fetches += 1;"); // increment the fetch counter
 	printf(" let myTimeNow = new Date().now();");
-	printf(" const updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches;", reconquery);
+	printf(" var updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession + \"&starttime=\" + myTimeStamp + \"&%s&fetch=\" + fetches;", reconquery);
 	// exit based on number of attempted fetches or time taken being too great
 	printf(" const testMaxFetches = Math.max(%u,%u);", (unsigned int)(5+(24+(numudpports*UDPTIMEOUTSECS)+(numports*TIMEOUTSECS))/JSONFETCHEVERY), (unsigned int)(5+(IPSCAN_CLIENT_MAX_TIME_SECS / JSONFETCHEVERY)) );
 	printf(" if (fetches >= testMaxFetches || (Math.abs(myTimeNow - myTimeStamp) > %u))", (unsigned int)IPSCAN_CLIENT_MAX_TIME_SECS );

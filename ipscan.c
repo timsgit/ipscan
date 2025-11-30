@@ -114,9 +114,10 @@
 // 0.91 - add client IPv6 address reporting
 // 0.92 - reinclude redirects (needs further debug)
 // 0.93 - first operating redirect (ipscan_web update too)
+// 0.94 - also send redirect when the calculated timedifference at test initiation is too large
 
 //
-#define IPSCAN_MAIN_VER "0.93"
+#define IPSCAN_MAIN_VER "0.94"
 //
 
 #include "ipscan.h"
@@ -164,7 +165,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port);
 int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, int8_t deleteall);
 int tidy_up_db(int8_t deleteall);
-int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost);
+int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result);
 int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int count_teststate_rows_db(uint64_t timestamp, uint64_t session);
 // hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
@@ -1036,14 +1037,13 @@ int main(void)
 
 		#if (TEXTMODE != 1)
 		// javascript mode only
-                int64_t timedifference;
+                int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 		#endif
 
 		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numqueries = %u\n", numqueries);
 		#if (TEXTMODE != 1)
 		// javascript mode only
-                timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: querysession = %"PRIu64" querystarttime = %"PRIu64" diff = %"PRId64"\n", querysession, querystarttime, timedifference );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: ipv6addrquery = %d, addrfetch = %d, addrfetchnum = %d\n", ipv6addrquery, addrfetch, addrfetchnum);
@@ -1480,7 +1480,7 @@ int main(void)
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
                         	// Write the new value back to the database
-                        	rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete, unusedfield);
+                        	rc = update_result_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete);
                         	if (0 != rc)
                         	{
                                 	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for text-mode IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
@@ -1680,8 +1680,13 @@ int main(void)
 			rc = -1;
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
+				// if we're deleting things at the end of the test (ie NOT just relying on tidy up)
 				#ifndef IPSCAN_TIDY_UP_ONLY
+				#ifdef IPSCAN_TESTEND_DELETE_RESULTS_ONLY
 				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_DELETE_RESULTS_ONLY);
+				#else
+				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_DELETE_EVERYTHING);
+				#endif
 				#else
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARN: text-only delete_from_db DISABLED\n");
 				rc = 0;
@@ -1708,7 +1713,7 @@ int main(void)
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
 				// Mark test as completed successfully
-				rc = update_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete, unusedfield);
+				rc = update_result_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete);
                         	if (0 != rc)
                         	{
                         		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
@@ -1746,14 +1751,12 @@ int main(void)
 			#ifdef CLIENTDEBUG
 			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
 			fetch_to_string(fetchnum, &fetchstring[0]);
+                	timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 			IPSCAN_LOG( LOGPREFIX "ipscan: Fetch indicated %s completion for remote host: %s at querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 				 fetchstring, saferemoteaddrstring, querystarttime, querysession );
 			#endif
 
-			// Calculate and report time-difference
-                        nowtimeref = time(NULL);
-                        timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-
+			// report time-difference
                         if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
@@ -1799,6 +1802,9 @@ int main(void)
 			if (0 > result)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned bad value: %d\n", result);
+				// report time-difference
+                               	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                    		 	saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
 				result = PORTUNKNOWN;
 			}
 			uint64_t write_result = (uint64_t)result;
@@ -1887,8 +1893,6 @@ int main(void)
 					result |= IPSCAN_TESTSTATE_OTHERERROR_BIT; 
 					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: state changed to indicate OTHER error\n" );
 				}
-				// Default for unused database entries
-				const char unusedfield[] = "unused";
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				write_result = (uint64_t)result;
 				rc = -1;
@@ -1896,7 +1900,7 @@ int main(void)
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 				{	
 					// Write the new value back to the database
-					rc = update_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result, unusedfield);
+					rc = update_result_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result);
 					if (0 != rc)
 					{
 						IPSCAN_LOG( LOGPREFIX "ipscan: javascript-mode ERROR: update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
@@ -1915,6 +1919,9 @@ int main(void)
                         if (rc != 0)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: dump_db return code was %d (expected 0)\n", rc);
+				// report time-difference
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                      		 saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
                                 return(EXIT_SUCCESS);
                         }
 			// Replacement for dummy output
@@ -1929,11 +1936,10 @@ int main(void)
 				&& termsaccepted == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
 		{
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address :  %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, query database fetch\n",\
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, query database fetch\n",\
 					saferemoteaddrstring, querystarttime, querysession );
-			// Calculate and report time-difference
-                        nowtimeref = time(NULL);
-                        timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+			// report time-difference
+                	timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
                         if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
@@ -1981,6 +1987,9 @@ int main(void)
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: dump_db return code was %d (expected 0)\n", rc);
+				// report time-difference
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                       		 saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
 				return(EXIT_SUCCESS);
 			}
 			// Check the current running state and if it's NOT running then update it to running
@@ -2001,13 +2010,12 @@ int main(void)
 				result = IPSCAN_TESTSTATE_RUNNING_BIT;
 				uint64_t write_result = (uint64_t)result;
                         	// Write the new value back to the database
-				const char unusedfield[] = "unused";
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				rc = -1;
 				unsigned int z;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 				{
-                        		rc = update_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result, unusedfield);
+                        		rc = update_result_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result);
                         		if (0 != rc)
                         		{
                                			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for javascript-mode fetch IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
@@ -2046,12 +2054,14 @@ int main(void)
 				 ipscan_web_ver(), ipscan_h_ver(), ipscan_portlist_ver());
         		#endif
 			// Calculate and report time-difference
-			nowtimeref = time(NULL);
-			timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
+                	timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 			if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, excessive time difference = %"PRId64", sending redirect.\n",\
 					saferemoteaddrstring, querystarttime, querysession, timedifference );
+				// send a redirect in the hope that the client will reload the page
+				create_redirect_header(302, URIPATH"/"EXENAME);
+				return(EXIT_SUCCESS);
 			}
 			else
 			{
@@ -2059,6 +2069,7 @@ int main(void)
 					saferemoteaddrstring, querystarttime, querysession, timedifference );
 			}
 			#endif
+
 			// Start of check for existing test with same parameters - how many rows exist for this mix of address, starttime and session?
 			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
@@ -2075,11 +2086,22 @@ int main(void)
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode read_db_result() at duplicate initiation test returned bad value: %d\n", result);
 					result = PORTUNKNOWN;
 				}
+				// if the other test is in the running state then report an error
 				if ( PORTUNKNOWN != result )
 				{
-					// database held a valid IPSCAN_TESTSTATE_AS_PORTNUM entry, so a test is already running with these session parameters
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters is already running\n" );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
+					if ( (result & IPSCAN_TESTSTATE_RUNNING_BIT) == IPSCAN_TESTSTATE_RUNNING_BIT)
+					{
+						// database held a valid IPSCAN_TESTSTATE_AS_PORTNUM entry, so a test is already running with these session parameters
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters is already running: %d\n", result );
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
+					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters exists but is not running: %d\n", result );
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
+					}
+					// redirect irrespective of whether test is running or not because either way another test is running and two tests can't share one state
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters is present in the database - sending redirect\n" );
 					create_redirect_header(302, URIPATH"/"EXENAME);
 					return(EXIT_SUCCESS);
 				}
@@ -2093,6 +2115,7 @@ int main(void)
 				{
        		                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test returned 0, BUT count_teststate_rows_db() returned %d\n", other_num_rows );
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
+       		                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test found same session for different host, sending redirect\n" );
 					create_redirect_header(302, URIPATH"/"EXENAME);
 					return(EXIT_SUCCESS);
 				}
@@ -2480,6 +2503,9 @@ int main(void)
 				if (0 > result)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript TCP stats read_db_result() returned bad value: %d\n", result );
+					// Calculate and report time-difference
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                       		 	saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
 					result = PORTUNKNOWN;
 				}
 				if ( PORTUNKNOWN == result )
@@ -2598,6 +2624,9 @@ int main(void)
 				if (0 > result)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript waiting read_db_result() returned bad value: %d\n", result);
+					// Calculate and report time-difference
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
+                                       		 	saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
 					result = PORTUNKNOWN;
 				}
 				if ( PORTUNKNOWN == result )
@@ -2674,8 +2703,13 @@ int main(void)
                         	{
 					// Delete the results
 					//
+					// if we're deleting things at the end of the test (ie NOT just relying on tidy up)
 					#ifndef IPSCAN_TIDY_UP_ONLY
+					#ifdef IPSCAN_TESTEND_DELETE_RESULTS_ONLY
 					rc = delete_from_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_DELETE_RESULTS_ONLY);
+                                	#else
+					rc = delete_from_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_DELETE_EVERYTHING);
+                                	#endif
                                 	#else  
                                 	IPSCAN_LOG( LOGPREFIX "ipscan: WARN: javascript delete_from_db DISABLED\n");
                                 	rc = 0;

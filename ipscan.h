@@ -316,9 +316,9 @@
 	//
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
-		#define IPSCAN_LOGVERBOSITY 1
-		#define CLIENTDEBUG 1
-		#define DBDEBUG 1
+		// #define IPSCAN_LOGVERBOSITY 3
+		// #define CLIENTDEBUG 1
+		// #define DBDEBUG 1
 	#endif
 	//
 	// database (NOT port scan results) related debug:
@@ -677,6 +677,10 @@
 	//
 	#define IPSCAN_DELETE_EVERYTHING (1)
 	#define IPSCAN_DELETE_RESULTS_ONLY (0)
+	//
+	// At the end of the test - delete only the results - if defined, otherwise delete all
+	//
+	// #define IPSCAN_TESTEND_DELETE_RESULTS_ONLY (1)
 
 
 	// Flag indicating that the response was indirect rather than from the host under test

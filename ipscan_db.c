@@ -92,9 +92,10 @@
 // 0.71 - updates to ensure error conditions cause appropriate fall-through
 // 0.72 - update count_teststate_rows_db to dump rows that match session parameters
 // 0.73 - correct return values under certain circumstances
+// 0.74 - remove indirecthost from update_db and rename it to update_result_db to more accurately reflect what it does
 
 //
-#define IPSCAN_DB_VER "0.73"
+#define IPSCAN_DB_VER "0.74"
 //
 
 #include "ipscan.h"
@@ -1313,13 +1314,13 @@ int tidy_up_db(int8_t deleteall)
 }
 
 
-// ----------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------
 //
-// Function to update the database, creating it first, if required
+// Function to update the the result entry in a specific row of the database, creating it first, if required
 //
-// ----------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------------------
 
-int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result, const char *indirecthost )
+int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result)
 {
 
 	// ID                 BIGINT UNSIGNED
@@ -1346,8 +1347,8 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	//
 
 	//
-	// RETURNS   0		- update_db() completed successfully
-	//         <>0		- update_db() completed unsuccessfully
+	// RETURNS   0		- update_result_db() completed successfully
+	//         <>0		- update_result_db() completed unsuccessfully
 	//
 
 	int retval = -1; // do not change this
@@ -1356,14 +1357,14 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	int rc = mysql_library_init(0, NULL, NULL);
         if (0 != rc)
         {
-                IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to initialise MySQL library\n");
+                IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to initialise MySQL library\n");
                 mysql_library_end();
                 return (98);
         }
 	connection = mysql_init(NULL);
 	if (NULL == connection)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to initialise MySQL\n");
+		IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to initialise MySQL\n");
 		retval = 1;
 	}
 	else
@@ -1377,8 +1378,8 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
 			if (NULL == mysqlrc)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
-				IPSCAN_LOG( LOGPREFIX "ipscan: update_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
+				IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
 				retval = 3;
 			}
 			else
@@ -1399,7 +1400,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 != rc)
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: SET AUTOCOMMIT=0 failed, returned %d\n", rc);
+								IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: SET AUTOCOMMIT=0 failed, returned %d\n", rc);
 								retval = 201;
 							}
 						}
@@ -1410,12 +1411,12 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 != rc)
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: LOCK TABLES failed, returned %d\n", rc);
+								IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: LOCK TABLES failed, returned %d\n", rc);
 								retval = 202;
 							}
 						}
 						// SET AUTOCOMMIT=0;LOCK TABLES `%s` WRITE; INSERT .... ; COMMIT; UNLOCK TABLES
-						qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` SET portresult = %u WHERE (hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u AND indirecthost = '%s')" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port, indirecthost);
+						qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` SET portresult = %u WHERE (hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u)" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port);
 						// retval defaults to -1, set positive for error conditions
 						if (-1 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
@@ -1430,10 +1431,10 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
                                                         #endif
                                                         if (false == convertedok)
                                                         {
-                                                                IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: failed to convert remote host address to a safe variant\n" );
+                                                                IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: failed to convert remote host address to a safe variant\n" );
                                                         }
-							IPSCAN_LOG( LOGPREFIX "ipscan: update_db: UPDATE `%s` SET portresult = %u WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u AND indirecthost = '%s')\n",\
-								MYSQL_TBLNAME, result, saferemoteaddrstring, timestamp, session, port, indirecthost);
+							IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: UPDATE `%s` SET portresult = %u WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u)\n",\
+								MYSQL_TBLNAME, result, saferemoteaddrstring, timestamp, session, port);
 							#endif
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 == rc)
@@ -1448,7 +1449,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 										#if (DBDEBUG > 1)
 										//Count the rows and report
 										uint64_t num_rows = mysql_num_rows(dbresult);
-										IPSCAN_LOG( LOGPREFIX "ipscan: update_db: Found %"PRIu64" rows in the result set\n", num_rows );
+										IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: Found %"PRIu64" rows in the result set\n", num_rows );
 										unsigned int num_fields = mysql_num_fields(dbresult);
 										MYSQL_ROW dbrow;
 										while ((dbrow = mysql_fetch_row(dbresult)))
@@ -1457,7 +1458,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 											lengths = mysql_fetch_lengths(dbresult);
 											for (unsigned int i = 0; i < num_fields; i++)
 											{
-												IPSCAN_LOG( LOGPREFIX "ipscan: update_db: row [%.*s]\n", (int)lengths[i], dbrow[i] ? dbrow[i] : "NULL" );
+												IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: row [%.*s]\n", (int)lengths[i], dbrow[i] ? dbrow[i] : "NULL" );
 											}
 										}
 										#endif
@@ -1469,12 +1470,12 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 								 		if (mysql_field_count(connection) == 0)
 								 		{
 											#if (DBDEBUG > 1)
-											IPSCAN_LOG( LOGPREFIX "ipscan: update_db: Found %lld rows affected\n", mysql_affected_rows(connection));
+											IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: Found %lld rows affected\n", mysql_affected_rows(connection));
 											#endif
 										}
 										else
 										{
-											IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR retrieving result\n");
+											IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR retrieving result\n");
 											retval = 999;
 											break;
 										}
@@ -1483,7 +1484,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 									// >0 error, -1 = no, 0 = yes (another loop)
 									if ((rc = mysql_next_result(connection)) > 0)
 									{
-										IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR could not execute statement in multi-statement update\n");
+										IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR could not execute statement in multi-statement update\n");
 									}
 								} while (rc == 0);
 								// retval set to 0 if update completed successfully
@@ -1491,7 +1492,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 							}
 							else
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to execute update query \"%s\" %u (%s)\n",\
+								IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to execute update query \"%s\" %u (%s)\n",\
 										query, mysql_errno(connection), mysql_error(connection) );
 								retval = 7;
 							}
@@ -1501,7 +1502,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 								if (0 != rc)
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: COMMIT failed, returned %d\n", rc);
+									IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: COMMIT failed, returned %d\n", rc);
 									retval = 203;
 								}
 							}
@@ -1511,34 +1512,34 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 								if (0 != rc)
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
+									IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
 									retval = 204;
 								}
 							}
 						}
 						else
 						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to create update query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+							IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to create update query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
 							retval = 8;
 						}
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to execute create_table query \"%s\" %u (%s)\n",\
+						IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to execute create_table query \"%s\" %u (%s)\n",\
 								query, mysql_errno(connection), mysql_error(connection) );
 						retval = 6;
 					}
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+					IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to create create_table query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
 					retval = 5;
 				}
 			} // Matches with main else
 		} // MySQL options
 		else
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: update_db: ERROR: mysql_options() failed - check your my.cnf file\n");
+			IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: mysql_options() failed - check your my.cnf file\n");
 			retval = 2;
 		}
 		// Tidy up
@@ -1550,7 +1551,7 @@ int update_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t
 	// retval defaults to -1, set to 0 if UPDATE completes successfully, set to positive values for error conditions
 	if (0 != retval)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: update_db: INFO: returning with retval = %d\n",retval);
+		IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: INFO: returning with retval = %d\n",retval);
 	}
 	return (retval);
 }
