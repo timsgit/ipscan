@@ -1,6 +1,4 @@
-//    IPscan - an HTTP-initiated IPv6 port scanner.
-//
-//    Copyright (C) 2011-2025 Tim Chappell.
+//    Copyright (C) 2011-2026 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -16,7 +14,6 @@
 //
 //    You should have received a copy of the GNU General Public License
 //    along with IPscan.  If not, see <http://www.gnu.org/licenses/>.
-
 // ipscan_udp.c 	version
 // 0.01 		initial version after split from ipscan_checks.c
 // 0.02			add parallel scanning support
@@ -57,9 +54,14 @@
 // 0.37 		Add write_db loop to account for deadlocks
 // 0.38			move to nanosleep() from deprecated usleep()
 // 0.39			improve various format strings
+// 0.40 		update copyright year
+// 0.41			add function to get local IPv6 address
+// 1.00			add raw sockets functionality
+// 1.01			update while() loop with continues
+// 1.02			add raw socket BPF filter to reduce userland processing
 
 //
-#define IPSCAN_UDP_VER "0.39"
+#define IPSCAN_UDP_VER "1.02"
 //
 
 #include "ipscan.h"
@@ -81,6 +83,9 @@
 // String comparison
 #include <string.h>
 
+// Interface name length
+#include <net/if.h>
+
 // Logging with syslog requires additional include
 #if (LOGMODE == 1)
 #include <syslog.h>
@@ -96,10 +101,38 @@
 #include <linux/if_packet.h>
 #include <net/ethernet.h>
 
+// Define offset into ICMPv6 packet where user-defined data resides
+#define ICMP6DATAOFFSET sizeof(struct icmp6_hdr)
+
+// Other IPv6 related
+#include <netinet/ip6.h>
+#include <netinet/icmp6.h>
+#include <linux/ipv6.h>
+// RAW
+#include <netinet/in.h>
+#include <netinet/udp.h>
+#include <sys/select.h>
+
+// BPF support
+#include <linux/if_ether.h>
+#include <linux/filter.h>
+
 //
 // Prototype declarations
 //
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost );
+unsigned short checksum(unsigned short *ptr, int nbytes) ; // RAW
+int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip);
+void print_ids(const char * place);
+int drop_privileges();
+int regain_privileges();
+void result_to_string(uint32_t result, char * retstring);
+uint32_t get_random32(void);
+uint16_t get_ephemeral(void);
+//
+#ifndef IP_MAXPACKET
+#define IP_MAXPACKET 65535
+#endif
 
 // Others that FreeBSD highlighted
 #include <netinet/in.h>
@@ -127,33 +160,117 @@ const char* ipscan_udp_ver(void)
 //
 // ----------------------------------------------------------------
 //
-int check_udp_port(char * hostname, uint16_t port, uint8_t special)
+/* FUNCTIONALITY OUTLINE
+
+	0. retval = PORTUNKNOWN, create sockets, select ports, configure sockets, apply filter
+	0b. create/send packet to elicit response
+	1. while (retval == PORTUNKNOWN && sockets valid)
+	{
+	2. poll()
+	2b. if error then log, set retval and continue;
+	2c. else if (poll timeout) then retval = STEALTH/break; // we timed out and no response
+	3.  if (PROTO events && POLLIN && retval == PORTUNKNOWN) // UDP/TCP packet received
+		while (retval == PORTUNKNOWN)
+		{
+			recvfrom (NONBLOCKING)
+			if error (EAGAIN or EWOULDBLOCK) then break; // this recvfrom is done - we've looked at all packets
+			check size exceeds minimum
+			check source address == DUT, report if not and continue;
+			check swapped src/dest ports match our transmission, report if not and continue;
+			[TCP] check ack sequence matches our (transmission+1), report if not and continue;
+			if all matches && TCP then check flags
+				ACK => OPEN
+				RST => REFUSED
+			if (all matches && UDP) then UDPOPEN
+		}
+	4. if (ICMPv6 event && POLLIN && retval == PORTUNKNOWN) // only look at ICMPv6 if we haven't had something valid in TCP/UDP socket
+		while (retval == PORTUNKNOWN)
+		{
+			indirect = 0; // direct
+			recvfrom (NONBLOCKING)
+			if error (EAGAIN or EWOULDBLOCK) then break; // this recvfrom is done - we've looked at all packets
+			check size exceeds minimum
+			check ICMPv6 header source address == DUT && inner packet matches
+				if (sa == DUT) then indirect = 0
+				else if (sa != DUT && sa != localhost && sa != localip) then log and set indirect = IPSCAN_INDIRECT_RESPONSE;
+				else not for us, so continue
+			check inner IPv6 source & destination addresses and NEXTHDR match our transmission, report if not and continue;
+			check inner TCP/UDP src/dest ports match our transmission, report if not and continue;
+			[TCP] check inner TCP sequence matches our transmission+1, report if not and continue;
+			set retval based on ICMPv6 type/code
+		}
+	}
+	close sockets
+	return (retval + indirect)
+		
+END OF FUNCTIONALITY OUTLINE: */
+//
+// ----------------------------------------------------------------
+//
+int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * indhost_ptr)
 {
-	char txmessage[UDP_BUFFER_SIZE+1],rxmessage[UDP_BUFFER_SIZE+1];
+	char txmessage[UDP_BUFFER_SIZE+1];
 	struct sockaddr_in6 remoteaddr;
 	struct timeval timeout;
 	struct sockaddr_in6 localaddr;
+	int rc = 0;
+	// set return value to a known default
+	int retval = PORTUNKNOWN;
+
+	#ifdef IPSCAN_PRIV_DEBUG
+	print_ids("start of udp_raw");
+	#endif
+
+ 	struct in6_addr my_tx_ipaddr, dest_ip;
+	struct sockaddr_in6 local_sockaddr;
+
+	// lodge/create UDP header parameters
+        uint16_t my_tx_src_port = get_ephemeral();
+        uint16_t my_tx_dst_port = port;
+
+
+	// Convert the HUT's hostname to a struct in6_addr
+        if (inet_pton(AF_INET6, hostname, &dest_ip) == 1)
+        {
+		#ifdef UDPDEBUG
+                IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: entering with host %s, dstport %u and special %u, selecting srcport = %u\n",\
+                        hostname, my_tx_dst_port, special, my_tx_src_port);
+		#endif
+        }  
+        else
+        {
+                IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: inet_pton() for HUT: %s\n", hostname);
+                retval = PORTINTERROR;
+        }
+
+	// determine local address (my_tx_ipaddr) which is used to send to hostname
+    	rc = get_my_local_ipaddr(hostname, &my_tx_ipaddr);
+	if (EXIT_FAILURE == rc)
+	{
+                IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: get_my_local_ipaddr() returned with an error\n");
+		retval = PORTINTERROR;
+	}
+
+	memset(&local_sockaddr, 0, sizeof(struct sockaddr_in6));
+	local_sockaddr.sin6_family = AF_INET6;
+	local_sockaddr.sin6_addr = my_tx_ipaddr;
+	local_sockaddr.sin6_port = 0; // Must be 0 for raw sockets to avoid EINVAL
+
+	// Set to IPSCAN_INDIRECT_RESPONSE if another host responds on the DUT's behalf (e.g. a mid-point router or firewall)
+        int indirect = 0; // default - report as direct response. 
+
+	// struct for an ICMPv6 filter, so only wanted types are received
+        struct icmp6_filter myfilter;
 
 	// Local address update indication
-	int la_update = 0;
+	int found_la_name = 0;
 
-	int rc = 0;
+	rc = 0;
 	unsigned int i = 0;
-	int fd = -1;
-
-	// buffer for logging entries
-	#ifdef UDPDEBUG
-	int udplogbuffersize = LOGENTRYSIZE;
-	char udplogbuffer[ (size_t)(LOGENTRYSIZE + 1) ];
-	char *udplogbufferptr = &udplogbuffer[0];
-	#endif
 
 	// Holds length of transmitted UDP packet, which since they are representative packets,
 	//  depends on the port being tested
 	unsigned int len = 0;
-
-	// set return value to a known default
-	int retval = PORTUNKNOWN;
 
 	// Capture time of day and convert to NTP format
 	struct timeval tv;
@@ -179,79 +296,81 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	// Local MAC address update indication
 	int lam_update = 0;
 
-	// Clear localaddr
+	// Create localaddr sockaddr_in6 structure - for use in address comparison
 	memset(&localaddr, 0, sizeof(struct sockaddr_in6));
 	// Fill in a default address in case getifaddrs() is unsuccessful
 	rc = inet_pton(AF_INET6, "::1", &(localaddr.sin6_addr));
-
 	if (rc != 1)
 	{
-		IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad inet_pton() call for localaddr, returned %d with errno %d (%s)\n", rc, errno, strerror(errno));
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: ERROR: Bad inet_pton() call for localaddr, returned %d with errno %d (%s)\n", rc, errno, strerror(errno));
+		retval = PORTINTERROR;
 	}
 	localaddr.sin6_port = htons(port);
 	localaddr.sin6_family = AF_INET6;
 	localaddr.sin6_flowinfo = 0;
 	localaddr.sin6_scope_id = 0;
 
-	// Determine local address and its related MAC address
-	// Modify IPSCAN_INTERFACE_NAME in ipscan.h to match the server
+	// Determine transmit interface name and then MAC address
 	rc = getifaddrs( &ifaddr );
 	if (rc == -1)
 	{
-		IPSCAN_LOG( LOGPREFIX "check_udp_port: getifaddrs failed, returned %d (%s)\n", errno, strerror(errno));
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: ERROR: getifaddrs() failed, returned %d (%s)\n", errno, strerror(errno));
+		retval = PORTINTERROR;
 	}
 	else
 	{
+		// find the interface name based on the address that we've already determined
+		char my_tx_intname[IFNAMSIZ+1];
+		memset(my_tx_intname, 0, sizeof(my_tx_intname));
 		for (ifa = ifaddr; (NULL != ifa); ifa = ifa->ifa_next)
 		{
-			if (ifa->ifa_addr == NULL) continue;
-
+			if (ifa->ifa_addr == NULL) continue; // skip
 			int family = ifa->ifa_addr->sa_family;
 
-			if ( family == AF_INET6 && strcasecmp(IPSCAN_INTERFACE_NAME, ifa->ifa_name) == 0 && la_update == 0 )
+			if ( family == AF_INET6 && IN6_ARE_ADDR_EQUAL(&(local_sockaddr.sin6_addr), &((*((struct sockaddr_in6*)ifa->ifa_addr)).sin6_addr)) == 1)
 			{
-				char localaddrstr[INET6_ADDRSTRLEN+1];
-				const char * rccharptr = inet_ntop(AF_INET6, &((*((struct sockaddr_in6*)ifa->ifa_addr)).sin6_addr), localaddrstr, INET6_ADDRSTRLEN);
-				if (NULL == rccharptr)
+				memcpy(my_tx_intname, ifa->ifa_name, strnlen(ifa->ifa_name,IFNAMSIZ) ); // store the interface name
+				found_la_name = 1;
+				#ifdef UDPDEBUG
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: INFO: found device name for transmit interface: %s\n", my_tx_intname);
+				#endif
+			} 
+		}
+		// if we found the interface name then attempt to find the link-local (MAC) address
+		if (found_la_name == 1)
+		{
+			for (ifa = ifaddr; (NULL != ifa); ifa = ifa->ifa_next)
+			{
+				if (ifa->ifa_addr == NULL) continue;
+				int family = ifa->ifa_addr->sa_family;
+
+				if ( family == AF_PACKET && strcasecmp(ifa->ifa_name,my_tx_intname) == 0 && lam_update == 0 )
 				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: inet_ntop() returned an error (%s)\n", strerror(errno));
-					memset(localaddrstr, 0, INET6_ADDRSTRLEN);
-				}
-				else
-				{
-					// Copy result to localaddr for later use (MPLS LSP Ping)
-					memcpy(&localaddr.sin6_addr, &((*((struct sockaddr_in6*)ifa->ifa_addr)).sin6_addr), sizeof(struct in6_addr));
-					la_update = 1;
+					// Copy result to localmacaddr for later use (DHCPv6)
+					struct sockaddr_ll *sa_ll = (struct sockaddr_ll * )ifa->ifa_addr;
+					for (i = 0; i < 6; i++) localmacaddr[i] = sa_ll->sll_addr[i];
+					lam_update = 1;
 					#ifdef UDPDEBUG
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: found localaddr = %s\n", localaddrstr);
+					IPSCAN_LOG( LOGPREFIX "check_udp_port: INFO: found MAC address for transmit interface: %02x:%02x:%02x:%02x:%02x:%02x\n",\
+						localmacaddr[0], localmacaddr[1], localmacaddr[2], localmacaddr[3], localmacaddr[4], localmacaddr[5]);
 					#endif
 				}
-			}
-
-			if ( family == AF_PACKET && strcasecmp(IPSCAN_INTERFACE_NAME, ifa->ifa_name) == 0 && lam_update == 0 )
-			{
-				// Copy result to localmacaddr for later use (DHCPv6)
-				struct sockaddr_ll *sa_ll = (struct sockaddr_ll * )ifa->ifa_addr;
-				for (i = 0; i < 6; i++) localmacaddr[i] = sa_ll->sll_addr[i];
-				lam_update = 1;
-				#ifdef UDPDEBUG
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: found MAC address %02x:%02x:%02x:%02x:%02x:%02x\n", localmacaddr[0], localmacaddr[1], localmacaddr[2], localmacaddr[3], localmacaddr[4], localmacaddr[5]);
-				#endif
 			}
 		}
 		freeifaddrs(ifaddr);
 	}
 
-	if (la_update == 0 && lam_update == 0)
+	if (found_la_name == 0 || lam_update == 0)
 	{
-		IPSCAN_LOG( LOGPREFIX "check_udp_port: INFO: failed to determine the link-local or MAC address for interface %s\n", IPSCAN_INTERFACE_NAME);
-		IPSCAN_LOG( LOGPREFIX "check_udp_port: INFO: check whether IPSCAN_INTERFACE_NAME defined in ipscan.h is correct.\n");
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: ERROR: failed to determine the transmit interface device name or MAC address\n");
+		retval = PORTINTERROR;
 	}
 
+	// Populate remoteaddr as HUT (hostname)
 	rc = inet_pton(AF_INET6, hostname, &(remoteaddr.sin6_addr));
 	if (rc != 1)
 	{
-		IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad inet_pton() call, returned %d with errno %d (%s)\n", rc, errno, strerror(errno));
+		IPSCAN_LOG( LOGPREFIX "check_udp_port: ERROR Bad inet_pton() call for hostname, returned %d with errno %d (%s)\n", rc, errno, strerror(errno));
 		retval = PORTINTERROR;
 	}
 	remoteaddr.sin6_port = htons(port);
@@ -260,55 +379,189 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 	remoteaddr.sin6_scope_id = 0; // unused in our case
 
 	// Attempt to create a socket
+	int udp_sock = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
+	if (udp_sock < 0)
+        {
+        	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: UDPv6 socket. Need root privileges? Unexpected failure : %d (%s)\n", errno, strerror(errno));
+		retval = PORTINTERROR;
+        }
+
+    	int icmp_sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+	if (icmp_sock < 0)
+        {
+        	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: ICMPv6 socket. Need root privileges? Unexpected failure : %d (%s)\n", errno, strerror(errno));
+		retval = PORTINTERROR;
+        }
+
+	// Set socket timeouts tx/rx for both UDP and ICMPv6 raw sockets
 	if (PORTUNKNOWN == retval)
-	{
-		fd = socket(AF_INET6, SOCK_DGRAM, 0);
-		if (fd == -1)
-		{
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad socket call, returned %d (%s)\n", errno, strerror(errno));
-			retval = PORTINTERROR;
-		}
-		else
-		{
-			memset(&timeout, 0, sizeof(timeout));
-			timeout.tv_sec = UDPTIMEOUTSECS;
-			timeout.tv_usec = UDPTIMEOUTMICROSECS;
-
-			rc = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-			if (rc < 0)
-			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errno, strerror(errno));
-				retval = PORTINTERROR;
-			}
-		}
-	}
-
-	if (PORTUNKNOWN == retval) // continue
 	{
 		memset(&timeout, 0, sizeof(timeout));
 		timeout.tv_sec = UDPTIMEOUTSECS;
 		timeout.tv_usec = UDPTIMEOUTMICROSECS;
 
-		rc = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+		rc = setsockopt(udp_sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 		if (rc < 0)
 		{
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errno, strerror(errno));
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Bad UDPv6 setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errno, strerror(errno));
 			retval = PORTINTERROR;
 		}
 	}
 
 	if (PORTUNKNOWN == retval)
 	{
-		// Need to connect, since otherwise asynchronous ICMPv6 responses will not be delivered to us
-		rc = connect( fd, (struct sockaddr *)&remoteaddr, sizeof(remoteaddr) );
+		memset(&timeout, 0, sizeof(timeout));
+		timeout.tv_sec = UDPTIMEOUTSECS;
+		timeout.tv_usec = UDPTIMEOUTMICROSECS;
+
+		rc = setsockopt(udp_sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 		if (rc < 0)
 		{
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad connect() attempt, returned %d (%s)\n", errno, strerror(errno));
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Bad UDPv6 setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errno, strerror(errno));
 			retval = PORTINTERROR;
 		}
 	}
 
+      	// Assuming something bad hasn't already happened then attempt to set the ICMPv6 timeouts
+	if (PORTUNKNOWN == retval)
+	{
+		memset(&timeout, 0, sizeof(timeout));
+		timeout.tv_sec = UDPTIMEOUTSECS;
+		timeout.tv_usec = UDPTIMEOUTMICROSECS;
 
+		rc = setsockopt(icmp_sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+		if (rc < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Bad ICMPv6 setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errno, strerror(errno));
+			retval = PORTINTERROR;
+		}
+	}
+        else
+        {
+                IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 setsockopt SO_SNDTIMEO not attempted\n");
+        }
+
+        if (PORTUNKNOWN == retval)
+        {
+                // Set receive timeout
+                memset(&timeout, 0, sizeof(timeout));
+                timeout.tv_sec = UDPTIMEOUTSECS;
+                timeout.tv_usec = UDPTIMEOUTMICROSECS;
+                int timeo = setsockopt(icmp_sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+                if (timeo < 0)
+                {
+                        int errsv = errno ;
+                        IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Bad ICMPv6 setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
+                        retval = PORTINTERROR;
+                }
+        }
+        else
+        {
+                IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 setsockopt SO_RCVTIMEO not attempted\n");
+        }
+
+	if (retval == PORTUNKNOWN)
+	{
+        	// Filter out all the ICMPv6 responses except the ones we're looking for
+        	// taken from RFC3542
+        	ICMP6_FILTER_SETBLOCKALL(&myfilter);
+        	// Start-of-pragma to prevent gcc sign-conversion warnings ...
+        	#pragma GCC diagnostic push
+        	#pragma GCC diagnostic ignored "-Wsign-conversion"
+        	ICMP6_FILTER_SETPASS(ICMP6_DST_UNREACH, &myfilter);
+        	ICMP6_FILTER_SETPASS(ICMP6_PACKET_TOO_BIG, &myfilter);
+        	ICMP6_FILTER_SETPASS(ICMP6_TIME_EXCEEDED, &myfilter);
+        	ICMP6_FILTER_SETPASS(ICMP6_PARAM_PROB, &myfilter);
+        	#pragma GCC diagnostic pop
+        	// End-of-pragma
+        	rc = setsockopt(icmp_sock, IPPROTO_ICMPV6, ICMP6_FILTER, &myfilter, sizeof(myfilter));
+        	if (rc < 0)
+        	{
+               		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: setsockopt: setting ICMPv6 filter: %s (%d)\n", strerror(errno), errno);
+               		retval = PORTINTERROR;
+        	}
+	}
+
+	if (retval == PORTUNKNOWN)
+	{
+		// Bind both sockets to our local address
+		rc = bind(udp_sock, (const struct sockaddr *)&local_sockaddr, sizeof(struct sockaddr_in6));
+		if (rc < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: failed to bind udp_sock = %d(%s)\n", errno, strerror(errno));
+			retval = PORTINTERROR;
+		}
+	}
+
+	if (retval == PORTUNKNOWN)
+	{
+		rc = bind(icmp_sock, (const struct sockaddr *)&local_sockaddr, sizeof(struct sockaddr_in6));
+		if (rc < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: failed to bind icmp_sock = %d(%s)\n", errno, strerror(errno));
+			retval = PORTINTERROR;
+		}
+	}
+
+        if (PORTUNKNOWN == retval)
+        {
+		// Create a BPF socket filter that checks source/destination ports
+		struct sock_fprog Filter;
+    
+		// NOTE: IPv6 raw socket returns No MAC header and No IP header - so data (&offsets) start at UDP layer
+		struct sock_filter BPF_code[] = {
+			// 0. Check Source Port (Offset 0, 2 bytes)  
+			{ BPF_LD | BPF_H | BPF_ABS, 0, 0, 0x00000000 },         // LDH [0]
+			{ BPF_JMP | BPF_JEQ | BPF_K, 0, 3, 0x0123 },            // JEQ #0x0123, else skip 3
+			// 2. Check Destination Port (Offset 2, 2 bytes)
+			{ BPF_LD | BPF_H | BPF_ABS, 0, 0, 0x00000002 },         // LDH [2]
+			{ BPF_JMP | BPF_JEQ | BPF_K, 0, 1, 0x4567 },            // JEQ #0x4567, else skip 1
+			// 4. Responses
+			{ BPF_RET | BPF_K, 0, 0, 0x00040000 },			// Pass (Return max length)
+			{ BPF_RET | BPF_K, 0, 0, 0x00000000 }			// Drop
+        	};
+
+		// adjust the dummy port numbers above to match the ones we actually transmitted/expect
+		BPF_code[1].k = my_tx_dst_port; //the source port we're comparing was the destination port of our transmission
+		BPF_code[3].k = my_tx_src_port; //the destination port we're comparing was the source port of our transmission
+
+		Filter.len = sizeof(BPF_code) / sizeof(struct sock_filter);
+		Filter.filter = BPF_code;
+
+    		// Attach the filter
+    		rc = setsockopt(udp_sock, SOL_SOCKET, SO_ATTACH_FILTER, &Filter, sizeof(Filter));
+		if (rc < 0 )
+		{
+                	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: setsockopt: attaching BPF filter: %s (%d)\n", strerror(errno), errno);
+                	retval = PORTINTERROR;
+    		}
+	}
+
+	// Socket is created/configured so drop privileges
+	rc = drop_privileges();
+	if (rc != EXIT_SUCCESS)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: drop_privileges() returned %d\n", rc);
+                retval = PORTINTERROR;
+	}
+
+        // If something bad has happened then return now ...
+        // mustn't return to caller with root privileges, hence done here ...
+        if (PORTUNKNOWN != retval)
+        {
+                if (-1 != udp_sock) close(udp_sock); // close socket if appropriate
+                if (-1 != icmp_sock) close(icmp_sock); // close socket if appropriate
+		rc = regain_privileges();
+		if (rc != EXIT_SUCCESS)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: regain_privileges() returned %d\n", rc);
+		}
+                return (retval);
+        }
+
+	//
+	// Write the selected UDP packet content into txmessage, based on the selected port
+	//
 	if (PORTUNKNOWN == retval)
 	{
 		size_t rc_st = 0;
@@ -1918,7 +2171,7 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 			txmessage[len++] = 0x0A;
 			txmessage[len++] = 0x0D;
 			txmessage[len++] = 0x0;
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2025 Tim Chappell. See https://ipv6.chappell-family.com/ipv6tcptest/ This message is destined for UDP port %d\n", port);
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2026 Tim Chappell. See https://ipv6.chappell-family.com/ipv6udptest/ This message is destined for UDP port %d\n", port);
 			if (rc < 0 || rc >= (UDP_BUFFER_SIZE-(int)len))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
@@ -1933,170 +2186,479 @@ int check_udp_port(char * hostname, uint16_t port, uint8_t special)
 		}
 	}
 
+	// define and clear the send and receive buffers
+        unsigned char send_buf[IP_MAXPACKET], rcv_buf[IP_MAXPACKET];
+	memset(send_buf, 0, IP_MAXPACKET);
+	memset(rcv_buf, 0, IP_MAXPACKET);
+
+	// udphdr will be the start of the packet we send (so begins at send_buf (offset 0)
+	// all the udphdr fields are 16-bit 
+	struct udphdr *udp = (struct udphdr *)send_buf;
+	uint16_t udp_len = (uint16_t)(sizeof(struct udphdr) + len); // header size plus message length (len)
+        udp->source = htons(my_tx_src_port);
+        udp->dest = htons(my_tx_dst_port);
+    	udp->len = htons(udp_len);
+
+	// Create the pseudo-header so we can determine the checksum
+    	struct pseudo_hdr ph = { .src = my_tx_ipaddr, .dst = dest_ip, .len = htonl(udp_len), .next_hdr = IPPROTO_UDP };
+    	unsigned char check_buf[IP_MAXPACKET]; // to hold the pseudo-header plus real packet for checksum calculation only
+	// fill the checksum buffer - pseudo-header + udp header + udp body
+    	memcpy(check_buf, &ph, sizeof(ph));
+	memcpy(check_buf+sizeof(ph), udp, sizeof(struct udphdr));
+    	memcpy(check_buf + sizeof(ph)+ sizeof(struct udphdr), txmessage, len);
+
+	// calculate the udp checksum from check_buf data - total length is pseudo-header + UDP header + message body
+	// put the result into udp->check
+    	udp->check = checksum((unsigned short*)check_buf, sizeof(ph) + udp_len);
+
+	// add the txmessage octets to the end of the send_buf (the buffer we'll actually transmit)
+	// it alread has the udp header (inc checksum) at the start, so offset appropriately
+    	memcpy(send_buf + sizeof(struct udphdr), txmessage, len);
+
+	// Send the packet
 	if (PORTUNKNOWN == retval)
 	{
-		rc = (int)write(fd,&txmessage,(size_t)len);
-		if (rc < 0)
+		// Send the message - UDP header + message body (txmessage, len octets)
+    		struct sockaddr_in6 d_addr = { .sin6_family = AF_INET6, .sin6_addr = dest_ip };
+    		ssize_t bytes_sent = sendto(udp_sock, send_buf, udp_len, 0, (struct sockaddr *)&d_addr, sizeof(d_addr));
+
+		if (bytes_sent < 0) // error condition
 		{
 			if (0 != special)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad write(port %d:%d) attempt, returned %d (%s)\n", port, special, errno, strerror(errno));
+				IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Bad sendto(port %d:%d) attempt, returned %d (%s)\n", port, special, errno, strerror(errno));
 			}
 			else
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad write(port %d) attempt, returned %d (%s)\n", port, errno, strerror(errno));
+				IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Bad sendto(port %d) attempt, returned %d (%s)\n", port, errno, strerror(errno));
 			}
 			retval = PORTINTERROR;
 		}
-		else
+		else // successful sendto()
 		{
 			#ifdef UDPDEBUG
 			if (0 != special)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: write(port %d:%d) returned %d\n", port, special, rc);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: sendto(port %d:%d) sent %ld octets\n", port, special, bytes_sent);
 			}
 			else
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: write(port %d) returned %d\n", port, rc);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: sendto(port %d) sent %ld octets\n", port, bytes_sent);
 			}
 			#endif
 		}
 	}
 
-	if (PORTUNKNOWN == retval)
+	// Calculate/create localhost sockaddr_in6 structure - for later address comparison
+	struct sockaddr_in6 localhost_addr;
+	memset(&localhost_addr, 0, sizeof(localhost_addr));
+	localhost_addr.sin6_family = AF_INET6;
+	localhost_addr.sin6_port = 0; // Must be 0 for raw sockets to avoid EINVAL
+	// Convert IPv6 localhost
+	rc = inet_pton(AF_INET6, "::1", &localhost_addr.sin6_addr);
+	if (rc < 0)
 	{
-		rc = (int)read(fd,&rxmessage,UDP_BUFFER_SIZE);
-		int errsv = errno ;
-		if (rc < 0)
+		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Bad inet_pton for localhost, returned %d (%s)\n", errno, strerror(errno));
+		retval = PORTINTERROR;
+	}
+
+	time_t timestart = time(0);
+	if (timestart < 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: time() returned bad value for timestart %d (%s)\n", errno, strerror(errno));
+		retval = PORTINTERROR;
+	}
+	time_t timenow = timestart;
+	unsigned int loopcount = 0;
+
+	//
+	// Start of the main receive loop which is based on the functionality outline described above
+	//
+	while (((timenow-timestart) <= (UDPTIMEOUTSECS+2)) && (retval == PORTUNKNOWN))
+	{ // OUTER LOOP
+	        loopcount++;
+		#ifdef UDPDEBUG
+		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: OUTER loopcount = %u for HUT %s dst port %u special %u\n", loopcount, hostname, my_tx_dst_port, special);
+		#endif
+		// file descriptors for UDP and ICMPv6
+		struct pollfd fds[2];
+		fds[0].fd = udp_sock;
+		fds[0].events = POLLIN;
+		fds[1].fd = icmp_sock;
+		fds[1].events = POLLIN;
+
+		// Poll for a response on either socket
+		int pollrc = poll(fds, 2, (UDPTIMEOUTSECS*1000+100)); // timeout is in ms
+		if (pollrc < 0)
 		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: OUTERLOOP poll error for HUT %s dst port %u special %u, %d(%s)\n",\
+				hostname, my_tx_dst_port, special, errno, strerror(errno));
+			retval = PORTINTERROR;
+			continue;
+		}
+		else if (pollrc == 0)
+		{
+			// timeout
 			#ifdef UDPDEBUG
-			if (0 != special)
-			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad read(port %d:%d), returned %d (%s)\n", port, special, errno, strerror(errno));
-			}
-			else
-			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad read(port %d), returned %d (%s)\n", port, errno, strerror(errno));
-			}
+       		 	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: OUTERLOOP poll timeout for HUT %s dstport %u special %u\n", hostname, my_tx_dst_port, special);
 			#endif
-			// cycle through the expected list of results
-			for (i = 0; PORTEOL != resultsstruct[i].returnval && PORTUNKNOWN == retval ; i++)
-			{
-
-				// Find a matching connect returncode and also errno, if appropriate
-				if (resultsstruct[i].connrc == rc)
-				{
-					// Set the returnvalue if we find a match
-					if ( rc == -1 && resultsstruct[i].connerrno == errsv )
-					{
-						retval = resultsstruct[i].returnval;
-					}
-				}
-			}
-
-			#ifdef RESULTSDEBUG
-			if (0 != special)
-			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: found port %d:%d returned read = %d, errsv = %d(%s)\n",port, special, rc, errsv, strerror(errsv));
-			}
-			else
-			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: found port %d returned read = %d, errsv = %d(%s)\n",port, rc, errsv, strerror(errsv));
-			}
-			#endif
-
-			// If we haven't found a matching returncode/errno then log this ....
-			if (PORTUNKNOWN == retval)
-			{
-				if (0 != special)
-				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: read(port %d:%d) unexpected response, errno is : %d (%s) for host %s port %d\n", port, special,\
-							errsv, strerror(errsv), hostname, port);
-				}
-				else
-				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: read(port %d) unexpected response, errno is : %d (%s) for host %s port %d\n", port, \
-							errsv, strerror(errsv), hostname, port);
-				}
-				retval = PORTUNEXPECTED;
-			}
+			retval = UDPSTEALTH;
+			continue;
 		}
 		else
 		{
-			retval = UDPOPEN;
-
-			#ifdef UDPDEBUG
-			if (0 != special)
+			if ((fds[0].revents & POLLIN) && (retval == PORTUNKNOWN)) // UDP socket has some data
 			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: good read() of UDP port %d:%d, returned %d bytes\n", port, special, rc);
-			}
-			else
-			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: good read() of UDP port %d, returned %d bytes\n", port, rc);
-			}
-
-			// Log the summary of results internally - but only if LOGVERBOSITY is set to 1
-			unsigned int rxlength = ( rc < UDPMAXLOGOCTETS ) ? rc : UDPMAXLOGOCTETS;
-			i = 0;
-			int position = 0;
-			while (i < rxlength)
-			{
-				if (position == 0)
+				unsigned int udp_loopcount = 0;
+				while (retval == PORTUNKNOWN)
 				{
-					if (0 != special)
+					udp_loopcount++;
+					// NON-BLOCKING - if there's nothing there then move on
+					struct sockaddr_storage rx_src_addr;
+					socklen_t rx_src_addr_len = sizeof(rx_src_addr);
+					char rx_ip6addr_str[INET6_ADDRSTRLEN+1];
+					ssize_t bytes_received = recvfrom(udp_sock, rcv_buf, IP_MAXPACKET, MSG_DONTWAIT, (struct sockaddr *)&rx_src_addr, &rx_src_addr_len);
+					if (bytes_received < 0) // error condition
 					{
-						rc = snprintf(udplogbufferptr, udplogbuffersize, "check_udp_port: Found response packet for port %d:%d: %02x", port, special, (rxmessage[i] & 0xff) );
+						if (errno == EAGAIN || errno == EWOULDBLOCK) // nothing to receive - we're done with this socket
+						{
+							#ifdef UDPDEBUG
+       		 					IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: HUT %s dstport %u special %u UDP recvfrom() UDP loopcount %u returned indicating nothing received %d(%s)\n",\
+								hostname, my_tx_dst_port, special, udp_loopcount, errno, strerror(errno));
+							#endif
+						}
+						else // an actual error
+						{
+       		 					IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: HUT %s dstport %u special %u UDP recvfrom() UDP loopcount %u returned error %d(%s)\n", \
+								hostname, my_tx_dst_port, special, udp_loopcount, errno, strerror(errno));
+						}
+						// nothing useful we can do - break from this loop and try ICMPv6
+						break;
+					}
+					else if (bytes_received >= (ssize_t)(sizeof(struct udphdr)) )
+					{
+						#ifdef IPSCAN_BPF_DEBUG
+						// dump header bytes to allow for BPF filter debug
+                                                if (bytes_received >= 16)
+                                                {
+                                                        IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: INFO rcv_buf 00-07: %02x %02x %02x %02x %02x %02x %02x %02x\n", \
+                                                                rcv_buf[0], rcv_buf[1], rcv_buf[2], rcv_buf[3], rcv_buf[4], rcv_buf[5], rcv_buf[6], rcv_buf[7]);
+                                                        IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: INFO rcv_buf 08-15: %02x %02x %02x %02x %02x %02x %02x %02x\n", \
+                                                                rcv_buf[8], rcv_buf[9], rcv_buf[10], rcv_buf[11], rcv_buf[12], rcv_buf[13], rcv_buf[14], rcv_buf[15]);
+                                                }
+						#endif
+
+						#ifdef UDPDEBUG
+       		 				IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: HUT %s dstport %u special %u UDP recvfrom() UDP loopcount %u returned %ld octets\n", \
+							hostname, my_tx_dst_port, special, udp_loopcount, bytes_received);
+						#endif
+						// compare the received packet with what we're expecting
+						struct sockaddr_in6 *rx_sockaddr_in6 = (struct sockaddr_in6 *)&rx_src_addr;
+						struct udphdr *udphdr_ptr = (struct udphdr *)rcv_buf;
+						if (rx_src_addr.ss_family == AF_INET6)
+						{
+							// Convert receive address (binary) to string and report size
+							if (inet_ntop(AF_INET6, &(rx_sockaddr_in6->sin6_addr), rx_ip6addr_str, sizeof(rx_ip6addr_str)) != NULL)
+							{
+								#ifdef UDPDEBUG
+								IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 recvfrom() size %ld from host %s\n",\
+									 bytes_received, rx_ip6addr_str);
+								#endif
+							}
+							else // address conversion failed, so check for another packet
+							{
+								#ifdef UDPDEBUG
+								IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 inet_ntop() returned %d(%s), so SKIP\n", errno, strerror(errno));
+								#endif
+								continue;
+							}
+							// Check if received packet is from HUT
+							if ( IN6_ARE_ADDR_EQUAL( &dest_ip, &(rx_sockaddr_in6->sin6_addr)) == 1)
+							{
+								#ifdef UDPDEBUG
+								IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 response received from HUT\n");
+								#endif
+								// Now we know response is from HUT then start checking the detail - reversed src/dst ports. UDP has no sequence
+								if ((ntohs(udphdr_ptr->source) == my_tx_dst_port) && (ntohs(udphdr_ptr->dest) == my_tx_src_port))
+								{
+									#ifdef UDPDEBUG
+									IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 response packet for HUT %s dstport %u special %u UDP loopcount %u\n",\
+										hostname, my_tx_dst_port, special, udp_loopcount );
+									#endif
+									retval = UDPOPEN;
+									continue; // retval setting should complete the loop
+								}
+								else
+								{
+									#ifdef UDPDEBUG
+									IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 response packet mismatch for HUT %s dstport %u spec %u UDP loopcount %u, received srcport %u, dstport %u, so SKIP\n",\
+										hostname, my_tx_dst_port, special, udp_loopcount,ntohs(udphdr_ptr->source), ntohs(udphdr_ptr->dest));
+									#endif
+									continue;
+								}
+							}
+							else
+							{
+								#ifdef UDPDEBUG
+								IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 srcaddress mismatch, for HUT %s dstport %u special %u UDP loopcount %u, actually from: %s, so SKIP\n",\
+									 hostname, my_tx_dst_port, special, udp_loopcount, rx_ip6addr_str);
+								#endif
+								continue;
+							}
+						}
+						else
+						{
+							#ifdef UDPDEBUG
+							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 response packet for HUT %s dstport %u special %u UDP loopcount %u was not IPv6, so SKIP\n",\
+								hostname, my_tx_dst_port, special, udp_loopcount);
+							#endif
+							continue;
+						}
+					}
+					else // too few bytes received - check for another packet
+					{
+						#ifdef UDPDEBUG
+       		 				IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: HUT %s dstport %u special %u UDP recvfrom() UDP loopcount %u returned too few octets: %ld, so SKIP\n", \
+							hostname, my_tx_dst_port, special, udp_loopcount, bytes_received);
+						#endif
+						continue;	
+					}
+				} // end of UDP socket while loop
+			} // end of UDP socket if
+
+			// Check ICMPv6 if nothing found for UDP socket
+			if ((fds[1].revents & POLLIN) && (retval == PORTUNKNOWN)) // ICMPv6 socket has some data
+			{
+				unsigned int icmp_loopcount = 0;
+				while (retval == PORTUNKNOWN)
+				{
+					icmp_loopcount++;
+					struct sockaddr_storage rx_src_addr;
+					socklen_t rx_src_addr_len = sizeof(rx_src_addr);
+					// NON-BLOCKING - if there's nothing there then move on
+					ssize_t bytes_received = recvfrom(icmp_sock, rcv_buf, IP_MAXPACKET, MSG_DONTWAIT, (struct sockaddr *)&rx_src_addr, &rx_src_addr_len);
+					if (bytes_received < 0) // error condition
+					{
+						if (errno == EAGAIN || errno == EWOULDBLOCK) // nothing to receive - we're done with this socket
+						{
+							#ifdef UDPDEBUG
+       		 					IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: HUT %s dstport %u special %u ICMPv6 recvfrom() ICMPv6 loopcount %u returned indicating nothing received %d(%s)\n",\
+								hostname, my_tx_dst_port, special, icmp_loopcount, errno, strerror(errno));
+							#endif
+						}
+						else // an actual error
+						{
+							#ifdef UDPDEBUG
+       		 					IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: HUT %s dstport %u special %u UDP recvfrom() ICMPv6 loopcount %u returned error %d(%s)\n", \
+								hostname, my_tx_dst_port, special, icmp_loopcount, errno, strerror(errno));
+							#endif
+						}
+						// nothing useful we can do - break from this loop
+						break;
+					}
+					else if (bytes_received >= ((ssize_t)(sizeof(struct icmp6_hdr)+sizeof(struct ipv6hdr)+sizeof(struct udphdr))))
+					{
+						struct sockaddr_in6 *rx_sockaddr_in6 = (struct sockaddr_in6 *)&rx_src_addr;
+						struct icmp6_hdr *rx_icmphdr_ptr = (struct icmp6_hdr *)rcv_buf;
+						struct ipv6hdr *rx_ipv6hdr_ptr = (struct ipv6hdr *)(rcv_buf + sizeof(struct icmp6_hdr));
+						struct udphdr *rx_udphdr_ptr = (struct udphdr *)(rcv_buf + sizeof(struct icmp6_hdr) + sizeof(struct ipv6hdr));
+						char rx_ip6addr_str[INET6_ADDRSTRLEN];
+						if (rx_src_addr.ss_family == AF_INET6)
+       		                                {
+                                                	// Convert binary to string
+                                                	if (inet_ntop(AF_INET6, &(rx_sockaddr_in6->sin6_addr), rx_ip6addr_str, sizeof(rx_ip6addr_str)) != NULL)
+                                                	{
+								#ifdef UDPDEBUG
+                                                       		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 recvfrom() size %ld from host %s\n",\
+                                                        		bytes_received, rx_ip6addr_str);
+								#endif
+                                                	}
+                                                	else // check for another packet
+                                                	{
+								#ifdef UDPDEBUG
+                                                       		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 inet_ntop() returned %d(%s), so SKIP\n", errno, strerror(errno));
+								#endif
+                                                       		continue;
+                                                	}
+						}
+						else
+						{
+							#ifdef UDPDEBUG
+							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 response was not from an IPv6 source, so SKIP\n");
+							#endif
+							continue;
+						}
+						if ( IN6_ARE_ADDR_EQUAL( &dest_ip, &(rx_sockaddr_in6->sin6_addr)) == 1 \
+							&& (rx_ipv6hdr_ptr->nexthdr == IPPROTO_UDP && IN6_ARE_ADDR_EQUAL( &rx_ipv6hdr_ptr->daddr, &dest_ip ) == 1 \
+                               		                && IN6_ARE_ADDR_EQUAL(&local_sockaddr.sin6_addr, &rx_ipv6hdr_ptr->saddr) == 1 )\
+                               		                && (ntohs(rx_udphdr_ptr->source) == my_tx_src_port) && (ntohs(rx_udphdr_ptr->dest) == my_tx_dst_port))
+						{
+							#ifdef UDPDEBUG
+							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: Matching ICMPv6 response received from HUT\n");
+							#endif
+							indirect = 0; // from expected host
+						}
+						else if (  (IN6_ARE_ADDR_EQUAL( &dest_ip, &(rx_sockaddr_in6->sin6_addr)) == 0) \
+							&& (IN6_ARE_ADDR_EQUAL( &localhost_addr.sin6_addr, &(rx_sockaddr_in6->sin6_addr)) == 0)\
+							&& (IN6_ARE_ADDR_EQUAL( &local_sockaddr.sin6_addr, &(rx_sockaddr_in6->sin6_addr)) == 0)\
+							&& (rx_ipv6hdr_ptr->nexthdr == IPPROTO_UDP && IN6_ARE_ADDR_EQUAL( &rx_ipv6hdr_ptr->daddr, &dest_ip ) == 1 \
+                                       		        && IN6_ARE_ADDR_EQUAL(&local_sockaddr.sin6_addr, &rx_ipv6hdr_ptr->saddr) == 1 )\
+                                       		        && (ntohs(rx_udphdr_ptr->source) == my_tx_src_port) && (ntohs(rx_udphdr_ptr->dest) == my_tx_dst_port) )
+						{
+							#ifdef UDPDEBUG
+							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: INDIRECT: Matching ICMPv6 response is NOT from HUT, potentially from another mid-point device: %s\n", rx_ip6addr_str);
+							#endif
+							indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)
+							// copy string address
+							memset(indhost_ptr, 0, INET6_ADDRSTRLEN); //Blank it first
+							memcpy(indhost_ptr, rx_ip6addr_str, INET6_ADDRSTRLEN); // copy the source address string over it
+						}
+						else
+						{
+							#ifdef UDPDEBUG
+							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 response is NOT from HUT, or from suitable mid-point device address : %s, or else mismatches, so SKIP\n", rx_ip6addr_str);
+							#endif	
+							continue; // a packet we're not expecting - could be from a 3rd party, ourselves, or localhost
+						}
+						// Inner ICMPv6 should already match if we get to here - so could be simplified
+						if ((rx_ipv6hdr_ptr->nexthdr == IPPROTO_UDP && IN6_ARE_ADDR_EQUAL( &rx_ipv6hdr_ptr->daddr, &dest_ip ) == 1 \
+							&& IN6_ARE_ADDR_EQUAL(&local_sockaddr.sin6_addr, &rx_ipv6hdr_ptr->saddr) == 1 )\
+						 	&& (ntohs(rx_udphdr_ptr->source) == my_tx_src_port) && (ntohs(rx_udphdr_ptr->dest) == my_tx_dst_port))
+						{
+							#ifdef UDPDEBUG
+							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 response received with inner IP packet UDP next header and UDP src/dst port matches\n");
+							#endif
+							if (rx_icmphdr_ptr->icmp6_type < 128)
+							{ // Error messages only - ignore neighbour discovery, etc. ICMPv6 filter should stop non-error cases being delivered
+								#ifdef UDPDEBUG
+								IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 error received for %s port %u, Type %d Code %d\n",\
+									hostname, port, rx_icmphdr_ptr->icmp6_type, rx_icmphdr_ptr->icmp6_code);
+								#endif
+								if (rx_icmphdr_ptr->icmp6_type == 1)
+								{
+									#ifdef UDPDEBUG
+									const char *codes[] = {"No route", "Admin prohibited", "Beyond scope", "Addr unreachable", "Port unreachable"};
+									IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 : %s\n", (rx_icmphdr_ptr->icmp6_code <= 4) ? codes[rx_icmphdr_ptr->icmp6_code] : "Unknown unreachable");
+									#endif
+									if (rx_icmphdr_ptr->icmp6_code == 0)
+									{
+										retval = PORTUNREACHABLE; // checked - No route to destination - add new response?
+									}
+									else if (rx_icmphdr_ptr->icmp6_code == 1)
+									{	
+										retval = PORTPROHIBITED; // checked - Administratively prohibited
+									}
+									else if (rx_icmphdr_ptr->icmp6_code == 2)
+									{	
+										retval = PORTBEYONDSCOPE; // checked - Beyond scope of source address
+									}
+									else if (rx_icmphdr_ptr->icmp6_code == 3)
+									{	
+										retval = PORTNOROUTE; // check - address unreachable from wireshark
+									}
+									else if (rx_icmphdr_ptr->icmp6_code == 4)
+									{
+										retval = PORTUNREACHABLE; // checked
+									}
+									else if (rx_icmphdr_ptr->icmp6_code == 5)
+									{
+										retval = PORTFAILEDPOLICY; // checked - good
+									}
+									else if (rx_icmphdr_ptr->icmp6_code == 6)
+									{
+										retval = PORTREJECTROUTE; // checked - good
+									}
+									else // catchall - for other unhandled values
+									{
+										#ifdef UDPDEBUG
+										IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Unhandled ICMPv6 type 1, code = %d for host %s port %u\n", rx_icmphdr_ptr->icmp6_code, hostname, port);
+										#endif
+										retval = PORTINTERROR;
+									}
+								}
+								else if (rx_icmphdr_ptr->icmp6_type == 2)
+								{
+									retval = PORTPKTTOOBIG; // checked
+								}
+								else if (rx_icmphdr_ptr->icmp6_type == 3)
+								{
+									retval = PORTTIMEEXCEEDED; // checked
+								}
+								else if (rx_icmphdr_ptr->icmp6_type == 4)
+								{
+									retval = PORTPARAMPROB; // checked
+								}
+								else
+								{
+									#ifdef UDPDEBUG
+									IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Unhandled ICMPv6 type: %d\n", rx_icmphdr_ptr->icmp6_type);
+									#endif
+									continue;
+								}
+							}
+							else
+							{
+								#ifdef UDPDEBUG
+								IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 non-error response, type: %d, so SKIP\n", rx_icmphdr_ptr->icmp6_type);
+								#endif
+								continue;
+							}
+						}
+						else
+						{
+							#ifdef UDPDEBUG
+							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ICMPv6 inner packet mismatch, so SKIP\n");
+							#endif
+							continue;
+						}
 					}
 					else
 					{
-						rc = snprintf(udplogbufferptr, udplogbuffersize, "check_udp_port: Found response packet for port %d: %02x", port, (rxmessage[i] & 0xff) );
+						// too few bytes
+						#ifdef UDPDEBUG
+        					IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: HUT %s dstport %u special %u UDP recvfrom() ICMPv6 loopcount %u returned too few bytes: %ld, so SKIP\n", \
+							hostname, my_tx_dst_port, special, icmp_loopcount, bytes_received);
+						#endif
+						continue;
 					}
-				}
-				else
-				{
-					rc = snprintf(udplogbufferptr, udplogbuffersize, " %02x", (rxmessage[i] & 0xff) );
-				}
+				} // end of ICMPv6 socket while loop
+			} // end of ICMPv6 IF
+		} // END of OUTERLOOP main IF
+	} // END of OUTERLOOP
 
-				if (rc < 0 || rc >= udplogbuffersize)
-				{
-					IPSCAN_LOG( LOGPREFIX "check_udp_port: logbuffer write truncated, increase LOGENTRYSIZE (currently %d) and recompile.\n", LOGENTRYSIZE);
-					exit(EXIT_FAILURE);
-				}
+	// No other valid response has been received then set as if in-progress
+	if (retval == PORTUNKNOWN) retval = UDPSTEALTH;
 
-				udplogbufferptr += rc ;
-				udplogbuffersize -= rc;
-				position ++ ;
-				if ( position >= LOGMAXOCTETS || i == (rxlength-1) )
-				{
-					#if (IPSCAN_LOGVERBOSITY == 1)
-					IPSCAN_LOG( LOGPREFIX "%s\n", udplogbuffer);
-					#endif
-					udplogbufferptr = &udplogbuffer[0];
-					udplogbuffersize = LOGENTRYSIZE;
-					position = 0;
-				}
-				i++ ;
-			}
-			#endif
-		}
-	}
-
-	if (-1 != fd)
+	if (UDPSTEALTH == retval)
 	{
-		rc = close(fd);
-		if (rc == -1)
-		{
-			IPSCAN_LOG( LOGPREFIX "check_udp_port: close of fd %d caused unexpected failure : %d (%s)\n", fd, errno, strerror(errno));
-			retval = PORTINTERROR;
-		}
+		#ifdef UDPDEBUG
+		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: No UDP or ICMPv6 response received for %s port %u\n", hostname, port);
+		#endif
 	}
 
-	// If we received any non-positive feedback then make sure we wait at least IPSCAN_MINTIME_PER_PORT secs
-	if ((UDPOPEN != retval) && (UDPSTEALTH != retval)) sleep(IPSCAN_MINTIME_PER_PORT);
+	close(udp_sock); 
+	close(icmp_sock);
 
-	return (retval);
+	// Packet tx/rx is complete, so attempt to regain privileges
+	rc = regain_privileges();
+	if (rc != EXIT_SUCCESS)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: regain_privileges() returned %d\n", rc);
+		retval = PORTINTERROR;
+	}
+
+	// return
+	#ifdef UDPDEBUG
+	char retstring[32] = "undefined";
+	result_to_string((uint32_t)retval, retstring);
+	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: returning for host %s port %u with retval = %d (%s), indirect = %d, indhost =%s\n", hostname, port, retval, retstring, indirect, indhost_ptr);
+	#endif
+	return (retval+indirect);
 }
-
+// ----------------------
+//
+//
+//
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, struct portlist_struc *udpportlist)
 {
 	pid_t childpid = fork();
@@ -2113,12 +2675,12 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		IPSCAN_LOG( LOGPREFIX "check_udp_ports_parll(): startindex %d and todo %d\n",portindex,todo);
 		#endif
 		// child - actually do the work here - and then exit successfully
-		const char unusedfield[8] = "unused\0";
 		for (unsigned int i = 0 ; i <todo ; i++)
 		{
 			uint16_t port = udpportlist[(unsigned int)(portindex+i)].port_num;
 			uint8_t special = udpportlist[(unsigned int)(portindex+i)].special;
-			int result = check_udp_port(hostname, port, special);
+			char indirecthost[INET6_ADDRSTRLEN+1] = "::1\0";
+			int result = check_udp_port_raw(hostname, port, special, &indirecthost[0]);
 			uint64_t write_result = 0;
                         if (result >= 0) write_result = (uint64_t)result;
 			// Put results into database
@@ -2126,7 +2688,7 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			int rc = -1;
 			for (unsigned int z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				rc = write_db(host_msb, host_lsb, timestamp, session, (uint64_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), write_result, unusedfield );
+				rc = write_db(host_msb, host_lsb, timestamp, session, (uint64_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT)), write_result, indirecthost );
 				if (rc != 0)
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db attempt %u returned %d\n", (z+1), rc);
@@ -2155,4 +2717,6 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 	}
 	return( (int)childpid );
 }
-
+//
+// ----------------------------------------------------------------
+//

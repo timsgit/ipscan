@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2025 Tim Chappell.
+//    Copyright (C) 2011-2026 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -40,9 +40,12 @@
 // 0.20 - add querystring checkers
 // 0.21 - tidy various format strings
 // 0.22 - add ipv6_address_to_string()
+// 0.23 - clamp session to 52-bits maximum (javascript number can only represent 53-bits losslessly)
+// 0.24 - update copyright year
+// 0.25 - raw socket functions
 
 //
-#define IPSCAN_GENERAL_VER "0.22"
+#define IPSCAN_GENERAL_VER "0.25"
 //
 
 #include "ipscan.h"
@@ -121,6 +124,9 @@ uint64_t get_session(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot read /dev/urandom, defaulting session to getpid() = %"PRIu64"\n", sessionnum);
 		}
 	}
+	// mask to a maximum of 52 bits - javascript numbers can only represent 53 bits accurately
+	uint64_t mask = 0x000FFFFFFFFFFFFFULL;
+	sessionnum = mask & sessionnum;
 	return (sessionnum);
 }
 
@@ -224,101 +230,107 @@ void fetch_to_string(uint32_t fetchnum, char * retstring)
 //
 // -----------------------------------------------------------------------------
 //
-// TJC - put restringfree back to signed so that calcs work correctly?
 char * state_to_string(uint64_t statenum, char * retstringptr, int retstringstart)
 {
 	if (0 >= retstringstart) return (char *)NULL;
 	char * retstringptrstart = retstringptr;
 	int rc = 0;
-	size_t retstringfree = (size_t)retstringstart;
+	int retstringfree = (int)retstringstart;
 
-	rc = snprintf(retstringptr, retstringfree, "%s", "flags: ");
-	if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+	rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "flags: ");
+	if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 	retstringptr += rc;
-	retstringfree -= (size_t)rc;
+	retstringfree -= rc;
 
 	if (0 != (statenum & PORTUNKNOWN))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "UNKNOWN, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "UNKNOWN, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_RUNNING_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "RUNNING, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "RUNNING, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_COMPLETE_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "COMPLETE, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "COMPLETE, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "TIMEOUT, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "TIMEOUT, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_EVALERROR_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "EVALERROR, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "EVALERROR, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_OTHERERROR_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "OTHERERROR, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "OTHERERROR, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_NAVAWAY_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "NAVAWAY, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "NAVAWAY, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_UNEXPCHANGE_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "UNEXPECTED, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "UNEXPECTED, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_BADCOMPLETE_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "BADCOMPLETE, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "BADCOMPLETE, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_DATABASE_ERROR_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "DB ERROR, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "DB ERROR, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
 	if (0 != (statenum & IPSCAN_TESTSTATE_CLIENT_ADDRCHANGE_BIT))
 	{
-		rc = snprintf(retstringptr, retstringfree, "%s", "ADDRCHNG, ");
-		if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "ADDRCHNG, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 		retstringptr += rc;
-		retstringfree -= (size_t)rc;
+		retstringfree -= rc;
 	}
-	rc = snprintf(retstringptr, retstringfree, "%s", "<EOL>\n\0");
-	if (rc < 0 || (size_t)rc >= retstringfree) return (char *)NULL;
+	if (0 != (statenum & IPSCAN_TESTSTATE_INIT_BIT))
+	{
+		rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "INIT, ");
+		if (rc < 0 || rc >= retstringfree) return (char *)NULL;
+		retstringptr += rc;
+		retstringfree -= rc;
+	}
+	rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "<EOL>\n\0");
+	if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 	retstringptr += rc;
-	retstringfree -= (size_t)rc;
-	if (0 == retstringfree) return (char *)NULL;
+	retstringfree -= rc;
+	if (0 >= retstringfree) return (char *)NULL;
 	return retstringptrstart;
 }
 
@@ -344,22 +356,22 @@ void result_to_string(uint32_t result, char * retstring)
 	{
 		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "OPEN");
 	}
-	else if (PORTABORT == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ABORT");
-	}
+//	else if (PORTABORT == result)
+//	{
+//		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ABORT");
+//	}
 	else if (PORTREFUSED == result)
 	{
 		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "REFUSED");
 	}
-	else if (PORTCRESET == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "CRESET");
-	}
-	else if (PORTNRESET == result)
-	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "NRESET");
-	}
+//	else if (PORTCRESET == result)
+//	{
+//		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "CRESET");
+//	}
+//	else if (PORTNRESET == result)
+//	{
+//		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "NRESET");
+//	}
 	else if (PORTINPROGRESS == result)
 	{
 		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "IN-PROGRESS");
@@ -380,9 +392,25 @@ void result_to_string(uint32_t result, char * retstring)
 	{
 		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PKT TOO BIG");
 	}
+	else if (PORTTIMEEXCEEDED == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PKT TIME EXCD");
+	}
 	else if (PORTPARAMPROB == result)
 	{
 		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PARAM PROBLEM");
+	}
+	else if (PORTREJECTROUTE == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "REJECT ROUTE");
+	}
+	else if (PORTFAILEDPOLICY == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "FAILED POLICY");
+	}
+	else if (PORTBEYONDSCOPE == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "BEYOND SCOPE");
 	}
 	else if (ECHONOREPLY == result)
 	{
@@ -613,3 +641,170 @@ bool ipv6_address_to_string( uint64_t msb, uint64_t lsb, char * buffer, unsigned
 	}
 	return ( (rc >= 0 && rc < bufflen) ? true : false );
 }
+// RAW
+// -----------------------------------------------------------------------------
+//
+unsigned short checksum(unsigned short *ptr, int nbytes) {
+    long sum = 0;
+    while (nbytes > 1) { sum += *ptr++; nbytes -= 2; }
+    if (nbytes == 1) sum += *(unsigned char*)ptr;
+    sum = (sum >> 16) + (sum & 0xffff);
+    sum += (sum >> 16);
+    return (unsigned short)(~sum);
+}
+//
+// -----------------------------------------------------------------------------
+//
+int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip) {
+    
+	int udp_sock = socket(AF_INET6, SOCK_DGRAM, 0);
+	// any service will do - we're just interested in which address we'd use to connect to the remote device
+	struct sockaddr_in6 service_check = { .sin6_family = AF_INET6, .sin6_port = htons(123) };
+	int rc = inet_pton(AF_INET6, dest_ip, &service_check.sin6_addr);
+	if (rc < 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : inet_pton returned error inside get_local_ipv6  %d(%s)\n", errno, strerror(errno));
+		return EXIT_FAILURE;
+	}
+	rc = connect(udp_sock, (const struct sockaddr *)&service_check, sizeof(service_check));
+	if (rc < 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : connect returned error inside get_local_ipv6  %d(%s)\n", errno, strerror(errno));
+		return EXIT_FAILURE;
+	}
+	struct sockaddr_in6 sockname;
+	socklen_t namelen = sizeof(sockname);
+	rc = getsockname(udp_sock, (struct sockaddr *)&sockname, &namelen);
+	if (rc < 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : getsockname returned error inside get_local_ipv6  %d(%s)\n", errno, strerror(errno));
+		return EXIT_FAILURE;
+	}
+	else
+	{
+		memcpy(local_ip, &sockname.sin6_addr, sizeof(struct in6_addr));
+	}
+	close(udp_sock);
+	return EXIT_SUCCESS;
+}
+//
+// -----------------------------------------------------------------------------
+//
+// Used for TCP ISN
+//
+uint32_t get_random32(void)
+{
+        uint32_t random32 = 0;
+        uint32_t fetchednum = 0;
+        FILE *fp;
+        fp = fopen("/dev/urandom", "r");
+
+        if (NULL == fp)
+        {
+                random32 = (uint32_t)getpid();
+                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot open /dev/urandom, %d (%s), defaulting random32 to getpid() = %"PRIu32"\n", errno, strerror(errno), random32);
+        }
+        else
+        {
+                size_t numitems = fread( &fetchednum, sizeof(fetchednum), 1, fp);
+                fclose(fp);
+                if (1 == numitems)
+                {
+                        random32 = fetchednum;
+                }
+                else
+                {
+                        random32 = (uint32_t)getpid();
+                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot read /dev/urandom, defaulting session to getpid() = %"PRIu32"\n", random32);
+                }
+        }
+        return (random32);
+}
+//
+// -----------------------------------------------------------------------------
+//
+uint16_t get_ephemeral(void)
+{
+	uint16_t ephemeral = 61000;
+        uint16_t random16 = 0;
+        uint16_t fetchedvalue = 0;
+        FILE *fp;
+        fp = fopen("/dev/urandom", "r");
+
+        if (NULL == fp)
+        {
+                random16 = (uint16_t)getpid();
+                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot open /dev/urandom, %d (%s), defaulting random16 to getpid() = %"PRIu16"\n", errno, strerror(errno), random16);
+        }  
+        else
+        {  
+                size_t numitems = fread( &fetchedvalue, sizeof(fetchedvalue), 1, fp);
+                fclose(fp);
+                if (1 == numitems)
+                {
+                        random16 = fetchedvalue;
+                }
+                else
+                {
+                        random16 = (uint16_t)getpid();
+                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot read /dev/urandom, defaulting session to getpid() = %"PRIu16"\n", random16);
+                }
+        }
+	// Linux ephemeral ports usually finish at 60999, so start above there. 12 additional bits represents + 0 through 4095
+	ephemeral += (random16 & 0xfff);
+	#ifdef PORTDEBUG
+        IPSCAN_LOG( LOGPREFIX "ipscan: get_ephemeral() returning %u, from lowest 12-bits of random16 %u\n", ephemeral, random16);
+	#endif
+        return (ephemeral);
+}
+//
+// -----------------------------------------------------------------------------
+//
+void print_ids(const char * place)
+{
+	uid_t r_uid = getuid();
+	uid_t e_uid = geteuid();
+	gid_t r_gid = getgid();
+	gid_t e_gid = getegid();
+	IPSCAN_LOG( LOGPREFIX "--- Current Identity State at %s ---\n", place);
+	IPSCAN_LOG( LOGPREFIX "User IDs : Real=%u, Effective=%u\n", r_uid, e_uid);
+	IPSCAN_LOG( LOGPREFIX "Group IDs: Real=%u, Effective=%u\n", r_gid, e_gid);
+	// Check for specific capability-like status
+	if (e_uid == 0) IPSCAN_LOG( LOGPREFIX "INFO: We have ROOT Effective UID\n");
+}
+//
+// -----------------------------------------------------------------------------
+//
+int drop_privileges()
+{
+	// Set effective UID to the real UID (non-root)
+	if (seteuid(getuid()) != 0) 
+	{
+		IPSCAN_LOG( LOGPREFIX "ERROR: failed to drop privileges, %d (%s)\n", errno, strerror(errno));
+		return(EXIT_FAILURE);
+	}
+	#ifdef IPSCAN_PRIV_DEBUG
+	IPSCAN_LOG( LOGPREFIX "Privileges dropped (UID: %u, EUID: %u)\n", getuid(), geteuid());
+	#endif
+	return(EXIT_SUCCESS);
+}
+
+//
+// -----------------------------------------------------------------------------
+//
+int regain_privileges()
+{
+	// Set effective UID back to root (0)
+	if (seteuid(0) != 0) 
+	{
+		IPSCAN_LOG( LOGPREFIX "ERROR: failed to regain privileges, %d (%s)\n", errno, strerror(errno));
+		return(EXIT_FAILURE);
+	}
+	#ifdef IPSCAN_PRIV_DEBUG
+	IPSCAN_LOG( LOGPREFIX "Privileges regained (UID: %u, EUID: %u)\n", getuid(), geteuid());
+	#endif
+	return(EXIT_SUCCESS);
+}
+//
+// -----------------------------------------------------------------------------
+//

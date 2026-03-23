@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2025 Tim Chappell.
+//    Copyright (C) 2011-2026 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -93,9 +93,11 @@
 // 0.72 - update count_teststate_rows_db to dump rows that match session parameters
 // 0.73 - correct return values under certain circumstances
 // 0.74 - remove indirecthost from update_db and rename it to update_result_db to more accurately reflect what it does
+// 0.75 - update copyright year
+// 1.00 - various updates related to raw sockets version (indirect host capture/reporting)
 
 //
-#define IPSCAN_DB_VER "0.74"
+#define IPSCAN_DB_VER "1.00"
 //
 
 #include "ipscan.h"
@@ -646,7 +648,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							mysql_free_result(result);
 							#ifdef RESULTSDEBUG
 							#if (IPSCAN_LOGVERBOSITY >= 1)
-							IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: reported %d actual results to the client.\n", nump);
+							IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: reported %u actual results to the client.\n", nump);
 							#endif
 							#endif
 						}
@@ -882,7 +884,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 //
 // Fetch a single result
 //
-int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port)
+int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, char * indhost)
 {
 
 	//
@@ -890,7 +892,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	//  < 0 		- error condition
 	//  0 =< x <= INT_MAX 	- portresult value from database
 	//                        NOTE: actually a uint64_t BUT values in excess of INT_MAX are unexpected
-	//
+	// indhost		- set if not an error condition
 
 	uint64_t dbres; // database result
 	int retres = -1; // retres defaults to -1, set to other negative values for error conditions
@@ -993,7 +995,11 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 								if (9 == num_fields) // database includes indirect host and timestamp fields
 								{
 									// 6	PORTRESULT	BIGINT UNSIGNED
+									// 7    INDIRECTHOST    VARCHAR(INET6_ADDRSTRLEN+1)
+									char tempindhost[INET6_ADDRSTRLEN+1];
+									memset(tempindhost, 0, sizeof(tempindhost));
 									int rcres = sscanf(row[6], "%"SCNu64, &dbres);
+									int rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", tempindhost);
 									if (1 == rcres)
 									{
 										// Set the return result
@@ -1004,6 +1010,11 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 										{
 											// retres will be >= 0
 											retres = (int)dbres;
+											// if indirect host
+											if (1 == rcindhost)
+											{
+												memcpy(indhost, tempindhost, INET6_ADDRSTRLEN);
+											}
 										}
 										else
 										{
@@ -1224,18 +1235,18 @@ int tidy_up_db(int8_t deleteall)
 				}
 				// SET AUTOCOMMIT=0;LOCK TABLES `%s` WRITE; INSERT .... ; COMMIT; UNLOCK TABLES
 				//
-				// Delete old (expired) results - DELETE FROM t1 WHERE ( ts <= NOW() - INTERVAL xx ) ORDER BY id
+				// Delete old (expired) results - DELETE FROM t1 WHERE ( ts <= NOW(6) - INTERVAL xx ) ORDER BY id
 				//
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete based on time only
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( ts <= NOW() - INTERVAL %u SECOND ) ORDER BY id",\
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( ts <= (NOW(6) - INTERVAL %u SECOND ) ) ORDER BY ts ASC",\
 						 MYSQL_TBLNAME, (uint32_t)IPSCAN_DELETE_EVERYTHING_LONG_OFFSET );
 				}
 				else
 				{
 					// delete based on time and row is not test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= NOW() - INTERVAL %u SECOND ) ORDER BY id",\
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= ( NOW(6) - INTERVAL %u SECOND ) ) ORDER BY ts ASC",\
 						 MYSQL_TBLNAME, IPSCAN_TESTSTATE_AS_PORTNUM, (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET );
 				}
 				// retval defaults to 0, set to non-0 for error conditions
@@ -1470,7 +1481,7 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 								 		if (mysql_field_count(connection) == 0)
 								 		{
 											#if (DBDEBUG > 1)
-											IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: Found %lld rows affected\n", mysql_affected_rows(connection));
+											IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: Found %llu rows affected\n", mysql_affected_rows(connection));
 											#endif
 										}
 										else
@@ -1830,7 +1841,8 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 							}
 							else
 							{
-								retval = (int)num_rows;
+								retval = (int)(num_rows & INT_MAX);
+								unsigned int thisrow = 1;
 								while ((row = mysql_fetch_row(result)))
 								{
 									if (9 == num_fields) // only dump rows if it is a database format we understand
@@ -1851,14 +1863,15 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
                                                         				#endif
                                                         				if (false == convertedok)
                                                         				{
-                                                        					IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: failed to convert remote host address to a safe variant\n" );
+                                                        					IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: failed to convert db remote host address to a safe variant\n" );
                                                         				}
 											else
 											{
-												IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: host = %s, result = %"PRIu64"\n", saferemoteaddrstring, dbresult);
+												IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: thisrow = %u, host = %s, result = %"PRIu64"\n", thisrow, saferemoteaddrstring, dbresult);
 											}
 										}
 									}
+									thisrow++;
 								}
 							}
 							qrylen = snprintf(query, MAXDBQUERYSIZE, "COMMIT");

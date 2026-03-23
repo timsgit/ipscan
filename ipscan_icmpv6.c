@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2025 Tim Chappell.
+//    Copyright (C) 2011-2026 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -39,9 +39,11 @@
 // 0.19			update copyright year
 // 0.20			add (potentially) missing length check
 // 0.21			add pragmas to hide gcc warnings
+// 0.22			update copyright year
+// 1.00			drop/regain privileges
 
 //
-#define IPSCAN_ICMPV6_VER "0.21"
+#define IPSCAN_ICMPV6_VER "1.00"
 //
 
 #include "ipscan.h"
@@ -90,6 +92,10 @@ const char* ipscan_icmpv6_ver(void)
 {
     return IPSCAN_ICMPV6_VER;
 }
+
+// Function prototypes
+int drop_privileges();
+int regain_privileges();
 
 //
 // Send an ICMPv6 ECHO-REQUEST and see whether we receive an ECHO-REPLY in response
@@ -181,42 +187,14 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		retval = PORTINTERROR;
 	}
 
-	// Get root privileges in order to create the raw socket
-
-	uid_t uid = getuid();
-	uid_t gid = getgid();
-
-	#ifdef PINGDEBUG
-	uid_t euid = geteuid();
-	uid_t egid = getegid();
-	#endif
-
-	#ifdef PINGDEBUG
-	IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Entered with real UID  %d  real GID  %d  effective UID %d  effective GID %d\n", uid, gid, euid, egid);
-	#endif
-
-	rc = setuid(0);
-	if (rc != 0)
-	{
-		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: setuid: failed to gain root privileges - is setuid permission set?\n");
-		retval = PORTINTERROR;
-	}
-
-	rc = setgid(0);
-	if (rc != 0)
-	{
-		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: setgid: failed to gain root privileges - is setgid permission set?\n");
-		retval = PORTINTERROR;
-	}
-
 	// run with ROOT privileges, keep section to a minimum
 	if (PORTUNKNOWN == retval)
 	{
 		sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
 		errsv = errno;
-		if (sock < 0)
+		if (-1 == sock)
 		{
-			IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: socket: Error : %s (%d) for host %s\n", strerror(errsv), errsv, hostname);
+			IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: socket: ERROR: %s (%d) for host %s\n", strerror(errsv), errsv, hostname);
 			retval = PORTINTERROR;
 		}
 		else
@@ -227,22 +205,25 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 			rc = setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 			errsv = errno;
-			if (rc < 0)
+			if (-1 == rc)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Bad setsockopt SO_SNDTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
 				retval = PORTINTERROR;
 			}
 
-			memset(&timeout, 0, sizeof(timeout));
-			timeout.tv_sec = TIMEOUTSECS;
-			timeout.tv_usec = TIMEOUTMICROSECS;
-
-			rc = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-			errsv = errno;
-			if (rc < 0)
+			if (retval == PORTUNKNOWN)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
-				retval = PORTINTERROR;
+				memset(&timeout, 0, sizeof(timeout));
+				timeout.tv_sec = TIMEOUTSECS;
+				timeout.tv_usec = TIMEOUTMICROSECS;
+
+				rc = setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+				errsv = errno;
+				if (rc < 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: Bad setsockopt SO_RCVTIMEO set, returned %d (%s)\n", errsv, strerror(errsv));
+					retval = PORTINTERROR;
+				}
 			}
 
 			// Filter out everything except the responses we're looking for
@@ -258,12 +239,15 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 			ICMP6_FILTER_SETPASS(ICMP6_PACKET_TOO_BIG, &myfilter);
 			#pragma GCC diagnostic pop
 			// End-of-pragma
-			rc = setsockopt(sock, IPPROTO_ICMPV6, ICMP6_FILTER, &myfilter, sizeof(myfilter));
-			errsv = errno;
-			if (rc < 0)
+			if (retval == PORTUNKNOWN)
 			{
-				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: setsockopt: Error setting ICMPv6 filter: %s (%d)\n", strerror(errsv), errsv);
-				retval = PORTINTERROR;
+				rc = setsockopt(sock, IPPROTO_ICMPV6, ICMP6_FILTER, &myfilter, sizeof(myfilter));
+				errsv = errno;
+				if (rc < 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: setsockopt: setting ICMPv6 filter: %s (%d)\n", strerror(errsv), errsv);
+					retval = PORTINTERROR;
+				}
 			}
 
 			#ifdef PINGDEBUG
@@ -273,27 +257,30 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		} // end if (socket created successfully)
 	}
 
-	// END OF ROOT PRIVILEGES - Revert to previous privilege level
-	rc = setgid(gid);
-	if (rc != 0)
+	rc = drop_privileges();
+	if (rc != EXIT_SUCCESS)
 	{
-		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: setgid: failed to revoke root gid privileges\n");
+		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: drop_privileges() returned %d\n", rc);
 		retval = PORTINTERROR;
 	}
 
-	rc = setuid(uid);
-	if (rc != 0)
-	{
-		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: setuid: failed to revoke root uid privileges\n");
-		retval = PORTINTERROR;
-	}
+	// END OF ROOT PRIVILEGES - Revert to previous privilege level
+
 
 	// If something bad has happened then return now ...
 	// mustn't return to caller with root privileges, hence done here ...
 	if (PORTUNKNOWN != retval)
 	{
 		if (-1 != sock) close(sock); // close socket if appropriate
-		return(retval);
+		//
+        	// More sensitive packet processing is over, so now safe(r) to regain_privileges();
+        	//
+        	rc = regain_privileges();
+        	if (rc != EXIT_SUCCESS)
+        	{
+               		 IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+        	}
+		return (retval);
 	}
 
 	#ifdef PINGDEBUG
@@ -329,7 +316,15 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: txpackdata snprintf returned %d, expected >=0 but < %d\n", rc, (int)(ICMPV6_PACKET_SIZE-ICMP6DATAOFFSET));
 		retval = PORTINTERROR;
 		if (-1 != sock) close(sock); // close socket if appropriate
-		return(retval);
+		//
+                // More sensitive packet processing is over, so now safe(r) to regain_privileges();
+                //
+                rc = regain_privileges();
+                if (rc != EXIT_SUCCESS)
+                {
+                         IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+                }
+		return (retval);
 	}
 
 	// Choose a packet slightly bigger than minimum size
@@ -348,7 +343,15 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: RESTART: getnameinfo returned bad indication %d (%s)\n",errsv, gai_strerror(errsv));
 		retval = PORTINTERROR;
 		if (-1 != sock) close(sock); // close socket if appropriate
-		return(retval);
+		//
+                // More sensitive packet processing is over, so now safe(r) to regain_privileges();
+                //
+                rc = regain_privileges();
+                if (rc != EXIT_SUCCESS)
+                {
+                         IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+                }
+		return (retval);
 	}
 
 	// scatter/gather array
@@ -366,7 +369,15 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: sendmsg returned error, with errno %d (%s)\n", errsv, strerror(errsv));
 		retval = PORTINTERROR;
 		if (-1 != sock) close(sock); // close socket if appropriate
-		return(retval);
+		//
+                // More sensitive packet processing is over, so now safe(r) to regain_privileges();
+                //
+                rc = regain_privileges();
+                if (rc != EXIT_SUCCESS)
+                {
+                         IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+                }
+		return (retval);
 	}
 
 	if (rc != (int)sendsize)
@@ -374,7 +385,15 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 		IPSCAN_LOG( LOGPREFIX"check_icmpv6_echoresponse: requested sendmsg sent %u chars to %s but sendmsg returned %d\n", sendsize, hostname, rc);
 		retval = PORTINTERROR;
 		if (-1 != sock) close(sock); // close socket if appropriate
-		return(retval);
+		//
+                // More sensitive packet processing is over, so now safe(r) to regain_privileges();
+                //
+                rc = regain_privileges();
+                if (rc != EXIT_SUCCESS)
+                {
+                         IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+                }
+		return (retval);
 	}
 
 	// -----------------------------------------------
@@ -766,6 +785,9 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				case ICMP6_DST_UNREACH_NOPORT:
 					retval = PORTREFUSED;
 					break;
+				case ICMP6_DST_UNREACH_BEYONDSCOPE:
+					retval = PORTBEYONDSCOPE; 
+					break;
 				default:
 					retval = PORTUNREACHABLE;
 					break;
@@ -776,7 +798,15 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				#endif
 
 				if (-1 != sock) close(sock); // close socket if appropriate
-				return(retval+indirect);
+				//
+                		// More sensitive packet processing is over, so now safe(r) to regain_privileges();
+                		//
+                		rc = regain_privileges();
+                		if (rc != EXIT_SUCCESS)
+                		{
+                         		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+                		}
+				return (retval+indirect);
 			}
 			else if (rxicmp6_type == ICMP6_PARAM_PROB)
 			{
@@ -786,7 +816,15 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 				retval = PORTPARAMPROB;
 				if (-1 != sock) close(sock); // close socket if appropriate
-				return(retval+indirect);
+				//
+                                // More sensitive packet processing is over, so now safe(r) to regain_privileges();
+                                //
+                                rc = regain_privileges();
+                                if (rc != EXIT_SUCCESS)
+                                {
+                                        IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+                                }
+				return (retval+indirect);
 			}
 			else if (rxicmp6_type == ICMP6_TIME_EXCEEDED)
 			{
@@ -794,9 +832,17 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ICMP6_TYPE was TIME_EXCEEDED, with code %d\n", rxicmp6_code);
 				#endif
 
-				retval = PORTNOROUTE;
+				retval = PORTTIMEEXCEEDED;
 				if (-1 != sock) close(sock); // close socket if appropriate
-				return(retval+indirect);
+				//
+                                // More sensitive packet processing is over, so now safe(r) to regain_privileges();
+                                //
+                                rc = regain_privileges();
+                                if (rc != EXIT_SUCCESS)
+                                {
+                                        IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+                                }
+				return (retval+indirect);
 			}
 			else if (rxicmp6_type == ICMP6_PACKET_TOO_BIG)
 			{
@@ -806,7 +852,15 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 				retval = PORTPKTTOOBIG;
 				if (-1 != sock) close(sock); // close socket if appropriate
-				return(retval+indirect);
+				//
+                                // More sensitive packet processing is over, so now safe(r) to regain_privileges();
+                                //
+                                rc = regain_privileges();
+                                if (rc != EXIT_SUCCESS)
+                                {
+                                        IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+                                }
+				return (retval+indirect);
 			}
 			else
 			{
@@ -901,12 +955,23 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 	if (foundit == 1) retval = ECHOREPLY; else retval = ECHONOREPLY;
 
+	//
+	// More sensitive packet processing is over, so now safe(r) to regain_privileges();
+	//
+	rc = regain_privileges();
+	if (rc != EXIT_SUCCESS)
+	{
+		IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ERROR: regain_privileges() returned %d\n", rc);
+		retval = PORTINTERROR;
+	}
+
 	// return the status
 	if (-1 != sock) close(sock); // close socket if appropriate
+
 
 	// Make sure we wait long enough in all cases
 	sleep(IPSCAN_MINTIME_PER_PORT);
 
-	return(retval);
+	return (retval);
 }
 

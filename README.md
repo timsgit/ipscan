@@ -1,7 +1,7 @@
 # IPscan
 ### An HTTP-initiated IPv6 port scanner, offering text-only and javascript browser compatible versions.
 
-Copyright (C) 2011-2025 Tim Chappell.
+Copyright (C) 2011-2026 Tim Chappell.
 
 This file is part of IPscan.
 
@@ -28,10 +28,8 @@ Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and Raspbian and
 Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 
 unlisted platforms.
 
-NOTE: IPscan logging has been updated to aid operators needing to comply with regulatory
-requirements for the protection of end-users, e.g. GDPR. Where applicable, the logging-related
-recommendations outlined in: https://tools.ietf.org/id/draft-andersdotter-intarea-update-to-rfc6302-00.html#RFC6302
-have been implemented, for unmodified ipscan.h configurations. 
+NOTE: For releases >= version 2.00, IPscan has been updated to exclusively use raw sockets. As a result, 
+IPscan can now provide feedback on mid-point devices and all ICMPv6 response types/codes.
 
 Installation Steps:
 ===================

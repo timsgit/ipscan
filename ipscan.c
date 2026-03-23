@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2025 Tim Chappell.
+//    Copyright (C) 2011-2026 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -115,9 +115,14 @@
 // 0.92 - reinclude redirects (needs further debug)
 // 0.93 - first operating redirect (ipscan_web update too)
 // 0.94 - also send redirect when the calculated timedifference at test initiation is too large
+// 0.95 - insert an init phase which creates a database status entry marked as init and returns timestamp/session to browser
+//	  original beginscan call then modifies the databased entry to running and begins scanning the client
+// 0.97 - update copyright year
+// 1.00 - additional ICMPv6 response types and raw socket approach
+// 1.01 - add INDIRECT reporting for text-mode TCP and UDP
 
 //
-#define IPSCAN_MAIN_VER "0.94"
+#define IPSCAN_MAIN_VER "1.00"
 //
 
 #include "ipscan.h"
@@ -162,12 +167,14 @@
 //
 int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost);
 int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
-int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port);
+int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, char * indhost);
 int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, int8_t deleteall);
 int tidy_up_db(int8_t deleteall);
 int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result);
+#if (CLIENTDEBUG > 1)
 int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
 int count_teststate_rows_db(uint64_t timestamp, uint64_t session);
+#endif
 // hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
 int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *udpportlist);
 // hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
@@ -198,9 +205,7 @@ void create_html_form(uint16_t numports, uint16_t numudpports, const struct port
 #endif
 void create_html_common_header(void);
 void create_html_body_end(void);
-#if (1 == TEXTMODE)
 uint64_t get_session(void);
-#endif
 void fetch_to_string(int fetchnum, char * retstring);
 char * state_to_string(int statenum, char * retstringptr, size_t retstringfree);
 // create_results_key_table is only referenced if creating the text-only version of the scanner
@@ -219,28 +224,29 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 // structure holding the potential results table - entries MUST be in montonically increasing enumerated returnval order
 const struct rslt_struc resultsstruct[] =
 {
-		/* returnval,		connrc,	conn_errno		TEXT lbl			TEXT col	Description/User feedback	*/
-		{ PORTOPEN, 		0, 		0,	 			"OPEN", 			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-		{ PORTABORT, 		-1, 	ECONNABORTED, 	"ABRT", 			"yellow",	"An abort indication was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 			"yellow",	"A refused indication (TCP RST/ACK or ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTCRESET, 		-1, 	ECONNRESET, 	"CRST", 			"yellow",	"A connection reset request was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTNRESET, 		-1, 	ENETRESET, 		"NRST", 			"yellow",	"A network reset request was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		/* returnval,		connrc,	conn_errno	TEXT lbl			TEXT col	Description/User feedback	*/
+		{ PORTOPEN, 		0, 	0,		"OPEN", 			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
+ 		{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 			"yellow",	"A connection refused indication (TCP RST/ACK) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
 		{ PORTINPROGRESS, 	-1, 	EINPROGRESS, 	"STLTH", 			"green",	"No response was received in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
-		{ PORTPROHIBITED, 	-1, 	EACCES, 		"PHBTD", 			"yellow",	"An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTUNREACHABLE, 	-1, 	ENETUNREACH, 	"NUNRCH", 			"yellow",	"An unreachable response (ICMPv6 type 1 code 0) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTNOROUTE, 		-1, 	EHOSTUNREACH, 	"HUNRCH", 			"yellow",	"A No route to host response (ICMPv6 type 1 code 3 or ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTPKTTOOBIG, 	-1, 	EMSGSIZE, 		"TOOBIG", 			"yellow",	"A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTPARAMPROB, 	-1, 	EPROTO, 		"PRMPRB", 			"yellow",	"A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ ECHONOREPLY, 		-96, 	-96,	 		"ECHO NO REPLY",	"green",	"No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
-		{ ECHOREPLY, 		-97, 	-97,	 		"ECHO REPLY", 		"yellow",	"An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
-		{ UDPOPEN,			-95,	-95,			"UDPOPEN",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-		{ UDPSTEALTH,		-1,		EAGAIN,			"UDPSTEALTH",		"green",	"No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
+		{ PORTPROHIBITED, 	-1, 	EACCES, 	"ADMPHBTD", 			"yellow",	"An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ PORTUNREACHABLE, 	-1, 	ENETUNREACH, 	"PUNRCH", 			"yellow",	"A port unreachable response (ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ PORTNOROUTE, 		-1, 	EHOSTUNREACH, 	"HUNRCH", 			"yellow",	"A No route to host response (ICMPv6 type 1 code 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ PORTPKTTOOBIG, 	-1, 	EMSGSIZE, 	"TOOBIG", 			"yellow",	"A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ PORTPARAMPROB, 	-1, 	EPROTO, 	"PRMPRB", 			"yellow",	"A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ PORTTIMEEXCEEDED, 	-91, 	-91, 		"TIMEEXCEEDED", 		"yellow",	"A time exceeded (hop count reached 0) response (ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ PORTREJECTROUTE, 	-92,	-92,		"ROUTEREJECTED", 		"yellow",	"A Reject route to destination response (ICMPv6 type 1 code 6) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ PORTFAILEDPOLICY, 	-93,	-93,		"FAILEDPOLICY", 		"yellow",	"A Source address failed ingress or egress policy response (ICMPv6 type 1 code 5) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ PORTBEYONDSCOPE, 	-94,	-94,		"BEYONDSCOPE", 			"yellow",	"A Beyond scope of source address response (ICMPv6 type 1 code 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+		{ ECHONOREPLY, 		-96, 	-96,	 	"ECHO NO REPLY",		"green",	"No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
+		{ ECHOREPLY, 		-97, 	-97,	 	"ECHO REPLY", 			"yellow",	"An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
+		{ UDPOPEN,		-95,	-95,		"UDPOPEN",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
+		{ UDPSTEALTH,		-1,	EAGAIN,		"UDPSTEALTH",			"green",	"No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
 		/* Unexpected and unknown error response cases, do NOT change */
-		{ PORTUNEXPECTED,	-98,	-98,			"UNXPCT",			"white",	"An unexpected response was received to the connect attempt."},
-		{ PORTUNKNOWN, 		-99,	-99, 			"UNKWN", 			"white",	"An unknown error response was received, or the port is yet to be tested."},
-		{ PORTINTERROR,		-100,	-100,			"INTERR",			"white",	"An internal error occurred."},
+		{ PORTUNEXPECTED,	-98,	-98,		"UNXPCT",			"white",	"An unexpected response was received to the connect attempt."},
+		{ PORTUNKNOWN, 		-99,	-99, 		"UNKWN", 			"white",	"An unknown error response was received, or the port is yet to be tested."},
+		{ PORTINTERROR,		-100,	-100,		"INTERR",			"white",	"An internal error occurred."},
 		/* End of list marker, do NOT change */
-		{ PORTEOL,			-101,	-101,			"EOL",				"black",	"End of list marker."}
+		{ PORTEOL,		-101,	-101,		"EOL",				"black",	"End of list marker."}
 };
 
 //
@@ -345,7 +351,7 @@ int main(void)
 	// IPv6 address related
 	unsigned char remotehost[sizeof(struct in6_addr)];
 
-	uint64_t value;
+// TJC 	uint64_t value;
 	uint64_t remotehost_msb = 0ULL;
 	uint64_t remotehost_lsb = 0ULL;
 
@@ -438,7 +444,7 @@ int main(void)
 	else
 	{
 		#ifdef QUERYDEBUG
-		IPSCAN_LOG( LOGPREFIX "ipscan: Request method is : %s\n", requestmethod);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: REQUEST_METHOD string is : %s\n", requestmethod);
 		#endif
 
 		// Force Uppercase to ease comparison
@@ -478,7 +484,7 @@ int main(void)
 			else
 			{
 				#ifdef QUERYDEBUG
-				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: Query-string : %s\n", querystring);
+				IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: QUERY_STRING string : %s\n", querystring);
 				#endif
 
 				// Force lowercase to ease later comparison
@@ -630,12 +636,25 @@ int main(void)
 		create_html_body_end();
 		return(EXIT_SUCCESS);
 	}
-	else if ( sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring) != 1 )
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: Invalid REMOTE_ADDR variable data.\n");
-	}
 	else
 	{
+		rc = sscanf(remoteaddrvar,"%"TO_STR(INET6_ADDRSTRLEN)"s",remoteaddrstring);
+		if (1 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: Invalid REMOTE_ADDR variable data, sscanf() returned %d.\n", rc);
+			HTML_HEADER();
+			// Now finish the header
+			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
+			printf("</head>\n");
+			printf("<body>\n");
+			printf("<p>I was called with a REMOTE_ADDR variable that was invalid. That is very disappointing.</p>\n");
+			// Finish the HTML
+			create_html_body_end();
+			return(EXIT_SUCCESS);
+		}
+		#ifdef QUERYDEBUG
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: REMOTE_ADDR string : %s\n", remoteaddrstring);
+		#endif
 		// Determine the remote host address
 		rc = inet_pton(AF_INET6, remoteaddrstring, remotehost);
 		if (rc <= 0)
@@ -656,26 +675,16 @@ int main(void)
 		{
 			remotehost_msb = 0ULL;
 			remotehost_lsb = 0ULL;
-
 			// Split address into two 64 bit values stored within database
 			for (i=0 ; i<8 ; i++)
 			{
 				shift = 8 * (7-i);
-				value = (remotehost[i]);
-				while (shift > 0)
-				{
-					value = (value << 8);
-					shift -= 8;
-				}
-				remotehost_msb |= value;
-				shift = 8 * (7-i);
-				value = (remotehost[8+i]);
-				while (shift > 0)
-				{
-					value = (value << 8);
-					shift -= 8;
-				}
-				remotehost_lsb |= value;
+				uint64_t msbvalue = (uint64_t)(remotehost[i] & 0xff);
+				msbvalue = msbvalue<<shift;
+				remotehost_msb |= msbvalue;
+				uint64_t lsbvalue = (uint64_t)(remotehost[i+8] & 0xff);
+				lsbvalue = lsbvalue << shift;
+				remotehost_lsb |= lsbvalue;
 			}
 			#if (1 < IPSCAN_LOGVERBOSITY)
 			// report host addresses as (full)   128-bit addresses
@@ -1106,7 +1115,10 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address : %s text-mode, initiate scan\n", saferemoteaddrstring);
 			#endif
 
+			#if (CLIENTDEBUG >1)
 			int num_rows;
+			#endif
+
 			//
 			// Record TESTSTATE as RUNNING even though not necessary for text-mode
 			//
@@ -1132,11 +1144,16 @@ int main(void)
 					}
                         	}
 			}
-			if (0 != rc || (0 == rc && z > 1) )
+			if (0 == rc && z > 1)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited after %u attempts with rc: %d\n", z, rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited after %u attempts with rc: %d\n", z, rc);
+			}
+			if (0 != rc)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited with rc: %d\n", rc);
 			}
 
+			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (num_rows < 0)
@@ -1151,13 +1168,12 @@ int main(void)
                         }
                         else
                         {  
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after init) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                                 #endif
-                                #endif
                         }
+			#endif
 
 
 			// Create the header
@@ -1214,11 +1230,11 @@ int main(void)
 
 			}
 
-			int result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
+			int directresult = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of remote address: %s\n", saferemoteaddrstring);
 
-			portsstats[result]++ ;
+			portsstats[directresult]++ ;
 
 			uint64_t pingwrite = 0;
 			if (0 <= pingresult) pingwrite = (uint64_t)pingresult;
@@ -1242,12 +1258,17 @@ int main(void)
                                         }
 				}
 			}
-			if ( 0 != rc || (0 == rc && z > 1) )
+			if ( 0 == rc && z > 1 )
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db pingstate loop exited after %u attempts with rc: %d\n", z, rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode write_db pingstate loop exited after %u attempts with rc: %d\n", z, rc);
+			}
+			if ( 0 != rc )
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db pingstate loop exited with rc: %d\n", rc);
 			}
 
 
+			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (num_rows < 0)
@@ -1262,23 +1283,23 @@ int main(void)
                         }
                         else
                         {  
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after ping) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                                 #endif
-                                #endif
                         }
+			#endif
+
 			printf("<p>ICMPv6 ECHO-Request:</p>\n");
 			printf("<table>\n");
 			printf("<tr style=\"text-align:left\">\n");
 			if (pingresult >= IPSCAN_INDIRECT_RESPONSE)
 			{
-				printf("<td title=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </td><td style=\"background-color:%s\">INDIRECT-%s (from %s)</td>\n",resultsstruct[result].colour,resultsstruct[result].label, indirecthost);
+				printf("<td title=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </td><td style=\"background-color:%s\">INDIRECT-%s (from %s)</td>\n",resultsstruct[directresult].colour,resultsstruct[directresult].label, indirecthost);
 			}
 			else
 			{
-				printf("<td title=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </td><td style=\"background-color:%s\">%s</td>\n",resultsstruct[result].colour,resultsstruct[result].label);
+				printf("<td title=\"IPv6 ping\">ICMPv6 ECHO REQUEST returned : </td><td style=\"background-color:%s\">%s</td>\n",resultsstruct[directresult].colour,resultsstruct[directresult].label);
 			}
 			printf("</tr>\n");
 			printf("</table>\n");
@@ -1324,6 +1345,7 @@ int main(void)
 				}
 			}
 
+			#if (CLIENTDEBUG >1)
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (num_rows < 0)
@@ -1338,13 +1360,12 @@ int main(void)
                         }
                         else
                         {  
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after UDP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                                 #endif
-                                #endif
                         }
+			#endif
 
 			printf("<p>Individual UDP port scan results:</p>\n");
 			// Start of UDP port scan results table
@@ -1355,13 +1376,47 @@ int main(void)
 				uint16_t port = udpportlist[portindex].port_num;
 				uint8_t special = udpportlist[portindex].special;
 				last = (portindex == (NUMUDPPORTS-1)) ? 1 : 0 ;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ));
-				if (0 > result)
+				char udpindirecthost[INET6_ADDRSTRLEN+1];
+				memset(udpindirecthost, 0, INET6_ADDRSTRLEN+1);
+// HERE
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				int result = -1;
+				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode UDP results read_db_result() returned error value: %d\n", result);
-					result = PORTUNKNOWN;
+					result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+			 (uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ),\
+						udpindirecthost);
+					if (result < 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result for UDP port %u returned: %d\n", port, result);
+						// Wait to improve chances of missing a database deadlock
+						struct timespec rem;
+                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
+					}
 				}
-				if ( PORTUNKNOWN == result )
+				if (0 <= result && z > 1)
+                                {
+                                        IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode read_db_result loop exited after %u attempts with result: %d\n", z, result);
+                                }
+				if (0 > result)
+                                {
+                                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result loop exited with result: %d\n", result);
+                                }
+// HERE END
+
+				directresult = (result >= IPSCAN_INDIRECT_RESPONSE) ? (result - IPSCAN_INDIRECT_RESPONSE) : result ;
+				if (0 > directresult)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode UDP results read_db_result() returned error value: %d\n", directresult);
+					directresult = PORTUNKNOWN;
+				}
+				if ( PORTUNKNOWN == directresult )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result() returned UNKNOWN: UDP port scan results table\n" );
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address: %s\n", saferemoteaddrstring);
@@ -1371,20 +1426,20 @@ int main(void)
 				#ifdef UDPDEBUG
 				if (0 != special)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
+					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d:%d returned %d(%s)\n", port, special, directresult, resultsstruct[directresult].label);
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
+					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d returned %d(%s)\n", port, directresult, resultsstruct[directresult].label);
 				}
 				#endif
 
 				#ifdef UDPDEBUGOPEN
-				if (0 != special && UDPOPEN == result)
+				if (0 != special && UDPOPEN == directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d:%d returned : UDPOPEN\n", port, special);
 				}
-				else if (0 == special && UDPOPEN == result)
+				else if (0 == special && UDPOPEN == directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: UDP port %d returned : UDPOPEN\n", port);
 				}
@@ -1395,17 +1450,36 @@ int main(void)
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
-				while (i < NUMRESULTTYPES && resultsstruct[i].returnval != result) i++;
-				if (result == resultsstruct[i].returnval)
+				while (i < NUMRESULTTYPES && resultsstruct[i].returnval != directresult) i++;
+				if (directresult == resultsstruct[i].returnval)
 				{
-					portsstats[result]++ ;
+					portsstats[directresult]++ ;
+
 					if (0 != special)
 					{
-						printf("<td title=\"%s\" style=\"background-color:%s\">Port %d[%d] = %s</td>", udpportlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label);
+						if (result >= IPSCAN_INDIRECT_RESPONSE)
+						{
+							printf("<td title=\"%s\" style=\"background-color:%s\">Port %d[%d] = INDIRECT-%s (from %s)</td>",\
+								udpportlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label, udpindirecthost);
+						}
+						else
+						{
+							printf("<td title=\"%s\" style=\"background-color:%s\">Port %d[%d] = %s</td>",\
+								udpportlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label);
+						}
 					}
 					else
 					{
-						printf("<td title=\"%s\" style=\"background-color:%s\">Port %d = %s</td>", udpportlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
+						if (result >= IPSCAN_INDIRECT_RESPONSE)
+						{
+							printf("<td title=\"%s\" style=\"background-color:%s\">Port %d = INDIRECT-%s (from %s)</td>",\
+								 udpportlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label, udpindirecthost);
+						}
+						else
+						{
+							printf("<td title=\"%s\" style=\"background-color:%s\">Port %d = %s</td>",\
+								 udpportlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
+						}
 					}
 				}
 				else
@@ -1413,12 +1487,12 @@ int main(void)
 					if (0 != special)
 					{
 						printf("<td title=\"%s\" style=\"background-color:white\">Port %d[%d] = BAD</td>", udpportlist[portindex].port_desc, port, special);
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Unknown result for UDP port %d:%d is %d\n", port, special, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Unknown result for UDP port %d:%d is %d\n", port, special, directresult);
 					}
 					else
 					{
 						printf("<td title=\"%s\" style=\"background-color:white\">Port %d = BAD</td>", udpportlist[portindex].port_desc, port);
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Unknown result for UDP port %d is %d\n", port, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Unknown result for UDP port %d is %d\n", port, directresult);
 					}
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
@@ -1486,11 +1560,16 @@ int main(void)
                                 	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for text-mode IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
                         	}
 			}
-			if ( 0 != rc || (rc == 0 && z > 1) )
+			if ( rc == 0 && z > 1 )
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db loop exited after %u attempts with rc: %d\n", z, rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode update_db loop exited after %u attempts with rc: %d\n", z, rc);
+			}
+			if ( 0 != rc )
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db loop exited with rc: %d\n", rc);
 			}
 
+			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
 			if (num_rows < 0)
@@ -1505,13 +1584,12 @@ int main(void)
                         }
                         else
                         {  
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after TCP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
                                 #endif
-                                #endif
                         }
+			#endif
 
 			// Start of TCP port scan results table
  			printf("<table border=\"1\">\n");
@@ -1521,13 +1599,47 @@ int main(void)
 				uint16_t port = portlist[portindex].port_num;
 				uint8_t special = portlist[portindex].special;
 				last = (portindex == (numports-1)) ? 1 : 0 ;
-				result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, (uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)) );
-				if (0 > result)
+				char tcpindirecthost[INET6_ADDRSTRLEN+1];
+				memset( tcpindirecthost, 0, INET6_ADDRSTRLEN+1);
+//HERE2
+
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				int result = -1;
+				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode TCP read_db_result() returned error value: %d\n", result );
-					result = PORTUNKNOWN;
+					result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+					(uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)),\
+					tcpindirecthost );
+					if (result < 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result for TCP port %u returned: %d\n", port, result);
+						// Wait to improve chances of missing a database deadlock
+						struct timespec rem;
+                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
+					}
 				}
-				if ( PORTUNKNOWN == result )
+				if (0 <= result && z > 1)
+                                {
+                                        IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode read_db_result loop exited after %u attempts with result: %d\n", z, result);
+                                }
+				if (0 > result)
+                                {
+                                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result loop exited with result: %d\n", result);
+                                }
+//HERE2 END
+				directresult = (result >= IPSCAN_INDIRECT_RESPONSE) ? (result - IPSCAN_INDIRECT_RESPONSE) : result ;
+				if (0 > directresult)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode TCP read_db_result() returned error value: %d\n", directresult );
+					directresult = PORTUNKNOWN;
+				}
+				if ( PORTUNKNOWN == directresult )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result() returned UNKNOWN: TCP port scan results table\n" );
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
@@ -1538,20 +1650,20 @@ int main(void)
 				#ifdef RESULTSDEBUG
 				if (0 != special)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d:%d returned %d(%s)\n", port, special, result, resultsstruct[result].label);
+					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d:%d returned %d(%s)\n", port, special, directresult, resultsstruct[directresult].label);
 				}
 				else
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d returned %d(%s)\n", port, result, resultsstruct[result].label);
+					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d returned %d(%s)\n", port, directresult, resultsstruct[directresult].label);
 				}
 				#endif
 
 				#ifdef TCPDEBUGOPEN
-				if (0 != special && PORTOPEN == result)
+				if (0 != special && PORTOPEN == directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d:%d returned : PORTOPEN\n", port, special);
 				}
-				else if (0 == special && PORTOPEN == result)
+				else if (0 == special && PORTOPEN == directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: TCP port %d returned : PORTOPEN\n", port);
 				}
@@ -1562,21 +1674,44 @@ int main(void)
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
-				while (i < NUMRESULTTYPES && resultsstruct[i].returnval != result) i++;
-				if (result == resultsstruct[i].returnval)
+				while (i < NUMRESULTTYPES && resultsstruct[i].returnval != directresult) i++;
+				if (directresult == resultsstruct[i].returnval)
 				{
-					portsstats[result]++ ;
+					portsstats[directresult]++ ;
+
 					if (0 != special)
 					{
-						// False positive with LGTM - port_desc is predefined text with integer
-						// port and special are restricted-range integers
-						printf("<td title=\"%s\" style=\"background-color:%s\">Port %d[%d] = %s</td>", portlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label);
+						if (result >= IPSCAN_INDIRECT_RESPONSE)
+						{
+							// False positive with LGTM - port_desc is predefined text with integer
+							// port and special are restricted-range integers
+							printf("<td title=\"%s\" style=\"background-color:%s\">Port %d[%d] = INDIRECT-%s (from %s)</td>",\
+								portlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label, tcpindirecthost);
+						}
+						else
+						{
+							// False positive with LGTM - port_desc is predefined text with integer
+							// port and special are restricted-range integers
+							printf("<td title=\"%s\" style=\"background-color:%s\">Port %d[%d] = %s</td>",\
+								portlist[portindex].port_desc, resultsstruct[i].colour, port, special, resultsstruct[i].label);
+						}
 					}
 					else
 					{
-						// False positive with LGTM - port_desc is predefined text with integer
-						// port is a restricted-range integer
-						printf("<td title=\"%s\" style=\"background-color:%s\">Port %d = %s</td>", portlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
+						if (result >= IPSCAN_INDIRECT_RESPONSE)
+                                                {
+							// False positive with LGTM - port_desc is predefined text with integer
+							// port is a restricted-range integer
+							printf("<td title=\"%s\" style=\"background-color:%s\">Port %d = INDIRECT-%s (from %s)</td>",\
+								portlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label, tcpindirecthost);
+						}
+						else
+						{
+							// False positive with LGTM - port_desc is predefined text with integer
+							// port is a restricted-range integer
+							printf("<td title=\"%s\" style=\"background-color:%s\">Port %d = %s</td>",\
+								portlist[portindex].port_desc, resultsstruct[i].colour, port, resultsstruct[i].label);
+						}
 					}
 
 				}
@@ -1587,14 +1722,14 @@ int main(void)
 						// False positive with LGTM - port_desc is predefined text with integer
 						// port and special are restricted-range integers
 						printf("<td title=\"%s\" style=\"background-color:white\">Port %d[%d] = BAD</td>", portlist[portindex].port_desc, port, special);
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Unknown result for TCP port %d:%d is %d\n", port, special, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Unknown result for TCP port %d:%d is %d\n", port, special, directresult);
 					}
 					else
 					{
 						// False positive with LGTM - port_desc is predefined text with integer
 						// port is a restricted-range integer
 						printf("<td title=\"%s\" style=\"background-color:white\">Port %d = BAD</td>", portlist[portindex].port_desc, port);
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Unknown result for TCP port %d is %d\n",port,result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: Unknown result for TCP port %d is %d\n",port,directresult);
 					}
 					portsstats[ PORTUNKNOWN ]++ ;
 				}
@@ -1637,7 +1772,7 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for scancomplete %d (%s)\n", errno, strerror(errno));
 			}
-			IPSCAN_LOG( LOGPREFIX "ipscan: port scan and HTML document generation took %d seconds\n", (int)(scancomplete - scanstart));
+			IPSCAN_LOG( LOGPREFIX "ipscan: text-mode port scan and HTML document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
 
 			// Log the summary of results internally
@@ -1704,9 +1839,13 @@ int main(void)
                                         }
 				}
 			}
-                        if ( 0 != rc || (0 == rc && z > 1) )
+                        if ( 0 == rc && z > 1 )
                         {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db loop exited after %u attempts with rc: %d\n", z, rc);
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-only delete_from_db loop exited after %u attempts with rc: %d\n", z, rc);
+                        }
+                        if ( 0 != rc )
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db loop exited with rc: %d\n", rc);
                         }
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			rc = -1;
@@ -1719,9 +1858,13 @@ int main(void)
                         		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
                         	}
 			}
-                        if ( 0 != rc || (0 == rc && z > 1) )
+                        if ( 0 == rc && z > 1 )
                         {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only update_db loop exited after %u attempts with rc: %d\n", z, rc);
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-only update_db loop exited after %u attempts with rc: %d\n", z, rc);
+                        }
+                        if ( 0 != rc )
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only update_db loop exited with rc: %d\n", rc);
                         }
 			return(EXIT_SUCCESS);
 		}
@@ -1767,7 +1910,7 @@ int main(void)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
                                         saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
                         }
-
+			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
 			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
@@ -1789,16 +1932,45 @@ int main(void)
 			}
 			else
 			{
-				#ifdef CLIENTDEBUG
 				#if (1 <= IPSCAN_LOGVERBOSITY)
 				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (done/error) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, querystarttime, querysession );
 				#endif
-				#endif
 			}
+			#endif
 		
+// HERE3
 			// Fetch running state result from database so it can be updated
-			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM );
+			char tempindhost[INET6_ADDRSTRLEN+1];
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			rc = -1;
+			int result = -1;
+			unsigned int z;
+			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
+			{
+				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, tempindhost );
+				if (result < 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for running state returned: %d\n", result);
+					// Wait to improve chances of missing a database deadlock
+					struct timespec rem;
+                                       	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                       	int rc2 = nanosleep( &req, &rem);
+                                       	if (0 != rc2)
+                                       	{
+                                       		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
+                                       	}
+				}
+			}
+			if (0 <= result && z > 1)
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result running state loop exited after %u attempts with result: %d\n", z, result);
+                        }
+			if (0 > result)
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result running state loop exited after %u attempts with result: %d\n", z, result);
+                        }
+// HERE3 END
 			if (0 > result)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned bad value: %d\n", result);
@@ -1820,7 +1992,6 @@ int main(void)
 				const char unusedfield[] = "unused";
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				rc = -1;
-				unsigned int z;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 				{
 					rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result, unusedfield);
@@ -1837,9 +2008,13 @@ int main(void)
                                         	}
 					}
 				}
-				if (0 != rc || (0 == rc && z > 1))
+				if (0 == rc && z > 1)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE rewrite loop exited after %u attempts with rc: %d\n", z, rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE rewrite loop exited after %u attempts with rc: %d\n", z, rc);
+				}
+				if (0 != rc )
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE rewrite loop exited with rc: %d\n", rc);
 				}
 			}
 
@@ -1896,7 +2071,6 @@ int main(void)
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				write_result = (uint64_t)result;
 				rc = -1;
-				unsigned int z;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 				{	
 					// Write the new value back to the database
@@ -1906,9 +2080,13 @@ int main(void)
 						IPSCAN_LOG( LOGPREFIX "ipscan: javascript-mode ERROR: update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
 					}
 				}
-				if (0 != rc || (0 == rc && z > 1))
+				if (0 == rc && z > 1)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_db loop exited after %u attempts with rc: %d\n", z, rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode update_db loop exited after %u attempts with rc: %d\n", z, rc);
+				}
+				if (0 != rc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_db loop exited with rc: %d\n", rc);
 				}
 			}
 			// Replacement for dummy output
@@ -1952,6 +2130,7 @@ int main(void)
                         }
 			#endif
 
+			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
                         int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
@@ -1973,13 +2152,12 @@ int main(void)
 			}
                         else
                         {
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (query) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
-                                #endif
                         }
+			#endif
 			// Simplified header in which to wrap array of results
 			create_json_header();
 			// Dump the current port results for this client, querystarttime and querysession
@@ -1992,10 +2170,39 @@ int main(void)
                                        		 saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
 				return(EXIT_SUCCESS);
 			}
+// HERE4
 			// Check the current running state and if it's NOT running then update it to running
 			// effectively clear timeout bit, etc. if we've had a successful fetch
-			int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					IPSCAN_TESTSTATE_AS_PORTNUM );
+			char tempindhost[INET6_ADDRSTRLEN+1];
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			rc = -1;
+			int result = -1;
+			unsigned int z;
+			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
+			{
+				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, tempindhost );
+				if (result < 0)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for running state 2 returned: %d\n", result);
+					// Wait to improve chances of missing a database deadlock
+					struct timespec rem;
+                                       	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                       	int rc2 = nanosleep( &req, &rem);
+                                       	if (0 != rc2)
+                                       	{
+                                       		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread 2 returned %d(%s)\n", rc2, strerror(errno) );
+                                       	}
+				}
+			}
+			if (0 <= result && z > 1)
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result running state 2 loop exited after %u attempts with result: %d\n", z, result);
+                        }
+			if (0 > result)
+                        {
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result running state 2 loop exited after %u attempts with result: %d\n", z, result);
+                        }
+// HERE4 END
 			if (0 > result)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript fetch read_db_result() returned bad value: %d forcing to IPSCAN_TESTSTATE_IDLE\n", result);
@@ -2012,7 +2219,6 @@ int main(void)
                         	// Write the new value back to the database
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				rc = -1;
-				unsigned int z;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 				{
                         		rc = update_result_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result);
@@ -2029,9 +2235,13 @@ int main(void)
                                         	}
                         		}
 				}
-				if (0 != rc || (0 == rc && z > 1))
+				if (0 == rc && z > 1)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode fetch update_db loop exited after %u attempts with rc: %d\n", z, rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode fetch update_db loop exited after %u attempts with rc: %d\n", z, rc);
+				}
+				if (0 != rc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode fetch update_db loop exited with rc: %d\n", rc);
 				}
 			}
 		}
@@ -2069,7 +2279,38 @@ int main(void)
 					saferemoteaddrstring, querystarttime, querysession, timedifference );
 			}
 			#endif
+// ----
+// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+			const char unusedfield[] = "unused";
+                        rc = -1;
+                        unsigned int z;
+                        for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+                        {
+                                rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, IPSCAN_TESTSTATE_INIT_BIT, unusedfield);
+                                if (rc != 0)
+                                {
+                                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript write_db for IPSCAN_PROTO_TESTSTATE INIT attempt %u returned non-zero: %d\n", (z+1), rc);
+                                        // Wait to improve chances of missing a database deadlock
+                                        struct timespec rem;
+                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        int rc2 = nanosleep( &req, &rem);
+                                        if (0 != rc2)
+                                        {
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                        }
+                                }
+                        }
+                        if (0 == rc && z > 1)
+                        {
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript write_db for IPSCAN_PROTO_TESTSTATE INIT loop exited after %u attempts with rc: %d\n", z, rc);
+                        }
+                        if (0 != rc)
+                        {
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript write_db for IPSCAN_PROTO_TESTSTATE INIT loop exited with rc: %d\n", rc);
+                        }
+// ----
 
+			#if (CLIENTDEBUG > 1)
 			// Start of check for existing test with same parameters - how many rows exist for this mix of address, starttime and session?
 			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
@@ -2078,32 +2319,59 @@ int main(void)
 			}
 			else if (num_rows > 0)
 			{
+// HERE5
+				char indtemphost[INET6_ADDRSTRLEN+1];
 				// one or more rows exist, so check for any holding IPSCAN_TESTSTATE_AS_PORTNUM
-				int result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM );
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				int result = -1;
+				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
+				{
+					result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, indtemphost );
+					if (result < 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for running state 3 returned: %d\n", result);
+						// Wait to improve chances of missing a database deadlock
+						struct timespec rem;
+       	                                	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+       	                                	int rc2 = nanosleep( &req, &rem);
+       	                                	if (0 != rc2)
+       	                                	{
+       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread 3 returned %d(%s)\n", rc2, strerror(errno) );
+       	                                	}
+					}
+				}
+				if (0 <= result && z > 1)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result running state 3 loop exited after %u attempts with result: %d\n", z, result);
+				}
+				if (0 > result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result running state 3 loop exited after %u attempts with result: %d\n", z, result);
+				}
+// HERE5 END
 				if (0 > result)
 				{
 					// error condition - map result as PORTUNKNOWN
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode read_db_result() at duplicate initiation test returned bad value: %d\n", result);
 					result = PORTUNKNOWN;
 				}
-				// if the other test is in the running state then report an error
-				if ( PORTUNKNOWN != result )
+				// if the database entry is NOT in the INIT running state then report an error
+				if ( IPSCAN_TESTSTATE_INIT_BIT != result )
 				{
 					if ( (result & IPSCAN_TESTSTATE_RUNNING_BIT) == IPSCAN_TESTSTATE_RUNNING_BIT)
 					{
 						// database held a valid IPSCAN_TESTSTATE_AS_PORTNUM entry, so a test is already running with these session parameters
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters is already running: %d\n", result );
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
+						create_redirect_header(302, URIPATH"/"EXENAME);
+						return(EXIT_SUCCESS);
 					}
 					else
 					{
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters exists but is not running: %d\n", result );
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
 					}
-					// redirect irrespective of whether test is running or not because either way another test is running and two tests can't share one state
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters is present in the database - sending redirect\n" );
-					create_redirect_header(302, URIPATH"/"EXENAME);
-					return(EXIT_SUCCESS);
 				}
 			}
 			else if (num_rows == 0)
@@ -2113,41 +2381,43 @@ int main(void)
 				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
 				if (0 != other_num_rows)
 				{
-       		                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test returned 0, BUT count_teststate_rows_db() returned %d\n", other_num_rows );
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
-       		                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript duplicate initiation test found same session for different host, sending redirect\n" );
-					create_redirect_header(302, URIPATH"/"EXENAME);
-					return(EXIT_SUCCESS);
+       		                        IPSCAN_LOG( LOGPREFIX "ipscan: INFO but ERROR: count_rows_db() javascript duplicate initiation test returned 0, BUT count_teststate_rows_db() returned %d\n", other_num_rows );
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO but ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
+       		                        IPSCAN_LOG( LOGPREFIX "ipscan: INFO but ERROR: count_rows_db() javascript duplicate initiation test found same session for different host, sending redirect\n" );
+					// create_redirect_header(302, URIPATH"/"EXENAME);
+					// return(EXIT_SUCCESS);
 				}
 			}
 			// End of check for existing test with same parameters
+			#endif
 
-			// Default for unused database entries
-			const char unusedfield[] = "unused";
+			// Update the database to reflect the test is now running
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			rc = -1;
-			unsigned int z;
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				// Generate database entry for test state - indicate test running
-				rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					IPSCAN_TESTSTATE_AS_PORTNUM, IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
+				// Update database entry for test state - indicate test is NOW running
+                        	rc = update_result_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, IPSCAN_TESTSTATE_RUNNING_BIT);
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_result_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
                                         const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
                                         int rc2 = nanosleep( &req, &rem);
                                         if (0 != rc2)
                                         {
-                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_result_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         }
 				}
 			}
-			if (0 != rc || (0 == rc && z > 1))
+			if (0 == rc && z > 1)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited after %u attempts with rc: %d\n", z, rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode update_result_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited after %u attempts with rc: %d\n", z, rc);
+			}
+			if (0 != rc )
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_result_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited with rc: %d\n", rc);
 			}
 
 			time_t scanstart = time(NULL);
@@ -2157,6 +2427,7 @@ int main(void)
 				return(EXIT_SUCCESS); // new
 			}
 
+			#if (CLIENTDEBUG >1)
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
@@ -2171,13 +2442,12 @@ int main(void)
                         }
                         else
                         {
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (init) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
-                                #endif
                         }
+			#endif
 
 			// Put out a dummy page to keep the webserver happy
 			// Creating this page will take the entire duration of the scan ...
@@ -2209,6 +2479,7 @@ int main(void)
 			// Only include this section if ping is compiled in ...
 			#if (IPSCAN_INCLUDE_PING == 1)
 			int pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, &indirecthost[0] );
+
 			// Ensure the indirecthost returned is valid
                         // NOTE: this validation may require adjustment if the declaration of indirecthost changes
 			int ih_adjusted = 0;
@@ -2234,14 +2505,15 @@ int main(void)
 
                         }
 
-			int result = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
+			int directresult = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			#if (0 < IPSCAN_LOGVERBOSITY)
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",saferemoteaddrstring,\
-					pingresult, resultsstruct[result].label, indirecthost);
+					pingresult, resultsstruct[directresult].label, indirecthost);
 			#else
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of remote address : %s\n", saferemoteaddrstring);
 			#endif
-			portsstats[result]++ ;
+			portsstats[directresult]++ ;
+
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			rc = -1;
 			uint64_t write_ping_result = (uint64_t)pingresult;
@@ -2273,6 +2545,7 @@ int main(void)
 			}
 			#endif
 
+			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
@@ -2295,13 +2568,12 @@ int main(void)
 			}
                         else
                         {
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after ping) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
-                                #endif
                         }
+			#endif
 			// Only included if UDP is compiled in ...
 			#if (IPSCAN_INCLUDE_UDP == 1)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d UDP ports on remote address : %s\n", numudpports, saferemoteaddrstring );
@@ -2343,6 +2615,7 @@ int main(void)
 			}
 			#endif
 
+			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
@@ -2365,13 +2638,12 @@ int main(void)
 			}
                         else
                         {
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after UDP) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
-                                #endif
                         }
+			#endif
 
 			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning scan of %d TCP ports on remote address : %s\n", numports, saferemoteaddrstring); 
 
@@ -2409,7 +2681,7 @@ int main(void)
 					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: INFO: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
-
+			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
                         num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
 			if (num_rows < 0)
@@ -2432,13 +2704,12 @@ int main(void)
 			}
                         else
                         {
-				#ifdef CLIENTDEBUG
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (after TCP) returned rows: %d, %s querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
-                                #endif
                         }
+			#endif
 
 			// Only included if UDP is compiled in ...
 			#if (IPSCAN_INCLUDE_UDP == 1)
@@ -2447,14 +2718,45 @@ int main(void)
 			{
 				uint16_t port = udpportlist[portindex].port_num;
 				uint8_t special = udpportlist[portindex].special;
-				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-					(uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ) );
+				char tempindhost[INET6_ADDRSTRLEN+1];
+// HERE6
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				int result = -1;
+				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
+				{
+					result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+					(uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ),\
+					tempindhost );
+					if (result < 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for UDP stats port %u returned: %d\n", port, result);
+						// Wait to improve chances of missing a database deadlock
+						struct timespec rem;
+       	                                	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+       	                                	int rc2 = nanosleep( &req, &rem);
+       	                                	if (0 != rc2)
+       	                                	{
+       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread UDP stats returned %d(%s)\n", rc2, strerror(errno) );
+       	                                	}
+					}
+				}
+				if (0 <= result && z > 1)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result UDP stats loop exited after %u attempts with result: %d\n", z, result);
+				}
 				if (0 > result)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript UDP stats read_db_result() returned bad value: %d\n", result );
-					result = PORTUNKNOWN;
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result UDP stats loop exited after %u attempts with result: %d\n", z, result);
 				}
-				if ( PORTUNKNOWN == result )
+// HERE6 END
+				directresult = (result >= IPSCAN_INDIRECT_RESPONSE) ? (result - IPSCAN_INDIRECT_RESPONSE) : result ;
+				if (0 > directresult)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript UDP stats read_db_result() returned bad value: %d\n", directresult );
+					directresult = PORTUNKNOWN;
+				}
+				if ( PORTUNKNOWN == directresult )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result() returned UNKNOWN: UDP creating stats\n" );
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
@@ -2463,30 +2765,30 @@ int main(void)
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
-				while (i < NUMRESULTTYPES && resultsstruct[i].returnval != result) i++;
-				if (result == resultsstruct[i].returnval)
+				while (i < NUMRESULTTYPES && resultsstruct[i].returnval != directresult) i++;
+				if (directresult == resultsstruct[i].returnval)
 				{
-					portsstats[result]++ ;
+					portsstats[directresult]++ ;
 				}
 				else
 				{
 					if (0 != special)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: scan of UDP port %d:%d returned : %d\n", port, special, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: scan of UDP port %d:%d returned : %d\n", port, special, directresult);
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: scan of UDP port %d returned : %d\n", port, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: scan of UDP port %d returned : %d\n", port, directresult);
 					}
 					portsstats[PORTUNKNOWN]++;
 				}
 
 				#ifdef UDPDEBUGOPEN
-				if (0 != special && UDPOPEN == result)
+				if (0 != special && UDPOPEN == directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: scan of UDP port %d:%d returned : UDPOPEN\n", port, special);
 				}
-				else if (0 == special && UDPOPEN == result)
+				else if (0 == special && UDPOPEN == directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: scan of UDP port %d returned : UDPOPEN\n", port);
 				}
@@ -2498,17 +2800,47 @@ int main(void)
 			{
 				uint16_t port = portlist[portindex].port_num;
 				uint8_t special = portlist[portindex].special;
-				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-				 (uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ));
+				char tempindhost[INET6_ADDRSTRLEN+1];
+// HERE7
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				int result = -1;
+				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
+				{
+					result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
+				 	(uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ), tempindhost);
+					if (result < 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for TCP stats port %u returned: %d\n", port, result);
+						// Wait to improve chances of missing a database deadlock
+						struct timespec rem;
+       	                                	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+       	                                	int rc2 = nanosleep( &req, &rem);
+       	                                	if (0 != rc2)
+       	                                	{
+       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread TCP stats returned %d(%s)\n", rc2, strerror(errno) );
+       	                                	}
+					}
+				}
+				if (0 <= result && z > 1)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result TCP stats loop exited after %u attempts with result: %d\n", z, result);
+				}
 				if (0 > result)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript TCP stats read_db_result() returned bad value: %d\n", result );
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result TCP stats loop exited after %u attempts with result: %d\n", z, result);
+				}
+// HERE7 END
+				directresult = (result >= IPSCAN_INDIRECT_RESPONSE) ? (result - IPSCAN_INDIRECT_RESPONSE) : result ;
+				if (0 > directresult)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript TCP stats read_db_result() returned bad value: %d\n", directresult );
 					// Calculate and report time-difference
                                 	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
                                        		 	saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
-					result = PORTUNKNOWN;
+					directresult = PORTUNKNOWN;
 				}
-				if ( PORTUNKNOWN == result )
+				if ( PORTUNKNOWN == directresult )
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: TCP creating stats\n" );
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
@@ -2517,30 +2849,30 @@ int main(void)
 
 				// Find a matching returnval, or else flag it as unknown
 				i = 0 ;
-				while (i < NUMRESULTTYPES && resultsstruct[i].returnval != result) i++;
-				if (result == resultsstruct[i].returnval)
+				while (i < NUMRESULTTYPES && resultsstruct[i].returnval != directresult) i++;
+				if (directresult == resultsstruct[i].returnval)
 				{
-					portsstats[result]++ ;
+					portsstats[directresult]++ ;
 				}
 				else
 				{
 					if (0 != special)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: scan of TCP port %d:%d returned : %d\n", port, special, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: scan of TCP port %d:%d returned : %d\n", port, special, directresult);
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: scan of TCP port %d returned : %d\n", port, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: scan of TCP port %d returned : %d\n", port, directresult);
 					}
 					portsstats[PORTUNKNOWN]++;
 				}
 
 				#ifdef TCPDEBUGOPEN
-				if (0 != special && PORTOPEN == result)
+				if (0 != special && PORTOPEN == directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: scan of TCP port %d:%d returned : PORTOPEN\n", port, special);
 				}
-				else if (0 == special && PORTOPEN == result)
+				else if (0 == special && PORTOPEN == directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: scan of TCP port %d returned : PORTOPEN\n", port);
 				}
@@ -2558,9 +2890,9 @@ int main(void)
 			time_t scancomplete = time(NULL);
 			if (scancomplete < 0)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for scancomplete %d (%s)\n", errno, strerror(errno));
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for javascript scancomplete %d (%s)\n", errno, strerror(errno));
 			}
-			IPSCAN_LOG( LOGPREFIX "ipscan: port scan and HTML document generation took %d seconds\n", (int)(scancomplete - scanstart));
+			IPSCAN_LOG( LOGPREFIX "ipscan: javascript port scan and HTML document generation took %d seconds\n", (int)(scancomplete - scanstart));
 			#endif
 
 			// Log the summary of results internally
@@ -2619,8 +2951,36 @@ int main(void)
 			//
 			while (deletenowtime < timeouttime && client_finished == 0)
 			{
-				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
-						 IPSCAN_TESTSTATE_AS_PORTNUM );
+				char tempindhost[INET6_ADDRSTRLEN+1];
+// HERE8
+				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+				rc = -1;
+				int result = -1;
+				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
+				{
+					result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, tempindhost );
+					if (result < 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for test complete returned: %d\n", result);
+						// Wait to improve chances of missing a database deadlock
+						struct timespec rem;
+       	                                	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+       	                                	int rc2 = nanosleep( &req, &rem);
+       	                                	if (0 != rc2)
+       	                                	{
+       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread test complete returned %d(%s)\n", rc2, strerror(errno) );
+       	                                	}
+					}
+				}
+				if (0 <= result && z > 1)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result test complete exited after %u attempts with result: %d\n", z, result);
+				}
+				if (0 > result)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result test complete exited after %u attempts with result: %d\n", z, result);
+				}
+// HERE8 END
 				if (0 > result)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript waiting read_db_result() returned bad value: %d\n", result);
@@ -2668,7 +3028,7 @@ int main(void)
 				deletenowtime = time(NULL);
 				if (deletenowtime < 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for deletenowtime %d (%s)\n", errno, strerror(errno));
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for deletenowtime update: %d (%s)\n", errno, strerror(errno));
 					deletenowtime = timeouttime;
 				}
 			} // end of wait for client to signal test complete or timeout
@@ -2726,9 +3086,13 @@ int main(void)
                                         	}
 					}
 				}
-				if (0 != rc || (0 == rc && z>1))
+				if (0 == rc && z>1)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-only delete_from_db loop exited after %u attempts with rc: %d\n", z, rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-only delete_from_db loop exited after %u attempts with rc: %d\n", z, rc);
+				}
+				if (0 != rc)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-only delete_from_db loop exited with rc: %d\n", rc);
 				}
 			}
 		}
@@ -2761,9 +3125,10 @@ int main(void)
 			// Create the main html body
 			create_html_body_end();
 		}
+		// return the client's IPv6 address
 		else if ( numqueries == 3 && beginscan == 0 && fetch == 0 && ipv6addrquery == 1 && termsaccepted == 1 && addrfetch == 1 )
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: Client address fetch, returning address %s, addrfetchnum = %d\n", saferemoteaddrstring, addrfetchnum);
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: client address fetch, returning address %s, addrfetchnum = %d\n", saferemoteaddrstring, addrfetchnum);
 			// report full IPv6 address in json array format
 			create_json_header();
 			printf("[ \"%s\" ]\n",remoteaddrstring);
@@ -2857,20 +3222,24 @@ int main(void)
 		rc = tidy_up_db(IPSCAN_DELETE_EVERYTHING);
 		if (0 != rc)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) attempt %u returned %d\n", (z+1), rc);
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) attempt %u returned %d\n", (z+1), rc);
 			// Wait to improve chances of missing a database deadlock
 			struct timespec rem;
                         const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
                         int rc2 = nanosleep( &req, &rem);
                         if (0 != rc2)
                         {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                         }
 		}
 	}
-	if (0 != rc || (0 == rc && z>1))
+	if (0 != rc)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) loop exited after %u attempts with rc: %d\n", z, rc);
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) loop exited with rc: %d\n", rc);
+	}
+	if (0 == rc && z>1)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) loop exited after %u attempts with rc: %d\n", z, rc);
 	}
 	#endif
 	// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
@@ -2881,20 +3250,24 @@ int main(void)
 		rc = tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY);
 		if (0 != rc)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) attempt %u returned %d\n", (z+1), rc);
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) attempt %u returned %d\n", (z+1), rc);
 			// Wait to improve chances of missing a database deadlock
 			struct timespec rem;
                         const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
                         int rc2 = nanosleep( &req, &rem);
                         if (0 != rc2)
                         {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                         }
 		}
 	}
-	if (0 != rc || (0 == rc && z>1))
+	if (0 != rc)
 	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited after %u attempts with rc: %d\n", z, rc);
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited with rc: %d\n", rc);
+	}
+	if ((0 == rc && z>1))
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited after %u attempts with rc: %d\n", z, rc);
 	}
 	return(EXIT_SUCCESS);
 }

@@ -1,6 +1,6 @@
 //    IPscan - an HTTP-initiated IPv6 port scanner.
 //
-//    Copyright (C) 2011-2025 Tim Chappell.
+//    Copyright (C) 2011-2026 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -19,6 +19,9 @@
 
 #include <stdlib.h>
 #include <inttypes.h>
+// addition for pseudo-header structure
+#include <netinet/in.h>
+#include <linux/netfilter.h>
 
 #ifndef IPSCAN_H
 	#define IPSCAN_H 1
@@ -201,9 +204,10 @@
 	// 1.96 increase FETCHEVERY to 6s
 	// 1.97 add a server timestamp to the database to fix an issue with client timestamps being wrong/offset
 	//      A database update is mandatory - see README.md for details.
+	// 2.00 additional ICMPv6 types and first raw socket implementation
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "1.97"
+	#define IPSCAN_VERNUM "2.00"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -227,8 +231,9 @@
 	// ipscan.h version (separate from overall IPscan version (IPSCAN_VER)
 	// 0.01	- initial version when separated from IPSCAN_VER
 	// 0.02	- introduce IPSCAN_TEST_CLIENT_ADDRCHANGE - for testing only
+	// 1.00 - first version supporting raw sockets
 	//
-	#define IPSCAN_H_VER "0.02"
+	#define IPSCAN_H_VER "1.00"
 	//
 	//
 
@@ -253,11 +258,6 @@
 
 	// URL providing description special protocol tests
 	#define IPSCAN_SPECIALTESTS_URL "https://wiki.chappell-family.com/wiki/index.php?title=IPv6_SpecialTests"
-
-	// Interface name on which the test server listens
-	// Note this is only used to determine the IPv6 address inserted in MPLS LSP Ping packets
-	// and the Link-local address sent in DHCPv6 requests.
-	#define IPSCAN_INTERFACE_NAME "eth0"
 
 	// MySQL database-related globals
 	#define MYSQL_HOST "localhost"
@@ -321,6 +321,12 @@
 		// #define DBDEBUG 1
 	#endif
 	//
+	// Dump first 16 bytes of packets to support BPF debug
+	// #define IPSCAN_BPF_DEBUG 1
+	//
+	// Privilege escalation/de-escalation debug
+	// #define IPSCAN_PRIV_DEBUG 1
+	//
 	// database (NOT port scan results) related debug:
 	// #define DBDEBUG 1
 	//
@@ -335,6 +341,9 @@
 	//
 	// UDP checks related debug:
 	// #define UDPDEBUG 1
+	//
+	// TCP checks related debug:
+	// #define TCPDEBUG 1
 	//
 	// UDP Parallel processing related debug:
 	// #define UDPPARLLDEBUG 1
@@ -389,6 +398,9 @@
 
 	// Magic number requesting the client IPv6 address
 	#define MAGICIP6QUERY 456789
+
+	// Magic number for session init
+	#define MAGICINITSESSION 234567
 
 	// Maximum number of ports to be tested - this should exceed the sum of the default port list
 	// and the allowed user-defined ports
@@ -525,7 +537,7 @@
 	// Determine the maximum number of port scans that can be allocated to each child
 	#if (FAST == 1)
 		#define MAXCHILDREN 7
-		#define MAXPORTSPERCHILD 9
+		#define MAXPORTSPERCHILD 12
 	#else
 		#define MAXCHILDREN 1
 		#define MAXPORTSPERCHILD 9
@@ -535,8 +547,8 @@
 	// UDP port scans that can be running in parallel
 	// Determine the maximum number of UDP port scans that can be allocated to each child
 	#if (FAST == 1)
-		#define MAXUDPCHILDREN 3
-		#define MAXUDPPORTSPERCHILD 3
+		#define MAXUDPCHILDREN 4
+		#define MAXUDPPORTSPERCHILD 4
 	#else
 		#define MAXUDPCHILDREN 1
 		#define MAXUDPPORTSPERCHILD 9
@@ -551,7 +563,7 @@
 	// results into/out of the database. Currently queries are slightly in excess of 250 characters.
 	#define MAXDBQUERYSIZE 512
 
-	// Timeout for port response (in seconds)
+	// Timeout for TCP port response (in seconds)
 	#define TIMEOUTSECS 1
 	#define TIMEOUTMICROSECS 20000
 
@@ -633,9 +645,8 @@
 	#define IPSCAN_PROTO_TESTSTATE (4)
 	#define IPSCAN_PROTO_SIGNALLING (8)
 
-	// Define value of portnum used to hold TESTSTATE and SIGNALLING 
+	// Define value of portnum used to hold TESTSTATE
 	#define IPSCAN_TESTSTATE_AS_PORTNUM ((uint64_t)(0 + (IPSCAN_PROTO_TESTSTATE << IPSCAN_PROTO_SHIFT)))
-	#define IPSCAN_SIGNALLING_AS_PORTNUM ((uint64_t)(0 + (IPSCAN_PROTO_SIGNALLING << IPSCAN_PROTO_SHIFT)))
 
 	// Maximum length of string holding protocol name
 	#define IPSCAN_PROTO_STRING_MAX (16)
@@ -647,14 +658,14 @@
 	#define IPSCAN_RESULT_STRING_MAX (32)
 
 	// Maximum time we allow the javascript client to complete the test
-	#define IPSCAN_CLIENT_MAX_TIME_SECS 240
+	#define IPSCAN_CLIENT_MAX_TIME_SECS 300
 
 	// Timeout before results are deleted ...
 	// Should significantly exceed maximum test duration
-	#define IPSCAN_DELETE_TIMEOUT (300)
+	#define IPSCAN_DELETE_TIMEOUT (360)
 
 	// Sleep time between polls when waiting to delete results
-	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (30)
+	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (5)
 
 	// Time to wait before deleting database entries
 	// Should exceed time for multiple JSON fetches and sleep period
@@ -725,6 +736,7 @@
 	#define IPSCAN_TESTSTATE_BADCOMPLETE_BIT (4096)
 	#define IPSCAN_TESTSTATE_DATABASE_ERROR_BIT (8192)
 	#define IPSCAN_TESTSTATE_CLIENT_ADDRCHANGE_BIT (16384)
+	#define IPSCAN_TESTSTATE_INIT_BIT (32768)
 
 	//
 	// Size of buffer holding the flag textual descriptions
@@ -740,16 +752,17 @@
 	enum PORTSTATE
 	{
 		PORTOPEN = 0,
-		PORTABORT,
-		PORTREFUSED,
-		PORTCRESET,
-		PORTNRESET,
+ 		PORTREFUSED,
 		PORTINPROGRESS,
 		PORTPROHIBITED,
 		PORTUNREACHABLE,
 		PORTNOROUTE,
 		PORTPKTTOOBIG,
 		PORTPARAMPROB,
+		PORTTIMEEXCEEDED,
+		PORTREJECTROUTE,
+		PORTFAILEDPOLICY,
+		PORTBEYONDSCOPE,
 		ECHONOREPLY,
 		ECHOREPLY,
 		/* Addition for UDP port respond/doesn't */
@@ -795,6 +808,20 @@
 		uint16_t port_num;
 		uint8_t special;
 		char port_desc[PORTDESCSIZE];
+	};
+
+	//
+	// RAW socket related info
+	//
+	#ifndef IP_MAXPACKET
+	#define IP_MAXPACKET 65535
+	#endif
+
+	// Pseudo-header for raw socket checksum calculation
+	struct pseudo_hdr {
+    		struct in6_addr src, dst;
+    		uint32_t len;
+    		uint8_t zero[3], next_hdr;
 	};
 
 	// End of defines
