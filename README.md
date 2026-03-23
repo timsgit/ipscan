@@ -51,8 +51,7 @@ versions 1.97 and later. See step 4 below for details.
     2.  edit ipscan.h and adjust *at least* the following entries:
          a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will be world-accessible
          b. INCLUDETERMSOFUSE and TERMSOFUSEURL if you wish to reference a terms of use page on your website.
-         c. IPSCAN_INTERFACE_NAME - modify this to match the server's interface to which clients will browse.  
-         d. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
+         c. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
                            MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
                            MYSQL_USER - the username used to access the IPscan database.
                            MYSQL_PASSWD - the password used to identify the MySQL user.
