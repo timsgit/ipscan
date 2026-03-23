@@ -174,7 +174,6 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 
 	// set return value to a known default
 	int retval = PORTUNKNOWN;
-	// int expected_packet = -1; // set to 0 if received packet mismatches, 1 if matches
 	int indirect = 0; // default - direct response
 	struct in6_addr destaddr;
 	struct icmp6_filter myfilter;
