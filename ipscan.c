@@ -351,7 +351,6 @@ int main(void)
 	// IPv6 address related
 	unsigned char remotehost[sizeof(struct in6_addr)];
 
-// TJC 	uint64_t value;
 	uint64_t remotehost_msb = 0ULL;
 	uint64_t remotehost_lsb = 0ULL;
 
