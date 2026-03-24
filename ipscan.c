@@ -279,8 +279,10 @@ int main(void)
 	#else
 	// fetchnums are only used in javascript-only mode
 	int fetchnum = 0;
+	#ifdef CLIENTDEBUG
 	// Client IPv6 address fetchnum
 	int addrfetchnum = 0;
+	#endif
 	#endif
 
 	// List of ports to be tested and their results
@@ -1031,7 +1033,9 @@ int main(void)
 		{
 			addrfetch = (query[i].varval >0) ? 1 : 0;
 			#if (TEXTMODE != 1)
+			#ifdef CLIENTDEBUG
 			if (1 == addrfetch && (int)(query[i].varval < 4096)) addrfetchnum = (int)query[i].varval;
+			#endif
 			#endif
 		}
 
@@ -1906,8 +1910,10 @@ int main(void)
                         }  
                         else
                         {
+				#ifdef CLIENTDEBUG
                                 IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
                                         saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
+				#endif
                         }
 			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
@@ -3127,7 +3133,9 @@ int main(void)
 		// return the client's IPv6 address
 		else if ( numqueries == 3 && beginscan == 0 && fetch == 0 && ipv6addrquery == 1 && termsaccepted == 1 && addrfetch == 1 )
 		{
+			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: client address fetch, returning address %s, addrfetchnum = %d\n", saferemoteaddrstring, addrfetchnum);
+			#endif
 			// report full IPv6 address in json array format
 			create_json_header();
 			printf("[ \"%s\" ]\n",remoteaddrstring);
