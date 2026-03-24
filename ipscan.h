@@ -316,9 +316,9 @@
 	//
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
-		// #define IPSCAN_LOGVERBOSITY 3
-		// #define CLIENTDEBUG 1
-		// #define DBDEBUG 1
+		#define IPSCAN_LOGVERBOSITY 3
+		#define CLIENTDEBUG 1
+		#define DBDEBUG 1
 	#endif
 	//
 	// Dump first 16 bytes of packets to support BPF debug

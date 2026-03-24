@@ -120,9 +120,10 @@
 // 0.97 - update copyright year
 // 1.00 - additional ICMPv6 response types and raw socket approach
 // 1.01 - add INDIRECT reporting for text-mode TCP and UDP
+// 1.02 - minor logging improvements
 
 //
-#define IPSCAN_MAIN_VER "1.00"
+#define IPSCAN_MAIN_VER "1.01"
 //
 
 #include "ipscan.h"
