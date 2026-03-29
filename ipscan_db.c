@@ -95,9 +95,10 @@
 // 0.74 - remove indirecthost from update_db and rename it to update_result_db to more accurately reflect what it does
 // 0.75 - update copyright year
 // 1.00 - various updates related to raw sockets version (indirect host capture/reporting)
+// 1.01 - change to reporting in case of database error
 
 //
-#define IPSCAN_DB_VER "1.00"
+#define IPSCAN_DB_VER "1.01"
 //
 
 #include "ipscan.h"
@@ -636,9 +637,9 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							{
 								// default  - in case TESTSTATE was missing from database
 								port = IPSCAN_TESTSTATE_AS_PORTNUM; 
-								res =  (uint32_t)(IPSCAN_TESTSTATE_DATABASE_ERROR_BIT);
+								res =  (uint32_t)(IPSCAN_TESTSTATE_COMPLETE_BIT);
 								printf("%u, %u, \"%s\", ", port, res, "::1");
-								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: TESTSTATE missing, so reported IPSCAN_TESTSTATE_DATABASE_ERROR_BIT to client.\n");
+								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: TESTSTATE missing, so reported IPSCAN_TESTSTATE_COMPLETE_BIT to client.\n");
 								dumped_running_state = 1;
 								retval = 96;
 							}
@@ -1229,7 +1230,7 @@ int tidy_up_db(int8_t deleteall)
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: LOCK TABLES failed, returned %d\n", rc);
+						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: INFO: LOCK TABLES failed, returned %d\n", rc);
 						retval = 492;
 					}
 				}

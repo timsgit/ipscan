@@ -97,8 +97,9 @@
 // 0.76 - update copyright year
 // 1.00 - add indirect flagging for TCP ports
 // 1.01 - clear query string parameters when forcing a hard reload
+// 1.02 - further changes to hard reload functionality
 
-#define IPSCAN_WEB_VER "1.01"
+#define IPSCAN_WEB_VER "1.02"
 
 #include "ipscan.h"
 
@@ -248,6 +249,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" let myBlink = 0;");
 	printf(" let myHTTPTimeout;");
 	printf(" let fetches = 0;");
+	printf(" let myTabId = -1;");
 	// myTimeStamp becomes the starttime query parameter
 	printf(" let myTimeStamp = -1;");
 	// mySession becomes the session query parameter - multiple runs on the same browser should be unique
@@ -269,6 +271,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// set globals to their default values - in case main() is called again
 	//
 	printf(" myInterval = 0;");
+	printf(" myTabId = 0;");
 	printf(" myBlink = 0;");
 	printf(" fetches = 0;");
 	printf(" myTimeStamp = -1;");
@@ -298,7 +301,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	// (2) initialise the session parameters
 	//
-	printf(" const myTabId = getUniqueTabId();");
+	printf(" myTabId = getUniqueTabId();");
         // myTimeStamp becomes the starttime query parameter
         printf(" myTimeStamp = sessionStorage.getItem(\"TimeStamp\");");
         // mySession becomes the session query parameter - multiple runs on the same browser should each be unique
@@ -413,12 +416,9 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// Update the browser's address bar without reloading
 	printf(" window.history.replaceState({}, '', url);");
 	printf(" window.location.href = url;");
-	// Add a unique query parameter to the current URL
-	// was printf(" const currentHref = window.location.href.split('?')[0];");
-	printf(" const currentHref = window.location.href;");
-	printf(" const newHref = currentHref + '?nocache=' + new Date().getTime();");
-	// Assign the new URL to force a navigation and fresh request
-	printf(" window.location.href = newHref;");
+	// Reload the page, enforcing no-cache, whilst also clearing the session storage
+	printf(" fetch(window.location.href, { cache: \"no-store\", credentials: \"include\" })");
+	printf(" .finally(() => { sessionStorage.clear(); window.location.replace(window.location.pathname + window.location.search); });");
 	printf(" }\n");
 
 	// function to report a HTTP transfer timed out
