@@ -121,9 +121,10 @@
 // 1.00 - additional ICMPv6 response types and raw socket approach
 // 1.01 - add INDIRECT reporting for text-mode TCP and UDP
 // 1.02 - minor logging improvements
+// 1.03 - NAVAWAY no longer completes the test - just sets the flag
 
 //
-#define IPSCAN_MAIN_VER "1.01"
+#define IPSCAN_MAIN_VER "1.03"
 //
 
 #include "ipscan.h"
@@ -2056,8 +2057,7 @@ int main(void)
 				}
 				else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 				{
-					// Mark test as complete, noting that it ended because client navigated away
-					result = IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT; 
+					result |= IPSCAN_TESTSTATE_NAVAWAY_BIT; 
 				}
 				else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
 				{
