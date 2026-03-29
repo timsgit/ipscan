@@ -96,9 +96,10 @@
 // 0.75 - update copyright year
 // 1.00 - various updates related to raw sockets version (indirect host capture/reporting)
 // 1.01 - change to reporting in case of database error
+// 1.02 - various code improvements
 
 //
-#define IPSCAN_DB_VER "1.01"
+#define IPSCAN_DB_VER "1.02"
 //
 
 #include "ipscan.h"
@@ -230,13 +231,15 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				// Use the default engine - sensitive data may persist until next tidy_up_db() call
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY `mykey` (hostmsb,hostlsb,createdate,session,portnum) ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 				// retval defaults to -1, and is set to positive values if an error condition occurs
-				if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval guaranteed to be -1 at this point, so removed from if
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
-						if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						// guaranteed that (retval < 0) at this point, so no need to check
+						if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 							if (0 != rc)
@@ -753,7 +756,8 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
 				// retval defaults to 0, set to positive values if an error condition occurs
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval must be 0 at this point, so not checked in this if
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1214,7 +1218,8 @@ int tidy_up_db(int8_t deleteall)
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
 				// retval defaults to 0, set to non-0 for error conditions
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval must be 0 at this point, so removed from if
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1618,7 +1623,8 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
 				// retval defaults to 0, set to negative value for error condition
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval guaranteed to be 0 at this point, so removed from if
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
@@ -1800,7 +1806,8 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 				char query[MAXDBQUERYSIZE];
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SET AUTOCOMMIT=0");
 				// retval defaults to 0, set to negative values for error conditions
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				// retval must be 0 at this point, so removed from if
+				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 != rc)
