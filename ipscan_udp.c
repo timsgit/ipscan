@@ -59,9 +59,10 @@
 // 1.00			add raw sockets functionality
 // 1.01			update while() loop with continues
 // 1.02			add raw socket BPF filter to reduce userland processing
+// 1.03			add UDP SIP OPTIONS packet generator
 
 //
-#define IPSCAN_UDP_VER "1.02"
+#define IPSCAN_UDP_VER "1.03"
 //
 
 #include "ipscan.h"
@@ -2063,6 +2064,167 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			txmessage[len++] = 0;
 			txmessage[len++] = 0;
 
+			break;
+		}
+
+		case 5060: // SIP
+		{
+			// https://www.ietf.org/rfc/rfc3261.txt section 11.1
+   			// A Contact header field MAY be present in an OPTIONS.
+			//
+			// An Accept header field SHOULD be included to indicate the type of
+			// message body the UAC wishes to receive in the response.  Typically,
+			// this is set to a format that is used to describe the media
+			// capabilities of a UA, such as SDP (application/sdp).
+			//
+			// The response to an OPTIONS request is assumed to be scoped to the
+			// Request-URI in the original request.  However, only when an OPTIONS
+			// is sent as part of an established dialog is it guaranteed that future
+			// requests will be received by the server that generated the OPTIONS
+			// response.
+			//
+			// Example OPTIONS request:
+			//
+			// OPTIONS sip:carol@chicago.com SIP/2.0
+			// Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bKhjhs8ass877
+			// Max-Forwards: 70
+			// To: <sip:carol@chicago.com>
+			// From: Alice <sip:alice@atlanta.com>;tag=1928301774
+			// Call-ID: a84b4c76e66710
+			// CSeq: 63104 OPTIONS
+			// Contact: <sip:alice@pc33.atlanta.com>
+			// Accept: application/sdp
+			// Content-Length: 0
+			//
+
+			len = 0;
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "OPTIONS sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x] SIP/2.0\n",\
+				dest_ip.s6_addr[0], dest_ip.s6_addr[1], dest_ip.s6_addr[2], dest_ip.s6_addr[3],\
+				dest_ip.s6_addr[4], dest_ip.s6_addr[5], dest_ip.s6_addr[6], dest_ip.s6_addr[7],\
+				dest_ip.s6_addr[8], dest_ip.s6_addr[9], dest_ip.s6_addr[10], dest_ip.s6_addr[11],\
+				dest_ip.s6_addr[12], dest_ip.s6_addr[13], dest_ip.s6_addr[14], dest_ip.s6_addr[15]);
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip options statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Via: SIP/2.0/UDP [%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x];branch=z9hG4bKtjc211401368n\n",\
+				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
+				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
+				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
+				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15]);
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip via statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Max-Forwards: 70\n");
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip forwards statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "To: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]>\n",\
+				dest_ip.s6_addr[0], dest_ip.s6_addr[1], dest_ip.s6_addr[2], dest_ip.s6_addr[3],\
+				dest_ip.s6_addr[4], dest_ip.s6_addr[5], dest_ip.s6_addr[6], dest_ip.s6_addr[7],\
+				dest_ip.s6_addr[8], dest_ip.s6_addr[9], dest_ip.s6_addr[10], dest_ip.s6_addr[11],\
+				dest_ip.s6_addr[12], dest_ip.s6_addr[13], dest_ip.s6_addr[14], dest_ip.s6_addr[15]);
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip to statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "From: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]>;tag=7269925901\n",\
+				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
+				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
+				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
+				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15]);
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip from statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Call-ID: ab%08x@%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n",\
+				get_random32(),\
+				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
+				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
+				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
+				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15]);
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip callid statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "CSeq: 21639 OPTIONS\n");
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip cseq statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Contact: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]>\n",\
+				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
+				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
+				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
+				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15]);
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip contact statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Accept: application/sdp\n");
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip accept statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			// Header terminated by empty line - so additional CRLF
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Content-Length: 0\n\r\n");
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip accept statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			
 			break;
 		}
 

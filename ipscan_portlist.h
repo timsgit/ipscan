@@ -45,9 +45,10 @@
 // 0.21 - const portlist structs
 // 0.22 - add MongoDB ports
 // 0.23 - update copyright year
+// 0.24 - add UDP SIP
 
 //
-#define IPSCAN_PORTLIST_VER "0.23"
+#define IPSCAN_PORTLIST_VER "0.24"
 //
 
 #include "ipscan.h"
@@ -164,6 +165,7 @@ const struct portlist_struc udpportlist[] =
 		{ 1900, 0, "UPnP SSDP" },\
 		{ 3503, 0, "MPLS LSP Ping" },\
 		{ 4500, 0, "IKEv2 NAT-T SA_INIT" },\
+		{ 5060, 0, "SIP" },\
 		{11211, 0, "memcache ASCII" },\
 		{11211, 1, "memcache binary" },\
 };

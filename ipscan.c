@@ -122,9 +122,10 @@
 // 1.01 - add INDIRECT reporting for text-mode TCP and UDP
 // 1.02 - minor logging improvements
 // 1.03 - NAVAWAY no longer completes the test - just sets the flag
+// 1.04 - removed setting of database error flag
 
 //
-#define IPSCAN_MAIN_VER "1.03"
+#define IPSCAN_MAIN_VER "1.04"
 //
 
 #include "ipscan.h"
@@ -1992,9 +1993,9 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned UNKNOWN: fetching running state\n" );
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at querystarttime %"PRIu64", querysession %"PRIu64"\n", querystarttime, querysession);
-				// Set state to running but flag that database returned something unexpected
-				write_result = (uint64_t)( IPSCAN_TESTSTATE_RUNNING_BIT | IPSCAN_TESTSTATE_DATABASE_ERROR_BIT );
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: running state changed to indicate DATABASE error\n" );
+				// Set teststate to complete
+				write_result = (uint64_t)( IPSCAN_TESTSTATE_COMPLETE_BIT );
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: running state changed to indicate COMPLETE\n" );
 				// Default for unused database entries
 				const char unusedfield[] = "unused";
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock

@@ -587,7 +587,7 @@
 	#define ICMPV6_MAGIC_VALUE2 ((unsigned int)12569)
 
 	// UDP buffer size
-	#define UDP_BUFFER_SIZE 512
+	#define UDP_BUFFER_SIZE 768
 
 	// UDP timeout (seconds) - needs to exceed UPnP/SSDP response request time (MX field) which is 1
 	#define UDPTIMEOUTSECS 2
