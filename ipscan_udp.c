@@ -2098,7 +2098,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			//
 
 			len = 0;
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "OPTIONS sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x] SIP/2.0\n",\
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "OPTIONS sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:5060 SIP/2.0\n",\
 				dest_ip.s6_addr[0], dest_ip.s6_addr[1], dest_ip.s6_addr[2], dest_ip.s6_addr[3],\
 				dest_ip.s6_addr[4], dest_ip.s6_addr[5], dest_ip.s6_addr[6], dest_ip.s6_addr[7],\
 				dest_ip.s6_addr[8], dest_ip.s6_addr[9], dest_ip.s6_addr[10], dest_ip.s6_addr[11],\
@@ -2112,11 +2112,12 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Via: SIP/2.0/UDP [%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x];branch=z9hG4bKtjc211401368n\n",\
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Via: SIP/2.0/UDP [%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u;branch=z9hG4bKtjc211401368n\n",\
 				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
 				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
 				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
-				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15]);
+				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15],\
+				my_tx_src_port);
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip via statement, returned %d\n", rc);
@@ -2136,7 +2137,22 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "To: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]>\n",\
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "From: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u>;tag=7269925901\n",\
+				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
+				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
+				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
+				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15],\
+				my_tx_src_port);
+			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
+			{
+				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip from statement, returned %d\n", rc);
+				retval = PORTINTERROR;
+			}
+			else
+			{
+				len += (unsigned int)rc;
+			}
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "To: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:5060>\n",\
 				dest_ip.s6_addr[0], dest_ip.s6_addr[1], dest_ip.s6_addr[2], dest_ip.s6_addr[3],\
 				dest_ip.s6_addr[4], dest_ip.s6_addr[5], dest_ip.s6_addr[6], dest_ip.s6_addr[7],\
 				dest_ip.s6_addr[8], dest_ip.s6_addr[9], dest_ip.s6_addr[10], dest_ip.s6_addr[11],\
@@ -2144,20 +2160,6 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip to statement, returned %d\n", rc);
-				retval = PORTINTERROR;
-			}
-			else
-			{
-				len += (unsigned int)rc;
-			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "From: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]>;tag=7269925901\n",\
-				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
-				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
-				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
-				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15]);
-			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
-			{
-				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip from statement, returned %d\n", rc);
 				retval = PORTINTERROR;
 			}
 			else
@@ -2179,7 +2181,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "CSeq: 21639 OPTIONS\n");
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "CSeq: 1 OPTIONS\n");
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip cseq statement, returned %d\n", rc);
@@ -2189,11 +2191,12 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Contact: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]>\n",\
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Contact: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u>\n",\
 				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
 				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
 				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
-				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15]);
+				my_tx_ipaddr.s6_addr[12], my_tx_ipaddr.s6_addr[13], my_tx_ipaddr.s6_addr[14], my_tx_ipaddr.s6_addr[15],\
+				my_tx_src_port);
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip contact statement, returned %d\n", rc);
@@ -2213,7 +2216,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			// Header terminated by empty line - so additional CRLF
+			// Header is terminated by empty line - so additional CRLF appended to this line
 			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Content-Length: 0\n\r\n");
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{

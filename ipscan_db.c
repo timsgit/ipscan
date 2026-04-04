@@ -97,9 +97,10 @@
 // 1.00 - various updates related to raw sockets version (indirect host capture/reporting)
 // 1.01 - change to reporting in case of database error
 // 1.02 - various code improvements
+// 1.03 - dump_db() returns RUNNING instead of COMPLETED
 
 //
-#define IPSCAN_DB_VER "1.02"
+#define IPSCAN_DB_VER "1.03"
 //
 
 #include "ipscan.h"
@@ -640,9 +641,9 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							{
 								// default  - in case TESTSTATE was missing from database
 								port = IPSCAN_TESTSTATE_AS_PORTNUM; 
-								res =  (uint32_t)(IPSCAN_TESTSTATE_COMPLETE_BIT);
+								res =  (uint32_t)(IPSCAN_TESTSTATE_RUNNING_BIT);
 								printf("%u, %u, \"%s\", ", port, res, "::1");
-								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: TESTSTATE missing, so reported IPSCAN_TESTSTATE_COMPLETE_BIT to client.\n");
+								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: TESTSTATE missing, so reported IPSCAN_TESTSTATE_RUNNING_BIT to client.\n");
 								dumped_running_state = 1;
 								retval = 96;
 							}

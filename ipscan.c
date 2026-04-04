@@ -1994,8 +1994,8 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at querystarttime %"PRIu64", querysession %"PRIu64"\n", querystarttime, querysession);
 				// Set teststate to complete
-				write_result = (uint64_t)( IPSCAN_TESTSTATE_COMPLETE_BIT );
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: running state changed to indicate COMPLETE\n" );
+				write_result = (uint64_t)( IPSCAN_TESTSTATE_RUNNING_BIT );
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: test state changed to indicate RUNNING\n" );
 				// Default for unused database entries
 				const char unusedfield[] = "unused";
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
