@@ -98,8 +98,9 @@
 // 1.00 - add indirect flagging for TCP ports
 // 1.01 - clear query string parameters when forcing a hard reload
 // 1.02 - further changes to hard reload functionality
+// 1.03 - yet more changes to hard reload functionality
 
-#define IPSCAN_WEB_VER "1.02"
+#define IPSCAN_WEB_VER "1.03"
 
 #include "ipscan.h"
 
@@ -260,6 +261,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" let myIpv6AddrFetchStart = -1;"); // logs the fetchnum that client's IPv6 address fetch began (-1 not started)
 	printf(" let myReloadDeclined = false;"); // flag - if true then a page reload  (test restart) has been offerred but declined - allow test to complete
 	printf(" let lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
+	printf(" const cleanUrl = window.location.protocol + \"//\" + window.location.host + window.location.pathname;");
 	printf(" let serverRunningState = -1;\n");
 
 	printf("function main()");
@@ -267,6 +269,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" \"use strict\";"); 
 	// Handler to emulate Date.now() for IE8 and earlier - but in all cases return seconds not milliseconds
 	printf(" Date.prototype.now = function() { return Math.floor(( typeof(Date.now) == \"function\" ? Date.now() : new Date().getTime())/1000); };");
+	//
+	// Remove query params without refreshing the page
+	//
+	printf(" window.history.replaceState({path: cleanUrl}, '', cleanUrl);");
 	//
 	// set globals to their default values - in case main() is called again
 	//
@@ -321,7 +327,13 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
         printf(" console.log('ERROR: myTimeStamp: ',myTimeStamp.toString());");
         printf(" console.log('ERROR: mySession  : ',mySession.toString());");
         #endif
-	printf(" forceHardReload();");
+	// Have one more go at settign up session parameters - previously called reload
+	printf(" mySession = -1n;");//BigInt
+	printf(" myTimeStamp = -1;");
+	printf(" sessionStorage.clear();");
+	printf(" myTabId = getUniqueTabId();");
+        printf(" myTimeStamp = sessionStorage.getItem(\"TimeStamp\");");
+        printf(" mySession = BigInt(sessionStorage.getItem(\"SessionNumber\"));");
 	printf(" }");
 
 	//
@@ -408,17 +420,18 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" return tabId;");
 	printf(" }");
 
+	// function to force page reload
 	printf(" function forceHardReload()");
 	printf(" {");
-	printf(" const url = new URL(window.location.href);");
-	// This effectively removes all querystring parameters
-	printf(" url.search = '';"); 
-	// Update the browser's address bar without reloading
-	printf(" window.history.replaceState({}, '', url);");
-	printf(" window.location.href = url;");
-	// Reload the page, enforcing no-cache, whilst also clearing the session storage
-	printf(" fetch(window.location.href, { cache: \"no-store\", credentials: \"include\" })");
-	printf(" .finally(() => { sessionStorage.clear(); window.location.replace(window.location.pathname + window.location.search); });");
+	// 1. clear persistent storage
+	printf(" localStorage.clear();");
+	printf(" sessionStorage.clear();");
+	// 2. Force hard reload via cache-busting URL - support added to ipscan.c
+	printf(" const cleanUrl = new URL(window.location.origin + window.location.pathname);");
+	printf(" cleanUrl.searchParams.set('reload', Date.now());"); // adds ?reload=<numeric-time>
+	// 3. replace() ensures the current "dirty" state isn't in the back-button history
+	// changing the window location causes the page reload
+	printf(" window.location.replace(cleanUrl.toString());");
 	printf(" }\n");
 
 	// function to report a HTTP transfer timed out

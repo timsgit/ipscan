@@ -170,7 +170,7 @@ const char* ipscan_udp_ver(void)
 	2. poll()
 	2b. if error then log, set retval and continue;
 	2c. else if (poll timeout) then retval = STEALTH/break; // we timed out and no response
-	3.  if (PROTO events && POLLIN && retval == PORTUNKNOWN) // UDP/TCP packet received
+	3.  if (PROTO events && POLLIN && retval == PORTUNKNOWN) // UDP packet received
 		while (retval == PORTUNKNOWN)
 		{
 			recvfrom (NONBLOCKING)
@@ -178,13 +178,9 @@ const char* ipscan_udp_ver(void)
 			check size exceeds minimum
 			check source address == DUT, report if not and continue;
 			check swapped src/dest ports match our transmission, report if not and continue;
-			[TCP] check ack sequence matches our (transmission+1), report if not and continue;
-			if all matches && TCP then check flags
-				ACK => OPEN
-				RST => REFUSED
 			if (all matches && UDP) then UDPOPEN
 		}
-	4. if (ICMPv6 event && POLLIN && retval == PORTUNKNOWN) // only look at ICMPv6 if we haven't had something valid in TCP/UDP socket
+	4. if (ICMPv6 event && POLLIN && retval == PORTUNKNOWN) // only look at ICMPv6 if we haven't had something valid in UDP socket
 		while (retval == PORTUNKNOWN)
 		{
 			indirect = 0; // direct
@@ -196,8 +192,7 @@ const char* ipscan_udp_ver(void)
 				else if (sa != DUT && sa != localhost && sa != localip) then log and set indirect = IPSCAN_INDIRECT_RESPONSE;
 				else not for us, so continue
 			check inner IPv6 source & destination addresses and NEXTHDR match our transmission, report if not and continue;
-			check inner TCP/UDP src/dest ports match our transmission, report if not and continue;
-			[TCP] check inner TCP sequence matches our transmission+1, report if not and continue;
+			check inner UDP src/dest ports match our transmission, report if not and continue;
 			set retval based on ICMPv6 type/code
 		}
 	}

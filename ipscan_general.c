@@ -356,22 +356,10 @@ void result_to_string(uint32_t result, char * retstring)
 	{
 		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "OPEN");
 	}
-//	else if (PORTABORT == result)
-//	{
-//		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ABORT");
-//	}
 	else if (PORTREFUSED == result)
 	{
 		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "REFUSED");
 	}
-//	else if (PORTCRESET == result)
-//	{
-//		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "CRESET");
-//	}
-//	else if (PORTNRESET == result)
-//	{
-//		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "NRESET");
-//	}
 	else if (PORTINPROGRESS == result)
 	{
 		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "IN-PROGRESS");

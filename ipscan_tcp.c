@@ -132,7 +132,7 @@ const char* ipscan_tcp_ver(void)
 	2. poll()
 	2b. if error then log, set retval and continue;
 	2c. else if (poll timeout) then retval = STEALTH/break; // we timed out and no reponse
-	3.  if (PROTO events && POLLIN && retval == PORTUNKNOWN) // UDP/TCP packet received
+	3.  if (PROTO events && POLLIN && retval == PORTUNKNOWN) // TCP packet received
 		while (retval == PORTUNKNOWN)
 		{
 			recvfrom (NONBLOCKING)
@@ -144,9 +144,8 @@ const char* ipscan_tcp_ver(void)
 			if all matches && TCP then check flags
 				ACK => OPEN
 				RST => REFUSED
-			if (all matches && UDP) then UDPOPEN
 		}
-	4. if (ICMPv6 event && POLLIN && retval == PORTUNKNOWN) // only look at ICMPv6 if we haven't had something valid in TCP/UDP socket
+	4. if (ICMPv6 event && POLLIN && retval == PORTUNKNOWN) // only look at ICMPv6 if we haven't had something valid in TCP socket
 		while (retval == PORTUNKNOWN)
 		{
 			indirect = 0; // direct
@@ -157,7 +156,7 @@ const char* ipscan_tcp_ver(void)
 				if (sa == DUT && inner packet matches) then indirect = 0
 				else if (sa != DUT && sa != localhost && sa != localip && inner packet matches) then log and set indirect = IPSCAN_INDIRECT_RESPONSE, record source address;
 			check inner IPv6 source & destination addresses and NEXTHDR match our transmission, report if not and continue;
-			check inner TCP/UDP src/dest ports match our transmission, report if not and continue;
+			check inner TCP src/dest ports match our transmission, report if not and continue;
 			[TCP] check inner TCP sequence matches our transmission+1, report if not and continue;
 			set retval based on ICMPv6 type/code
 		}
@@ -899,7 +898,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			uint16_t port = portlist[portindex+i].port_num;
 			uint8_t special = portlist[portindex+i].special;
 			char indirecthost[INET6_ADDRSTRLEN+1] = "::1\0"; 
-			#ifdef TCPDEBUG
+			#ifdef PARLLDEBUG
 			IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): DEBUG: portindex = %u, i = %u, port_num = %d, special = %d\n", portindex, i, portlist[portindex+i].port_num, portlist[portindex+i].special);
 			IPSCAN_LOG ( LOGPREFIX "check_tcp_ports_parll(): DEBUG: hostname = %s, port = %u, special = %u\n", hostname, port, special);
 			#endif

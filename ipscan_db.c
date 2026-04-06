@@ -268,6 +268,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 							#ifdef DBDEBUG
 							uint32_t proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
 							char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+							memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
 							#if (1 < IPSCAN_LOGVERBOSITY)
                         				// report host addresses as full 128-bit addresses
                         				bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
@@ -476,6 +477,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 
 					#ifdef DBDEBUG
                                         char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+					memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
                                         #if (1 < IPSCAN_LOGVERBOSITY)
                                         // report host addresses as full 128-bit addresses
                                         bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
@@ -796,6 +798,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 
 					#if (defined DBDEBUG || defined CLIENTDEBUG)
 					char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+					memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
                                         #if (1 < IPSCAN_LOGVERBOSITY)
                                         // report host addresses as full 128-bit addresses
                                         bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
@@ -909,6 +912,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	// calculate two forms of reportable host addresses - dependant on verbosity
 	//
 	char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+	memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
         #if (1 < IPSCAN_LOGVERBOSITY)
         // report host addresses as full 128-bit addresses
         bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
@@ -1440,6 +1444,7 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 						{
 							#ifdef DBDEBUG
 							char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+							memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
                                                         #if (1 < IPSCAN_LOGVERBOSITY)
                                                         // report host addresses as full 128-bit addresses
                                                         bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
@@ -1654,6 +1659,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 
 					#ifdef DBDEBUG
 					char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+					memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
                                         #if (1 < IPSCAN_LOGVERBOSITY)
                                         // report host addresses as full 128-bit addresses
                                         bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
@@ -1858,6 +1864,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 									{
 										uint64_t ui64_hostmsb, ui64_hostlsb, dbresult;
 										char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+										memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
 										int rchostmsb = sscanf(row[1], "%"SCNu64, &ui64_hostmsb);
 										int rchostlsb = sscanf(row[2], "%"SCNu64, &ui64_hostlsb);
 										int rcres = sscanf(row[6], "%"SCNu64, &dbresult);

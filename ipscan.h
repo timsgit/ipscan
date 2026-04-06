@@ -205,9 +205,10 @@
 	// 1.97 add a server timestamp to the database to fix an issue with client timestamps being wrong/offset
 	//      A database update is mandatory - see README.md for details.
 	// 2.00 additional ICMPv6 types and first raw socket implementation
+	// 2.01 add PORTINDIRECT reporting
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "2.00"
+	#define IPSCAN_VERNUM "2.01"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -319,6 +320,8 @@
 		#define IPSCAN_LOGVERBOSITY 3
 		#define CLIENTDEBUG 1
 		#define DBDEBUG 1
+		#define TCPDEBUG 1
+		#define UDPDEBUG 1
 	#endif
 	//
 	// Dump first 16 bytes of packets to support BPF debug
@@ -658,11 +661,11 @@
 	#define IPSCAN_RESULT_STRING_MAX (32)
 
 	// Maximum time we allow the javascript client to complete the test
-	#define IPSCAN_CLIENT_MAX_TIME_SECS 300
+	#define IPSCAN_CLIENT_MAX_TIME_SECS 240
 
 	// Timeout before results are deleted ...
 	// Should significantly exceed maximum test duration
-	#define IPSCAN_DELETE_TIMEOUT (360)
+	#define IPSCAN_DELETE_TIMEOUT (300)
 
 	// Sleep time between polls when waiting to delete results
 	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (5)
@@ -768,6 +771,8 @@
 		/* Addition for UDP port respond/doesn't */
 		UDPOPEN,
 		UDPSTEALTH,
+		/* INDIRECT responses */
+		PORTINDIRECT,
 		/* Unexpected and Unknown error response cases, do NOT change */
 		PORTUNEXPECTED,
 		PORTUNKNOWN,
