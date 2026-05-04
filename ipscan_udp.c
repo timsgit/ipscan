@@ -60,9 +60,10 @@
 // 1.01			update while() loop with continues
 // 1.02			add raw socket BPF filter to reduce userland processing
 // 1.03			add UDP SIP OPTIONS packet generator
+// 1.04			replace mention of DUT with HUT (Host Under Test) for consistency
 
 //
-#define IPSCAN_UDP_VER "1.03"
+#define IPSCAN_UDP_VER "1.04"
 //
 
 #include "ipscan.h"
@@ -176,7 +177,7 @@ const char* ipscan_udp_ver(void)
 			recvfrom (NONBLOCKING)
 			if error (EAGAIN or EWOULDBLOCK) then break; // this recvfrom is done - we've looked at all packets
 			check size exceeds minimum
-			check source address == DUT, report if not and continue;
+			check source address == HUT, report if not and continue;
 			check swapped src/dest ports match our transmission, report if not and continue;
 			if (all matches && UDP) then UDPOPEN
 		}
@@ -187,9 +188,9 @@ const char* ipscan_udp_ver(void)
 			recvfrom (NONBLOCKING)
 			if error (EAGAIN or EWOULDBLOCK) then break; // this recvfrom is done - we've looked at all packets
 			check size exceeds minimum
-			check ICMPv6 header source address == DUT && inner packet matches
-				if (sa == DUT) then indirect = 0
-				else if (sa != DUT && sa != localhost && sa != localip) then log and set indirect = IPSCAN_INDIRECT_RESPONSE;
+			check ICMPv6 header source address == HUT && inner packet matches
+				if (sa == HUT) then indirect = 0
+				else if (sa != HUT && sa != localhost && sa != localip) then log and set indirect = IPSCAN_INDIRECT_RESPONSE;
 				else not for us, so continue
 			check inner IPv6 source & destination addresses and NEXTHDR match our transmission, report if not and continue;
 			check inner UDP src/dest ports match our transmission, report if not and continue;
@@ -252,7 +253,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	local_sockaddr.sin6_addr = my_tx_ipaddr;
 	local_sockaddr.sin6_port = 0; // Must be 0 for raw sockets to avoid EINVAL
 
-	// Set to IPSCAN_INDIRECT_RESPONSE if another host responds on the DUT's behalf (e.g. a mid-point router or firewall)
+	// Set to IPSCAN_INDIRECT_RESPONSE if another host responds on the HUT's behalf (e.g. a mid-point router or firewall)
         int indirect = 0; // default - report as direct response. 
 
 	// struct for an ICMPv6 filter, so only wanted types are received
@@ -2541,7 +2542,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 								// Now we know response is from HUT then start checking the detail - reversed src/dst ports. UDP has no sequence
 								if ((ntohs(udphdr_ptr->source) == my_tx_dst_port) && (ntohs(udphdr_ptr->dest) == my_tx_src_port))
 								{
-									#ifdef UDPDEBUG
+									#ifdef UDPOPENDEBUG
 									IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 response packet for HUT %s dstport %u special %u UDP loopcount %u\n",\
 										hostname, my_tx_dst_port, special, udp_loopcount );
 									#endif
@@ -2665,7 +2666,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
                                        		        && IN6_ARE_ADDR_EQUAL(&local_sockaddr.sin6_addr, &rx_ipv6hdr_ptr->saddr) == 1 )\
                                        		        && (ntohs(rx_udphdr_ptr->source) == my_tx_src_port) && (ntohs(rx_udphdr_ptr->dest) == my_tx_dst_port) )
 						{
-							#ifdef UDPDEBUG
+							#ifdef MIDPOINTDEBUG
 							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: INDIRECT: Matching ICMPv6 response is NOT from HUT, potentially from another mid-point device: %s\n", rx_ip6addr_str);
 							#endif
 							indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)

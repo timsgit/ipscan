@@ -125,9 +125,10 @@
 // 1.04 - removed setting of database error flag
 // 1.05 - add reload query parameter to support bypassing browser cache when reloading page
 // 1.06 - add PORTINDIRECT reporting for test purposes
+// 1.07 - add additional PORT states for TCP connections
 
 //
-#define IPSCAN_MAIN_VER "1.06"
+#define IPSCAN_MAIN_VER "1.07"
 //
 
 #include "ipscan.h"
@@ -234,7 +235,7 @@ const struct rslt_struc resultsstruct[] =
 {
 		/* returnval,		connrc,	conn_errno	TEXT lbl			TEXT col	Description/User feedback	*/
 		{ PORTOPEN, 		0, 	0,		"OPEN", 			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
- 		{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 			"yellow",	"A connection refused indication (TCP RST/ACK) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+ 		{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 			"yellow",	"A TCP RST flag response was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
 		{ PORTINPROGRESS, 	-1, 	EINPROGRESS, 	"STLTH", 			"green",	"No response was received in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
 		{ PORTPROHIBITED, 	-1, 	EACCES, 	"ADMPHBTD", 			"yellow",	"An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
 		{ PORTUNREACHABLE, 	-1, 	ENETUNREACH, 	"PUNRCH", 			"yellow",	"A port unreachable response (ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
@@ -245,6 +246,8 @@ const struct rslt_struc resultsstruct[] =
 		{ PORTREJECTROUTE, 	-92,	-92,		"ROUTEREJECTED", 		"yellow",	"A Reject route to destination response (ICMPv6 type 1 code 6) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
 		{ PORTFAILEDPOLICY, 	-93,	-93,		"FAILEDPOLICY", 		"yellow",	"A Source address failed ingress or egress policy response (ICMPv6 type 1 code 5) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
 		{ PORTBEYONDSCOPE, 	-94,	-94,		"BEYONDSCOPE", 			"yellow",	"A Beyond scope of source address response (ICMPv6 type 1 code 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTALREADYOPN,	-89,	-89,		"ALREADYOPN",			"yellow",	"A TCP ACK flag response was received when attempting to open this port, suggesting the port is already open. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTSOFTCLOSE,	-88,	-88,		"SOFTCLOSE",			"yellow",	"A TCP FIN+ACK response was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
 		{ ECHONOREPLY, 		-96, 	-96,	 	"ECHO NO REPLY",		"green",	"No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
 		{ ECHOREPLY, 		-97, 	-97,	 	"ECHO REPLY", 			"yellow",	"An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
 		{ UDPOPEN,		-95,	-95,		"UDPOPEN",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
@@ -1818,7 +1821,7 @@ int main(void)
 					{
 						rc = snprintf(logbufferptr, logbuffersize, "Found %u %s",portsstats[i], "INDIRECT" );
 					}
-					else if (i > PORTINDIRECT) // PORTINDIRECT is missing from resultsstruct
+					else if (i > PORTINDIRECT) // PORTINDIRECT is missing from resultsstruct, so use label (i-1)
 					{
 						rc = snprintf(logbufferptr, logbuffersize, "Found %u %s",portsstats[i], resultsstruct[i-1].label );
 					}
@@ -1833,7 +1836,7 @@ int main(void)
 					{
 						rc = snprintf(logbufferptr, logbuffersize, ", %u %s",portsstats[i], "INDIRECT" );
 					}
-					else if (i > PORTINDIRECT) // PORTINDIRECT is missing from resultsstruct
+					else if (i > PORTINDIRECT) // PORTINDIRECT is missing from resultsstruct, so use label (i-1)
 					{
 						rc = snprintf(logbufferptr, logbuffersize, ", %u %s", portsstats[i], resultsstruct[i-1].label);
 					}
@@ -2978,7 +2981,7 @@ int main(void)
 					{
 						rc = snprintf(logbufferptr, logbuffersize, "Found %u %s",portsstats[i], "INDIRECT" );
 					}
-					else if (i > PORTINDIRECT) // PORTINDIRECT is missing from resultsstruct
+					else if (i > PORTINDIRECT) // PORTINDIRECT is missing from resultsstruct, so use label (-1)
 					{
 						rc = snprintf(logbufferptr, logbuffersize, "Found %u %s",portsstats[i], resultsstruct[i-1].label );
 					}
@@ -2993,7 +2996,7 @@ int main(void)
 					{
 						rc = snprintf(logbufferptr, logbuffersize, ", %u %s",portsstats[i], "INDIRECT" );
 					}
-					else if (i > PORTINDIRECT) // PORTINDIRECT is missing from resultsstruct
+					else if (i > PORTINDIRECT) // PORTINDIRECT is missing from resultsstruct, so use label (-1)
 					{
 						rc = snprintf(logbufferptr, logbuffersize, ", %u %s", portsstats[i], resultsstruct[i-1].label);
 					}

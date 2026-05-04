@@ -206,9 +206,10 @@
 	//      A database update is mandatory - see README.md for details.
 	// 2.00 additional ICMPv6 types and first raw socket implementation
 	// 2.01 add PORTINDIRECT reporting
+	// 2.02 expand TCP flags handling for HUT and INDIRECT mid-points
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "2.01"
+	#define IPSCAN_VERNUM "2.02"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -318,14 +319,15 @@
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 3
-		#define CLIENTDEBUG 1
-		#define DBDEBUG 1
+		#define MIDPOINTDEBUG 1
 		#define TCPDEBUG 1
-		#define UDPDEBUG 1
 	#endif
 	//
 	// Dump first 16 bytes of packets to support BPF debug
 	// #define IPSCAN_BPF_DEBUG 1
+	//
+	// Log test data related to MIDPOINT (INDIRECT) responses
+	// #define MIDPOINTDEBUG 1
 	//
 	// Privilege escalation/de-escalation debug
 	// #define IPSCAN_PRIV_DEBUG 1
@@ -766,17 +768,19 @@
 		PORTREJECTROUTE,
 		PORTFAILEDPOLICY,
 		PORTBEYONDSCOPE,
+		PORTALREADYOPN,
+		PORTSOFTCLOSE,
 		ECHONOREPLY,
 		ECHOREPLY,
 		/* Addition for UDP port respond/doesn't */
 		UDPOPEN,
 		UDPSTEALTH,
-		/* INDIRECT responses */
-		PORTINDIRECT,
 		/* Unexpected and Unknown error response cases, do NOT change */
 		PORTUNEXPECTED,
 		PORTUNKNOWN,
 		PORTINTERROR,
+		/* INDIRECT responses */
+		PORTINDIRECT,
 		/* End of list marker, do NOT change */
 		PORTEOL
 	};

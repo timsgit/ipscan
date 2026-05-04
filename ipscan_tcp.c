@@ -43,9 +43,10 @@
 // 1.00			add raw socket approach to reveal more response detail
 // 1.01			update while() loop with continues
 // 1.02			raw socket filter addition
+// 1.03			handle more TCP flags for HUT and mid-point devices
 
 //
-#define IPSCAN_TCP_VER "1.02"
+#define IPSCAN_TCP_VER "1.03"
 //
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -138,12 +139,24 @@ const char* ipscan_tcp_ver(void)
 			recvfrom (NONBLOCKING)
 			if error (EAGAIN or EWOULDBLOCK) then break; // this recvfrom is done - we've looked at all packets
 			check size exceeds minimum
-			check source address == DUT, report if not and continue;
-			check swapped src/dest ports match our transmission, report if not and continue;
-			[TCP] check ack sequence matches our (transmission+1), report if not and continue;
-			if all matches && TCP then check flags
-				ACK => OPEN
-				RST => REFUSED
+			if source address == HUT
+			{
+				check swapped src/dest ports and ack sequence match our transmission, report if not and continue;
+				if all matches && TCP then check flags
+					SYN+ACK => OPEN
+					RST => REFUSED
+					FIN+ACK => SOFTCLOSE
+					ACK => ALREADYOPEN
+			}
+			else
+			{ // This could only be a mid-point/firewall device - so only handle a limited set of flags
+				check swapped src/dest ports and ack sequence match our transmission, report if not and continue;
+				if all matches && TCP then check flags
+					RST => REFUSED
+					FIN+ACK => SOFTCLOSE
+					if one of these cases then
+						set indirect = IPSCAN_INDIRECT_RESPONSE, record response source address 
+			}
 		}
 	4. if (ICMPv6 event && POLLIN && retval == PORTUNKNOWN) // only look at ICMPv6 if we haven't had something valid in TCP socket
 		while (retval == PORTUNKNOWN)
@@ -152,9 +165,9 @@ const char* ipscan_tcp_ver(void)
 			recvfrom (NONBLOCKING)
 			if error (EAGAIN or EWOULDBLOCK) then break; // this recvfrom is done - we've looked at all packets
 			check size exceeds minimum
-			check ICMPv6 header source address == DUT
-				if (sa == DUT && inner packet matches) then indirect = 0
-				else if (sa != DUT && sa != localhost && sa != localip && inner packet matches) then log and set indirect = IPSCAN_INDIRECT_RESPONSE, record source address;
+			check ICMPv6 header source address == HUT
+				if (sa == HUT && inner packet matches) then indirect = 0
+				else if (sa != HUT && sa != localhost && sa != localip && inner packet matches) then log and set indirect = IPSCAN_INDIRECT_RESPONSE, record source address;
 			check inner IPv6 source & destination addresses and NEXTHDR match our transmission, report if not and continue;
 			check inner TCP src/dest ports match our transmission, report if not and continue;
 			[TCP] check inner TCP sequence matches our transmission+1, report if not and continue;
@@ -589,24 +602,45 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 										hostname, my_tx_dst_port, special, tcp_loopcount,\
 										tcphdr_ptr->syn ? "SYN " : "", tcphdr_ptr->ack ? "ACK " : "", tcphdr_ptr->rst ? "RST " : "");
 									#endif
-									if (tcphdr_ptr->ack)
-									{
-										retval = PORTOPEN;
-									}
-									if (tcphdr_ptr->rst)
+									if (1 == tcphdr_ptr->rst)
 									{
 										#ifdef TCPDEBUG
-										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection refused by HUT in response to SYN to host %s port %u special %u\n",\
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection refused by HUT (RST) in response to SYN to host %s port %u special %u\n",\
 											 hostname, my_tx_dst_port, special);
 										#endif
 										retval = PORTREFUSED; // checked - matches description
 									}
+									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (1 == tcphdr_ptr->syn) && (0 == tcphdr_ptr->fin))
+									{
+										#ifdef TCPDEBUG
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection accepted by HUT (SYN+ACK) in response to SYN to host %s port %u special %u\n",\
+											 hostname, my_tx_dst_port, special);
+										#endif
+										retval = PORTOPEN;
+									}
+									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (0 == tcphdr_ptr->syn) && (0 == tcphdr_ptr->fin))
+									{
+										#ifdef TCPDEBUG
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection already open from HUT (ACK) in response to SYN to host %s port %u special %u\n",\
+											 hostname, my_tx_dst_port, special);
+										#endif
+										retval = PORTALREADYOPN;
+									}
+									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (0 == tcphdr_ptr->syn) && (1 == tcphdr_ptr->fin))
+									{
+										#ifdef TCPDEBUG
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection soft close from HUT (FIN+ACK) in response to SYN to host %s port %u special %u\n",\
+											 hostname, my_tx_dst_port, special);
+										#endif
+										retval = PORTSOFTCLOSE;
+									}
+									// SYN only - do nothing - expect a later SYN+ACK packet
 									continue; // retval setting should complete the loop
 								}
 								else
 								{
 									#ifdef TCPDEBUG
-									IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: TCPv6 response packet mismatch for HUT %s dstport %u special %u TCP loopcount %u, received srcport %u, dstport %u ACK sequence %08x, so SKIP\n",\
+									IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: TCPv6 response inner-packet mismatch for HUT %s dstport %u special %u TCP loopcount %u, received srcport %u, dstport %u ACK sequence %08x, so SKIP\n",\
 										hostname, my_tx_dst_port, special, tcp_loopcount,ntohs(tcphdr_ptr->source), ntohs(tcphdr_ptr->dest), ntohl(tcphdr_ptr->ack_seq));
 									#endif
 									continue;
@@ -614,11 +648,51 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 							}
 							else
 							{
-								#ifdef TCPDEBUG
-								IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: TCPv6 srcaddress check fail, for HUT %s dstport %u special %u TCP loopcount %u, actually from: %s, so SKIP\n",\
-									 hostname, my_tx_dst_port, special, tcp_loopcount, rx_ip6addr_str);
+								#ifdef MIDPOINTDEBUG
+								IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: TCPv6 response is NOT from HUT\n");
 								#endif
+								// Now we know response is NOT from HUT then start checking the detail - reversed src/dst ports and TCP sequence
+								if ((ntohs(tcphdr_ptr->source) == my_tx_dst_port) && (ntohs(tcphdr_ptr->dest) == my_tx_src_port)\
+									 && (ntohl(tcphdr_ptr->ack_seq) == (my_tx_seq+1) ))
+								{
+									#ifdef MIDPOINTDEBUG
+									IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: TCPv6 srcaddress check fail BUT ports/seq match, HUT %s dstport %u special %u TCP loopcount %u, actually from: %s\n",\
+										 hostname, my_tx_dst_port, special, tcp_loopcount, rx_ip6addr_str);
+									#endif
+									if (1 == tcphdr_ptr->rst)
+									{
+										#ifdef MIDPOINTDEBUG
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection refused by someone else (%s) (RST) in response to SYN to host %s port %u special %u\n",\
+											rx_ip6addr_str, hostname, my_tx_dst_port, special);
+										#endif
+                                                                                retval = PORTREFUSED; // checked - matches description
+										indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)
+										// copy string address
+										memset(indhost_ptr, 0, INET6_ADDRSTRLEN); //Blank it first
+										memcpy(indhost_ptr, rx_ip6addr_str, INET6_ADDRSTRLEN); // copy the source address string over it
+                                                                        }
+									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (0 == tcphdr_ptr->syn) && (1 == tcphdr_ptr->fin))
+									{
+										#ifdef MIDPOINTDEBUG
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection soft close by someone else (%s) (FIN+ACK) in response to SYN to host %s port %u special %u\n",\
+											 rx_ip6addr_str, hostname, my_tx_dst_port, special);
+										#endif
+										retval = PORTSOFTCLOSE;
+										indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)
+										// copy string address
+										memset(indhost_ptr, 0, INET6_ADDRSTRLEN); //Blank it first
+										memcpy(indhost_ptr, rx_ip6addr_str, INET6_ADDRSTRLEN); // copy the source address string over it
+									}
+									else
+									{
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: response with valid ports/sequence received from %s but unexpected flag state: SAFR = %d%d%d%d\n",\
+											rx_ip6addr_str, tcphdr_ptr->syn, tcphdr_ptr->ack, tcphdr_ptr->fin, tcphdr_ptr->rst);
+									}
+								}
+								// continue whether this was a recognised packet/address/ports/flags, or NOT
+								// if it was recognised then retval has been set appropriately
 								continue;
+								
 							}
 						}
 						else
@@ -728,7 +802,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
                                		                && (ntohs(rx_tcphdr_ptr->source) == my_tx_src_port) && (ntohs(rx_tcphdr_ptr->dest) == my_tx_dst_port)\
 							&& (ntohl(rx_tcphdr_ptr->seq) == my_tx_seq) )
 						{
-							#ifdef TCPDEBUG
+							#ifdef MIDPOINTDEBUG
 							IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: INDIRECT: Matching ICMPv6 response is NOT from HUT, potentially from another mid-point device: %s\n", rx_ip6addr_str);
 							#endif
 							indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)
