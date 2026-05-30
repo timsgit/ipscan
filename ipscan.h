@@ -22,6 +22,7 @@
 // addition for pseudo-header structure
 #include <netinet/in.h>
 #include <linux/netfilter.h>
+#include <errno.h>
 
 #ifndef IPSCAN_H
 	#define IPSCAN_H 1
@@ -320,7 +321,6 @@
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 3
 		#define MIDPOINTDEBUG 1
-		#define TCPDEBUG 1
 	#endif
 	//
 	// Dump first 16 bytes of packets to support BPF debug
@@ -680,8 +680,8 @@
 	// Ensures tests which were in-progress when the server was shutdown/rebooted,
 	// or the client navigated away, etc. are deleted in relatively short order.
 	// All results, apart from the running state, older than the following will be deleted
-	// NOTE: time must be in seconds and exceed the longest time that a test can take to execute (150s)
-	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (360)
+	// NOTE: time must be in seconds and exceed the longest time that a test can take to execute (IPSCAN_CLIENT_MAX_TIME_SECS above)
+	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (300)
 	// Everything (results and running state) older than the following (in seconds) will be deleted
 	#define IPSCAN_DELETE_EVERYTHING_LONG_OFFSET (600)
 	//

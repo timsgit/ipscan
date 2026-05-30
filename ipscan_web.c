@@ -99,8 +99,10 @@
 // 1.01 - clear query string parameters when forcing a hard reload
 // 1.02 - further changes to hard reload functionality
 // 1.03 - yet more changes to hard reload functionality
+// 1.04 - improved getUniqueTabId() - to handle tab duplication
+// 1.05 - remove address-change detection and use millisecond resolution for timestamp
 
-#define IPSCAN_WEB_VER "1.03"
+#define IPSCAN_WEB_VER "1.05"
 
 #include "ipscan.h"
 
@@ -221,20 +223,6 @@ void create_json_header(void)
 	printf("%s%c%c\n","Content-type:application/json;charset=utf-8",13,10);
 }
 
-void create_redirect_header(const int redirtype, const char * location)
-{
-	printf("Content-Type: text/html; charset=UTF-8\n");
-	if (301 == redirtype)
-	{
-		printf ("Status: 301 Moved Permanently\n");
-	}
-	else
-	{
-		printf ("Status: 302 Found\n");
-	}
-        printf ("Location: %s\n\n", location);
-}
-
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery)
 {
 	uint16_t i;
@@ -251,15 +239,14 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" let myHTTPTimeout;");
 	printf(" let fetches = 0;");
 	printf(" let myTabId = -1;");
+    	printf(" const KEY_ID = \"tabId\";");
+	printf(" const KEY_TS = \"TimeStamp\";");
+	printf(" const KEY_SN = \"SessionNumber\";");
 	// myTimeStamp becomes the starttime query parameter
 	printf(" let myTimeStamp = -1;");
 	// mySession becomes the session query parameter - multiple runs on the same browser should be unique
 	printf(" let mySession = -1n;"); //BigInt
-	printf(" sessionStorage.clear();");
 	printf(" let statusresult = 0;");
-	printf(" let myInitIpv6Addr = \"::\";"); // client's IPv6 address logged at the start of the test. '::' used as undefined value
-	printf(" let myIpv6AddrFetchStart = -1;"); // logs the fetchnum that client's IPv6 address fetch began (-1 not started)
-	printf(" let myReloadDeclined = false;"); // flag - if true then a page reload  (test restart) has been offerred but declined - allow test to complete
 	printf(" let lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
 	printf(" const cleanUrl = window.location.protocol + \"//\" + window.location.host + window.location.pathname;");
 	printf(" let serverRunningState = -1;\n");
@@ -267,8 +254,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function main()");
 	printf(" {");
 	printf(" \"use strict\";"); 
-	// Handler to emulate Date.now() for IE8 and earlier - but in all cases return seconds not milliseconds
-	printf(" Date.prototype.now = function() { return Math.floor(( typeof(Date.now) == \"function\" ? Date.now() : new Date().getTime())/1000); };");
+	// Handler to emulate Date.now() for IE8 and earlier - in all cases return milliseconds
+	printf(" Date.prototype.now = function() { return ( typeof(Date.now) == \"function\" ? Date.now() : new Date().getTime()); };");
 	//
 	// Remove query params without refreshing the page
 	//
@@ -283,14 +270,11 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myTimeStamp = -1;");
 	printf(" mySession = -1n;"); //BigInt
 	printf(" statusresult = 0;");
-	printf(" myInitIpv6Addr = \"::\";"); // client's IPv6 address logged at the start of the test. '::' used as undefined value
-	printf(" myIpv6AddrFetchStart = -1;"); // logs the fetchnum that client's IPv6 address fetch began (-1 not started)
-	printf(" myReloadDeclined = false;"); // flag - if true then a page reload  (test restart) has been offerred but declined - allow test to complete
 	printf(" lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
 	printf(" serverRunningState = -1;\n");
 	//
 	// Main initialisation 
-	// (1) the scanstate text to RUNNING to give the user confidence that things are happening.
+	// (1) set the scanstate text to RUNNING to give the user confidence that things are happening.
 	//
 	printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
@@ -309,9 +293,9 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	printf(" myTabId = getUniqueTabId();");
         // myTimeStamp becomes the starttime query parameter
-        printf(" myTimeStamp = sessionStorage.getItem(\"TimeStamp\");");
+        printf(" myTimeStamp = sessionStorage.getItem(KEY_TS);");
         // mySession becomes the session query parameter - multiple runs on the same browser should each be unique
-        printf(" mySession = BigInt(sessionStorage.getItem(\"SessionNumber\"));");
+        printf(" mySession = BigInt(sessionStorage.getItem(KEY_SN));");
         #ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('    myTabId: ',myTabId.toString());");
         printf(" console.log('myTimeStamp: ',myTimeStamp.toString());");
@@ -330,10 +314,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// Have one more go at settign up session parameters - previously called reload
 	printf(" mySession = -1n;");//BigInt
 	printf(" myTimeStamp = -1;");
-	printf(" sessionStorage.clear();");
+	printf(" window.name = null;");
 	printf(" myTabId = getUniqueTabId();");
-        printf(" myTimeStamp = sessionStorage.getItem(\"TimeStamp\");");
-        printf(" mySession = BigInt(sessionStorage.getItem(\"SessionNumber\"));");
+        printf(" myTimeStamp = sessionStorage.getItem(KEY_TS);");
+        printf(" mySession = BigInt(sessionStorage.getItem(KEY_SN));");
 	printf(" }");
 
 	//
@@ -341,9 +325,9 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// so don't reuse myXmlHttpInitObj object for other transfers
 	//
 	printf(" var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession.toString() + \"&starttime=\" + myTimeStamp.toString() + \"&%s\";", MAGICBEGIN, reconquery);
-	printf(" myXmlHttpInitObj.onreadystatechange = function(){myInitStateChange(myXmlHttpInitObj); };");
 	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
 	printf(" myXmlHttpInitObj.send(null);");
+
 	//
 	// (4) finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
 	//
@@ -398,24 +382,34 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" } ");
 	printf("}\n");
 
-	printf("function getUniqueTabId()");
+	printf(" function getUniqueTabId()");
 	printf(" {");
-	printf(" let tabId = sessionStorage.getItem('tabId');");
-    	// If window.name doesn't match our stored ID, it's a duplicated tab
-	printf(" if (tabId && window.name !== tabId)");
+	printf(" const isDuplicate = sessionStorage.getItem(KEY_ID) && !window.name;");
+	printf(" if (isDuplicate)");
 	printf(" {");
-	printf(" tabId = null;"); // Force regeneration
-	printf(" sessionStorage.clear();");
+	printf(" sessionStorage.removeItem(KEY_ID);");
+	printf(" window.name = null;");
+        #ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('Duplicate tab detected - cleared sessionStorage');");
+        #endif
 	printf(" }");
+	// Try to read existing values
+	printf(" let tabId = sessionStorage.getItem(KEY_ID);");
+	printf(" let timeStamp = sessionStorage.getItem(KEY_TS);");
+	printf(" let sessionNumber = sessionStorage.getItem(KEY_SN);");
 	printf(" if (!tabId)");
 	printf(" {");
+	// Generate new values and store them
 	printf(" tabId = crypto.randomUUID();");
-	printf(" let thisTimeStamp = new Date().now();");
-        printf(" let thisSession = getSessionNumber();");
-	printf(" sessionStorage.setItem(\"tabId\", tabId);");
-	printf(" sessionStorage.setItem(\"TimeStamp\", thisTimeStamp);");
-	printf(" sessionStorage.setItem(\"SessionNumber\", thisSession);");
-        printf(" window.name = tabId;"); // Persist ID in the window object
+	printf(" timeStamp = new Date().now();");
+        printf(" sessionNumber = getSessionNumber();");
+	printf(" sessionStorage.setItem(KEY_ID, tabId);");
+	printf(" sessionStorage.setItem(KEY_TS, timeStamp);");
+	printf(" sessionStorage.setItem(KEY_SN, sessionNumber);");
+	printf(" window.name = tabId;");
+        #ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.log('Created new tabId, timeStamp and sessionNumber');");
+        #endif
 	printf(" }");
 	printf(" return tabId;");
 	printf(" }");
@@ -424,8 +418,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" function forceHardReload()");
 	printf(" {");
 	// 1. clear persistent storage
-	printf(" localStorage.clear();");
-	printf(" sessionStorage.clear();");
 	// 2. Force hard reload via cache-busting URL - support added to ipscan.c
 	printf(" const cleanUrl = new URL(window.location.origin + window.location.pathname);");
 	printf(" cleanUrl.searchParams.set('reload', Date.now());"); // adds ?reload=<numeric-time>
@@ -475,86 +467,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myXmlHttpErrObj.send(null);");
 	printf(" }\n");
 
-	// function to fetch client's IPv6 address from server
-	// used to support check of client IPv6 address change (privacy address issue)
-	// fetchnum is used to schedule fetch on odd periods and process returned information on even periods
-	printf(" function HTTPGetIpv6Address(fetchnum)");
-	printf(" {");
-	printf(" var ip6URL = \""URIPATH"/"EXENAME"?ipv6addrquery=%d&termsaccepted=1&addrfetch=\" + fetchnum;", MAGICIP6QUERY);
-	printf(" var Ip6Addr = '::';"); // dummy value (no valid IPv6 address returned)
-	// ALWAYS check response status and disable timers, etc. and reload, if 302
-	printf(" if (myXmlHttpIp6Obj.status == 302)");
-	printf(" {");
-	// Clear all the session parameters, stop timers, in-progress transfers
-	printf(" clearTimeout(myHTTPTimeout);");
-        printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
-        printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
-        printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
-        printf(" clearInterval(myInterval);");
-        printf(" clearInterval(myBlink);");
-	printf(" mySession = -1n;");//BigInt
-	printf(" myTimeStamp = -1;");
-	printf(" sessionStorage.clear();");
-	printf(" forceHardReload();");
-	printf(" }");
-	#ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.log('fetchnum: ',fetchnum);");
-	printf(" console.log('myXmlHttpIp6Obj.readyState: ',myXmlHttpIp6Obj.readyState);");
-	printf(" console.log('myXmlHttpIp6Obj.status    : ',myXmlHttpIp6Obj.status);");
-	#endif
-	printf(" if (fetchnum %% 2 == 0)"); // even fetchnum - so check whether previous transfer has finished
-	printf(" {");
-	printf(" if (myXmlHttpIp6Obj.readyState == 4 && myXmlHttpIp6Obj.status == 200)");
-	printf(" {"); // myXmlHttpIp6Obj fetch completed successfully
-	printf(" let Ip6JsonArray = [];"); // empty array
-	// returned array should be of the form '[ "address" ]'
-	printf(" if (myXmlHttpIp6Obj.responseText[0] === '[')"); // check first letter is '['
-        printf(" { try {");
-        printf(" Ip6JsonArray = JSON.parse(myXmlHttpIp6Obj.responseText);"); // try parsing the returned array
-        printf(" }");
-        printf(" catch (e) {");
-	printf(" console.log('JSON.parse failure: ',e.toString());"); // only log to local browser console
-        printf(" }");
-	#ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.log('typeof(Ip6JsonArray[0]): ',typeof(Ip6JsonArray[0]));");
-	printf(" console.log('Ip6JsonArray[0]: ',Ip6JsonArray[0]);");
-	#endif
-        printf(" }");
-	printf(" myIpv6AddrFetchStart = -1;"); // flag fetch as complete
-	printf(" if (Ip6JsonArray[0] !== undefined)"); // should be string
-        printf(" { ");
-	printf(" Ip6Addr = Ip6JsonArray[0];"); // Ip6JsonArray array is zero-based. [0] should be the client address
-        printf(" }");
-	printf(" }");
-	printf(" else"); // previous fetch hasn't completed
-	printf(" {");
-	// report status locally
-	#ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.log('unfinished fetch:');");
-	printf(" console.log('myXmlHttpIp6Obj.readyState: ',myXmlHttpIp6Obj.readyState);");
-	printf(" console.log('myXmlHttpIp6Obj.status:',myXmlHttpIp6Obj.status);");
-	#endif
-        printf(" }");
-        printf(" }");
-	printf(" else");
-        printf(" { "); // odd fetchnum - initiate a new fetch
-	// check if this is a later fetchnum period than when we started
-	printf(" if (fetchnum > myIpv6AddrFetchStart)");
-	printf(" {");
-	// if previous fetch is unfinished then abort it
-	printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
-	printf(" myIpv6AddrFetchStart = fetchnum;"); // log this fetchnum as the start
-	// initiate the fetch/GET
-	printf(" myXmlHttpIp6Obj.open(\"GET\", ip6URL, true);");
-	printf(" myXmlHttpIp6Obj.send(null);");
-        printf(" }");
-        printf(" }");
-	#ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.log('Returning Ip6Addr: ', Ip6Addr);");
-	#endif
-	printf(" return Ip6Addr;");
-	printf(" }\n"); // end of HTTPGetIpv6Address
-
 	// function to report bad JSON parse
         printf("function badJSONParse(es)");
         printf(" {");
@@ -573,7 +485,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" lastUpdate = 1;");
 	printf(" mySession = -1n;");//BigInt
 	printf(" myTimeStamp = -1;");
-	printf(" sessionStorage.clear();");
 	printf(" fetch = 900;");
 	// clear various timeouts and interval timers
 	printf(" clearTimeout(myHTTPTimeout);");
@@ -600,17 +511,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myXmlHttpErrObj.open(\"GET\", dbErrorURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");
 	printf(" }\n");
-
-	// function to report Ipv6 address changed
-	printf("function HTTPAddrChanged(first, second)");
-	printf(" {");
-        printf(" var addressString = \"ONE:\" + first + \"TWO:\" + second;");
-        printf(" var addrChangeURL = \""URIPATH"/"EXENAME"?session=\" + mySession.toString() + \"&starttime=\" + myTimeStamp.toString() + \"&%s&fetch=%d&string=\" + encodeURIComponent(addressString);", reconquery, IPSCAN_CLIENT_ADDR_CHANGED);
-	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
-	printf(" myXmlHttpErrObj.open(\"GET\", addrChangeURL, true);");
-	printf(" myXmlHttpErrObj.send(null);");
-	printf(" }\n");
-
 	// Page Exit Handler
 	printf("const pageExitHandler = function(peh)");
 	printf(" {");
@@ -619,6 +519,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" const message = \"Do you wish to end the IPv6 port scan prematurely?\";");
 	// For Chrome and some legacy browsers
 	printf(" peh.returnValue = message;");
+	printf(" sessionStorage.clear();");
+	printf(" window.name = null;");
 	// For modern browsers
 	printf(" return message;");
 	printf(" };\n");
@@ -658,83 +560,14 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
     	printf(" }");
   	printf(" }\n");
 	//
-	// function to handle GET state change for Initialisation - possible reload
-	//
-	printf("function myInitStateChange(initRequest)");
-	printf(" {");
-	printf(" if (initRequest.status === 302)"); // 302 redirect - IPscan triggers this if duplicate tests with same parameters detected
-	printf(" {");
-	// stop the timeouts, interval timersand any XML HTTP requests that are pending
-	printf(" clearTimeout(myHTTPTimeout);");
-	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
-	printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
-	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
-	printf(" clearInterval(myInterval);");
-	printf(" clearInterval(myBlink);");
-	printf(" sessionStorage.clear();");
-	printf(" forceHardReload();");
-	printf(" }");
-	printf(" }\n");
-	//
 	// Normal fetch handling
 	//
 	printf("function myStateChange(request, fetchnum)");
 	printf(" {");
 	printf(" let i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
-	printf(" let reloadPage = false;");
-	printf(" let myIpv6now = '::1';");
-	//  odd fetchnum - initiate a new fetch - return nothing useful
-	// even fetchnum - check whether transfer has finished and return address
-	//
-	// always call HTTPGetIpv6Address() for both odd/even fetchnum
-	// NOTE: HTTPGetIpv6Address() checks for 302 return code and reloads page if its found
-	//
-	printf(" let temporary = HTTPGetIpv6Address(fetchnum);");
-	printf(" if (fetchnum == 2)");
-	printf(" {"); // latch the initial client address
-	printf(" myInitIpv6Addr = temporary;");
-	printf(" }");
-	printf(" else if (fetchnum > 2)");
-	printf(" {"); // normal process - initiate address fetch (odd fetchnum) and then capture address (even fetchnum)
-	printf(" myIpv6now = temporary;");
-	printf(" }");
 	printf(" if (request.readyState == 4 && request.status == 200)");
 	printf(" {");
 	printf(" clearTimeout(myHTTPTimeout);");
-	// Check whether Client's IPv6 address has changed, or not.
-	// even fetchnum - hopefully transfer has finished and the returned address is the client's
-	// check fetchnum > 2 - so both myInitIpv6Add and myIpv6now have (hopefully) been filled with valid addresses
-	//
-	#ifdef IPSCAN_TEST_CLIENT_ADDRCHANGE
-	printf(" myIpv6now = \"t\"+myIpv6now;");
-	#endif
-	printf(" if (myReloadDeclined == false && (fetchnum %% 2) == 0 && fetchnum > 2 && myIpv6now != '::' && myInitIpv6Addr != '::' && myIpv6now != myInitIpv6Addr)");
-	printf(" {");
-	// attempt to send an indication to the server
-	printf(" HTTPAddrChanged(myInitIpv6Addr, myIpv6now);");
-	// ask the user whether they want to restart the test, or not
-	printf(" let reloadPage = window.confirm(\"Client IPv6 address change detected. Restart the test to ensure accurate results. Restart now?\");");
-	// if reload is declined then latch this feedback to ensure test completes with no further interruption
-	printf(" if (myReloadDeclined == false && reloadPage == false)");
-	printf(" {");
-	printf(" myReloadDeclined = true;");
-	printf(" }");
-	#ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.log('Client address mismatch');");
-	printf(" console.log('Client fetchnum        : ',fetchnum);");
-	printf(" console.log('Client fetchnum %% 2   : ',(fetchnum %% 2));");
-	printf(" console.log('Client init address    : ',myInitIpv6Addr);");
-	printf(" console.log('Client  now address    : ',myIpv6now);");
-	printf(" console.log('Client reloadPage      : ',reloadPage);");
-	printf(" console.log('Client myReloadDeclined: ', myReloadDeclined);");
-	#endif
-	// if we haven't declined the reload opportunity then cause a reload to happen
-	printf(" if (myReloadDeclined == false && reloadPage == true)");
-	printf(" {");
-	printf(" sessionStorage.clear();");
-	printf(" forceHardReload();");
-	printf(" }");
-	printf(" }");
 	// 
 	// if response.length >0 and first character is "[" then
 	// parse the response, assuming it is a valid update
@@ -763,7 +596,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" clearInterval(myInterval);");
 	printf(" clearInterval(myBlink);");
 	printf(" HTTPFinished();");
-	printf(" sessionStorage.clear();");
 	//
 	// Rewrite history to prevent re-use of old querystring parameters
 	//
@@ -776,6 +608,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	#ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('HREF after: ',window.location.href );");
 	#endif
+	printf(" sessionStorage.clear();");
+	printf(" window.name = null;");
 	printf(" }");
 	printf(" else");
 	// we haven't received a complete array of results yet - check if test successfully running 
@@ -783,7 +617,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" if (serverRunningState != -1 && (( serverRunningState & %d ) == %d))", IPSCAN_TESTSTATE_DATABASE_ERROR_BIT, IPSCAN_TESTSTATE_DATABASE_ERROR_BIT);
 	printf(" {");
-	printf(" sessionStorage.clear();");
 	printf(" forceHardReload();");
 	printf(" serverRunningState = -1;");
 	printf(" }");
@@ -963,7 +796,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" var updateURL = \""URIPATH"/"EXENAME"?session=\" + mySession.toString() + \"&starttime=\" + myTimeStamp.toString() + \"&%s&fetch=\" + fetches;", reconquery);
 	// exit based on number of attempted fetches or time taken being too great
 	printf(" const testMaxFetches = Math.max(%u,%u);", (unsigned int)(5+(24+(numudpports*UDPTIMEOUTSECS)+(numports*TIMEOUTSECS))/JSONFETCHEVERY), (unsigned int)(5+(IPSCAN_CLIENT_MAX_TIME_SECS / JSONFETCHEVERY)) );
-	printf(" if (fetches >= testMaxFetches || (Math.abs(myTimeNow - myTimeStamp) > %u))", (unsigned int)IPSCAN_CLIENT_MAX_TIME_SECS );
+	printf(" if (fetches >= testMaxFetches || (Math.abs(myTimeNow - myTimeStamp) > %u))", (unsigned int)(IPSCAN_CLIENT_MAX_TIME_SECS*1000) );
 	printf(" {");
 	printf(" clearInterval(myInterval);");
 	printf(" lastUpdate = 1;"); // flag we've attempted enough fetches or exceeded maximum time

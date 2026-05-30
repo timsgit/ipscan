@@ -61,9 +61,10 @@
 // 1.02			add raw socket BPF filter to reduce userland processing
 // 1.03			add UDP SIP OPTIONS packet generator
 // 1.04			replace mention of DUT with HUT (Host Under Test) for consistency
+// 1.05			minor changes to midpoint logging to help debug and test
 
 //
-#define IPSCAN_UDP_VER "1.04"
+#define IPSCAN_UDP_VER "1.05"
 //
 
 #include "ipscan.h"
@@ -2667,7 +2668,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
                                        		        && (ntohs(rx_udphdr_ptr->source) == my_tx_src_port) && (ntohs(rx_udphdr_ptr->dest) == my_tx_dst_port) )
 						{
 							#ifdef MIDPOINTDEBUG
-							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: INDIRECT: Matching ICMPv6 response is NOT from HUT, potentially from another mid-point device: %s\n", rx_ip6addr_str);
+							IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: INFO: Matching ICMPv6 response is NOT from HUT, potentially from another mid-point device: %s\n", rx_ip6addr_str);
 							#endif
 							indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)
 							// copy string address
@@ -2809,10 +2810,20 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	}
 
 	// return
-	#ifdef UDPDEBUG
-	char retstring[32] = "undefined";
-	result_to_string((uint32_t)retval, retstring);
-	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: returning for host %s port %u with retval = %d (%s), indirect = %d, indhost =%s\n", hostname, port, retval, retstring, indirect, indhost_ptr);
+	#ifdef MIDPOINTDEBUG
+	if (0 != indirect)
+	{
+		char retstring[32] = "undefined";
+		result_to_string((uint32_t)retval, retstring);
+		if (0 == special)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: returning for host %s port %u with retval = %d (%s), indirect = %d, indhost : %s\n", hostname, port, retval, retstring, indirect, indhost_ptr);
+		}
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: returning for host %s port %u:%u with retval = %d (%s), indirect = %d, indhost : %s\n", hostname, port, special, retval, retstring, indirect, indhost_ptr);
+		}
+	}
 	#endif
 	return (retval+indirect);
 }

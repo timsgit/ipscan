@@ -44,9 +44,11 @@
 // 1.01			update while() loop with continues
 // 1.02			raw socket filter addition
 // 1.03			handle more TCP flags for HUT and mid-point devices
+// 1.04			Add further address checks for TCP flags from non-HUT case
+// 1.05			Minor midpoint logging differences to aid debug
 
 //
-#define IPSCAN_TCP_VER "1.03"
+#define IPSCAN_TCP_VER "1.05"
 //
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -646,7 +648,10 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 									continue;
 								}
 							}
-							else
+							// if there's a HUT-address mismatch BUT its not from localhost or our external address then it might be from a valid midpoint device
+							else if ( (IN6_ARE_ADDR_EQUAL( &destaddr, &(rx_sockaddr_in6->sin6_addr)) == 0) \
+                                                        && (IN6_ARE_ADDR_EQUAL( &localhost_addr.sin6_addr, &(rx_sockaddr_in6->sin6_addr)) == 0)\
+                                                        && (IN6_ARE_ADDR_EQUAL( &local_sockaddr.sin6_addr, &(rx_sockaddr_in6->sin6_addr)) == 0))
 							{
 								#ifdef MIDPOINTDEBUG
 								IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: TCPv6 response is NOT from HUT\n");
@@ -662,7 +667,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 									if (1 == tcphdr_ptr->rst)
 									{
 										#ifdef MIDPOINTDEBUG
-										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection refused by someone else (%s) (RST) in response to SYN to host %s port %u special %u\n",\
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: INFO: Connection refused by someone else (%s) (RST) in response to SYN to host %s port %u special %u\n",\
 											rx_ip6addr_str, hostname, my_tx_dst_port, special);
 										#endif
                                                                                 retval = PORTREFUSED; // checked - matches description
@@ -674,7 +679,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (0 == tcphdr_ptr->syn) && (1 == tcphdr_ptr->fin))
 									{
 										#ifdef MIDPOINTDEBUG
-										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection soft close by someone else (%s) (FIN+ACK) in response to SYN to host %s port %u special %u\n",\
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: INFO: Connection soft close by someone else (%s) (FIN+ACK) in response to SYN to host %s port %u special %u\n",\
 											 rx_ip6addr_str, hostname, my_tx_dst_port, special);
 										#endif
 										retval = PORTSOFTCLOSE;
@@ -685,7 +690,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 									}
 									else
 									{
-										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: response with valid ports/sequence received from %s but unexpected flag state: SAFR = %d%d%d%d\n",\
+										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: ERROR: response with valid ports/sequence received from %s but unexpected flag state: SAFR = %d%d%d%d\n",\
 											rx_ip6addr_str, tcphdr_ptr->syn, tcphdr_ptr->ack, tcphdr_ptr->fin, tcphdr_ptr->rst);
 									}
 								}
@@ -693,6 +698,14 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 								// if it was recognised then retval has been set appropriately
 								continue;
 								
+							}
+							else
+							{
+								#ifdef MIDPOINTDEBUG
+								IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: TCPv6 response is NOT from HUT, or a valid midpoint addresss. Address : %s, so SKIP\n",\
+									rx_ip6addr_str);
+								#endif
+								continue;
 							}
 						}
 						else
@@ -803,7 +816,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 							&& (ntohl(rx_tcphdr_ptr->seq) == my_tx_seq) )
 						{
 							#ifdef MIDPOINTDEBUG
-							IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: INDIRECT: Matching ICMPv6 response is NOT from HUT, potentially from another mid-point device: %s\n", rx_ip6addr_str);
+							IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: INFO: Matching ICMPv6 response is NOT from HUT, potentially from another mid-point device: %s\n", rx_ip6addr_str);
 							#endif
 							indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)
 							// copy string address
@@ -941,10 +954,20 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	}
 
 	// return - determine the return value text equivalent in retstring
-	#ifdef TCPDEBUG
-	char retstring[32] = "undefined";
-	result_to_string((uint32_t)retval, retstring);
-	IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: returning for host %s port %u with retval = %d (%s), indirect = %d, indhost =%s\n", hostname, port, retval, retstring, indirect, indhost_ptr);
+	#ifdef MIDPOINTDEBUG
+	if (0 != indirect)
+	{
+		char retstring[32] = "undefined";
+		result_to_string((uint32_t)retval, retstring);
+		if (0 == special)
+		{
+			IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: returning for host %s port %u with retval = %d (%s), indirect = %d, indhost : %s\n", hostname, port, retval, retstring, indirect, indhost_ptr);
+		}
+		else
+		{
+			IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: returning for host %s port %u:%u with retval = %d (%s), indirect = %d, indhost : %s\n", hostname, port, special, retval, retstring, indirect, indhost_ptr);
+		}
+	}
 	#endif
 	return (retval+indirect);
 }

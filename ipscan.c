@@ -126,9 +126,10 @@
 // 1.05 - add reload query parameter to support bypassing browser cache when reloading page
 // 1.06 - add PORTINDIRECT reporting for test purposes
 // 1.07 - add additional PORT states for TCP connections
+// 1.08 - move to millisecond resolution for time since epoch for both text and javascript tests
 
 //
-#define IPSCAN_MAIN_VER "1.07"
+#define IPSCAN_MAIN_VER "1.08"
 //
 
 #include "ipscan.h"
@@ -187,7 +188,6 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *portlist);
 void create_json_header(void);
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery);
-void create_redirect_header(const int redirtype, const char * location);
 // starttime is of type time_t in create_html_body() calls:
 void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
 void report_useragent_strings(char *uavar, char *secchuavar, char *secchuaarchvar, char *secchuaarchplatvar);
@@ -233,31 +233,31 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 //
 const struct rslt_struc resultsstruct[] =
 {
-		/* returnval,		connrc,	conn_errno	TEXT lbl			TEXT col	Description/User feedback	*/
-		{ PORTOPEN, 		0, 	0,		"OPEN", 			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
- 		{ PORTREFUSED, 		-1, 	ECONNREFUSED, 	"RFSD", 			"yellow",	"A TCP RST flag response was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTINPROGRESS, 	-1, 	EINPROGRESS, 	"STLTH", 			"green",	"No response was received in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
-		{ PORTPROHIBITED, 	-1, 	EACCES, 	"ADMPHBTD", 			"yellow",	"An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTUNREACHABLE, 	-1, 	ENETUNREACH, 	"PUNRCH", 			"yellow",	"A port unreachable response (ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTNOROUTE, 		-1, 	EHOSTUNREACH, 	"HUNRCH", 			"yellow",	"A No route to host response (ICMPv6 type 1 code 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTPKTTOOBIG, 	-1, 	EMSGSIZE, 	"TOOBIG", 			"yellow",	"A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTPARAMPROB, 	-1, 	EPROTO, 	"PRMPRB", 			"yellow",	"A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTTIMEEXCEEDED, 	-91, 	-91, 		"TIMEEXCEEDED", 		"yellow",	"A time exceeded (hop count reached 0) response (ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTREJECTROUTE, 	-92,	-92,		"ROUTEREJECTED", 		"yellow",	"A Reject route to destination response (ICMPv6 type 1 code 6) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTFAILEDPOLICY, 	-93,	-93,		"FAILEDPOLICY", 		"yellow",	"A Source address failed ingress or egress policy response (ICMPv6 type 1 code 5) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ PORTBEYONDSCOPE, 	-94,	-94,		"BEYONDSCOPE", 			"yellow",	"A Beyond scope of source address response (ICMPv6 type 1 code 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTALREADYOPN,	-89,	-89,		"ALREADYOPN",			"yellow",	"A TCP ACK flag response was received when attempting to open this port, suggesting the port is already open. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTSOFTCLOSE,	-88,	-88,		"SOFTCLOSE",			"yellow",	"A TCP FIN+ACK response was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-		{ ECHONOREPLY, 		-96, 	-96,	 	"ECHO NO REPLY",		"green",	"No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
-		{ ECHOREPLY, 		-97, 	-97,	 	"ECHO REPLY", 			"yellow",	"An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
-		{ UDPOPEN,		-95,	-95,		"UDPOPEN",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-		{ UDPSTEALTH,		-1,	EAGAIN,		"UDPSTEALTH",			"green",	"No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
-		/* Unexpected and unknown error response cases, do NOT change */
-		{ PORTUNEXPECTED,	-98,	-98,		"UNXPCT",			"white",	"An unexpected response was received to the connect attempt."},
-		{ PORTUNKNOWN, 		-99,	-99, 		"UNKWN", 			"white",	"An unknown error response was received, or the port is yet to be tested."},
-		{ PORTINTERROR,		-100,	-100,		"INTERR",			"white",	"An internal error occurred."},
-		/* End of list marker, do NOT change */
-		{ PORTEOL,		-101,	-101,		"EOL",				"black",	"End of list marker."}
+                /* returnval,           connrc, conn_errno      TEXT lbl                        TEXT col        Description/User feedback       */
+                { PORTOPEN,             0,      0,              "OPEN",                         "red",          "An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
+                { PORTREFUSED,          -1,     ECONNREFUSED,   "RFSD",                         "yellow",       "A TCP RST flag response was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTINPROGRESS,       -1,     EINPROGRESS,    "STLTH",                        "green",        "No response was received in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
+                { PORTPROHIBITED,       -1,     EACCES,         "ADMPHBTD",                     "yellow",       "An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTUNREACHABLE,      -1,     ENETUNREACH,    "PUNRCH",                       "yellow",       "A port unreachable response (ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTNOROUTE,          -1,     EHOSTUNREACH,   "HUNRCH",                       "yellow",       "A No route to host response (ICMPv6 type 1 code 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTPKTTOOBIG,        -1,     EMSGSIZE,       "TOOBIG",                       "yellow",       "A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTPARAMPROB,        -1,     EPROTO,         "PRMPRB",                       "yellow",       "A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTTIMEEXCEEDED,     -91,    -91,            "TIMEEXCEEDED",                 "yellow",       "A time exceeded (hop count reached 0) response (ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTREJECTROUTE,      -92,    -92,            "ROUTEREJECTED",                "yellow",       "A Reject route to destination response (ICMPv6 type 1 code 6) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTFAILEDPOLICY,     -93,    -93,            "FAILEDPOLICY",                 "yellow",       "A Source address failed ingress or egress policy response (ICMPv6 type 1 code 5) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTBEYONDSCOPE,      -94,    -94,            "BEYONDSCOPE",                  "yellow",       "A Beyond scope of source address response (ICMPv6 type 1 code 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTALREADYOPN,       -89,    -89,            "ALREADYOPN",                   "yellow",       "A TCP ACK flag response was received when attempting to open this port, suggesting the port is already open. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { PORTSOFTCLOSE,        -88,    -88,            "SOFTCLOSE",                    "yellow",       "A TCP FIN+ACK response was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
+                { ECHONOREPLY,          -96,    -96,            "ECHO NO REPLY",                "green",        "No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
+                { ECHOREPLY,            -97,    -97,            "ECHO REPLY",                   "yellow",       "An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
+                { UDPOPEN,              -95,    -95,            "UDPOPEN",                      "red",          "A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
+                { UDPSTEALTH,           -1,     EAGAIN,         "UDPSTEALTH",                   "green",        "No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
+                /* Unexpected and unknown error response cases, do NOT change */
+                { PORTUNEXPECTED,       -98,    -98,            "UNXPCT",                       "white",        "An unexpected response was received to the connect attempt."},
+                { PORTUNKNOWN,          -99,    -99,            "UNKWN",                        "white",        "An unknown error response was received, or the port is yet to be tested."},
+                { PORTINTERROR,         -100,   -100,           "INTERR",                       "white",        "An internal error occurred."},
+                /* End of list marker, do NOT change */
+                { PORTEOL,              -101,   -101,           "EOL",                          "black",        "End of list marker."}
 };
 
 //
@@ -283,7 +283,6 @@ const char* ipscan_portlist_ver(void)
 
 int main(void)
 {
-
 	#if (1 == TEXTMODE)
 	// last is only used in text-only mode
 	int last = 0;
@@ -315,8 +314,28 @@ int main(void)
 	char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
 	char *remoteaddrvar;
 
-	// the session starttime, used as an unique index for the database
+	// "general purpose" variables, used as required
+	int rc;
+	unsigned int i = 0;
+	unsigned int shift;
+
+	// the session starttime, used for runtime calculations
 	time_t starttime;
+
+	// Calculate ms_since_epoch as an index for the database (previously seconds resolution)
+	// only used for text-mode - javascript mode creates starttime in browser session
+	#if (TEXTMODE == 1)
+	struct timespec ts_for_now;
+	rc = clock_gettime(CLOCK_REALTIME, &ts_for_now);
+	if (-1 == rc)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: clock_gettime() returned bad value for ms_since_epoch %d (%s)\n", errno, strerror(errno));
+		return(EXIT_SUCCESS);
+	}
+	// Convert seconds to milliseconds and nanoseconds to milliseconds
+    	uint64_t ms_since_epoch = ((uint64_t)ts_for_now.tv_sec * 1000) + ((uint64_t)ts_for_now.tv_nsec / 1000000);
+	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: clock_gettime() returned ms_since_epoch = %"PRIu64"\n", ms_since_epoch);
+	#endif
 
 	// Parallel scanning related
 	int childstatus;
@@ -325,11 +344,6 @@ int main(void)
 	#if (1 == IPSCAN_INCLUDE_UDP)
 	uint16_t numudpports = NUMUDPPORTS;
 	#endif
-
-	// "general purpose" variables, used as required
-	int rc;
-	unsigned int i = 0;
-	unsigned int shift;
 
 	// stats
 	unsigned int portsstats[ NUMRESULTTYPES ];
@@ -386,8 +400,9 @@ int main(void)
 		portsstats[i] = 0;
 	}
 
-	// Log the current time and "session" with which to initiate scan and fetch results
-	// These should ensure that each test is globally unique when client IP address is also used.
+	// Log the current time (ms_since_epoch) and "session" with which to initiate scan and fetch results
+	//
+	// starttime is now only used for runtime calculations.
 	starttime = time(NULL);
 	if (starttime < 0)
 	{
@@ -1074,28 +1089,26 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: nowtimeref out of range before timedifference calculation, time(NULL) returned %d(%s)\n", errno, strerror(errno) );
 		}
 
-		#if (TEXTMODE != 1)
-		// javascript mode only
-                int64_t timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-		#endif
 
 		#ifdef QUERYDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numqueries = %u\n", numqueries);
 		#if (TEXTMODE != 1)
 		// javascript mode only
+
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d fetchnum = %d\n", includeexisting, beginscan, fetch, fetchnum);
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: querysession = %"PRIu64" querystarttime = %"PRIu64" diff = %"PRId64"\n", querysession, querystarttime, timedifference );
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: querysession = %"PRIu64" querystarttime = %"PRIu64"\n", querysession, querystarttime );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: ipv6addrquery = %d, addrfetch = %d, addrfetchnum = %d\n", ipv6addrquery, addrfetch, addrfetchnum);
+		#ifdef CLIENTDEBUG
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: forcereload = %d, reloadnum = %d\n", forcereload, reloadnum);
+		#endif
 		if (1 != qsf || 1 != qstf)
 		{
 			IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: qsf = %d qstf = %d\n", qsf, qstf );
 		}
 		#else
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: includeexisting = %d beginscan = %d fetch = %d\n", includeexisting, beginscan, fetch);
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: session = %"PRIu64" starttime = %"PRIu64" and numports = %d\n", (uint64_t)session, (uint64_t)starttime, numports);
+		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: session = %"PRIu64" ms_since_epoch = %"PRIu64" and numports = %d\n", (uint64_t)session, ms_since_epoch, numports);
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: ipv6addrquery = %d, addrfetch = %d\n", ipv6addrquery, addrfetch);
-		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: forcereload = %d, reloadnum = %d\n", forcereload, reloadnum);
 		#endif
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: numcustomports = %u NUMUSERDEFPORTS = %d\n", numcustomports, NUMUSERDEFPORTS );
 		IPSCAN_LOG( LOGPREFIX "ipscan: DEBUG INFO: reconstituted query string = %s\n", reconquery );
@@ -1115,6 +1128,7 @@ int main(void)
 		//
 		//
 		//
+
 
 		#if (TEXTMODE == 1)
 
@@ -1161,7 +1175,7 @@ int main(void)
 			unsigned int z;
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-                        	rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+                        	rc = write_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session,\
 					 IPSCAN_TESTSTATE_AS_PORTNUM, IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
                         	if (rc != 0)
                         	{
@@ -1187,22 +1201,22 @@ int main(void)
 
 			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
-                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
+                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned error: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned error: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
                         }
                         else
                         {  
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after init) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after init) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
                                 #endif
                         }
 			#endif
@@ -1229,13 +1243,13 @@ int main(void)
 			// Log termsaccepted
 			IPSCAN_LOG( LOGPREFIX "ipscan: remote address : %s beginning text-mode scan with termsaccepted = %d\n", saferemoteaddrstring, termsaccepted );
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: at time %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
+			IPSCAN_LOG( LOGPREFIX "ipscan: at time %"PRIu64", session %"PRIu64"\n", ms_since_epoch, (uint64_t)session);
 			#endif
 
 			// Only included if ping is compiled in ...
 			#if (1 == IPSCAN_INCLUDE_PING)
 			// Ping the remote host and store the result ...
-			int pingresult = check_icmpv6_echoresponse(remoteaddrstring, (uint64_t)starttime, (uint64_t)session, &indirecthost[0] );
+			int pingresult = check_icmpv6_echoresponse(remoteaddrstring, ms_since_epoch, (uint64_t)session, &indirecthost[0] );
 
 			// Ensure the indirecthost returned is valid
 			// NOTE: this validation may require adjustment if the declaration of indirecthost changes
@@ -1276,7 +1290,7 @@ int main(void)
 			rc = -1;
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
-				rc = write_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+				rc = write_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session,\
 					(uint64_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingwrite, indirecthost);
 				if (rc != 0)
 				{
@@ -1303,22 +1317,22 @@ int main(void)
 
 			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
-                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
+                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned error: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned error: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
                         }
                         else
                         {  
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after ping) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after ping) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
                                 #endif
                         }
 			#endif
@@ -1355,10 +1369,10 @@ int main(void)
 					{
 						unsigned int todo = (remaining > MAXUDPPORTSPERCHILD) ? MAXUDPPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef UDPPARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",saferemoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_ports_parll(%s,%d,%d,host_msb,host_lsb,ms_since_epoch,session,portlist)\n",saferemoteaddrstring,porti,todo);
 						#endif
 						// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
-						rc |= check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, &udpportlist[0]);
+						rc |= check_udp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session, &udpportlist[0]);
 						porti += todo;
 						numchildren ++;
 						remaining = (int)(numudpports - porti);
@@ -1380,22 +1394,22 @@ int main(void)
 
 			#if (CLIENTDEBUG >1)
 			// Check we know about this client
-                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
+                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned error: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned error: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
                         }
                         else
                         {  
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after UDP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after UDP) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
                                 #endif
                         }
 			#endif
@@ -1416,7 +1430,7 @@ int main(void)
 				int result = -1;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 				{
-					result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+					result = read_db_result(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session,\
 			 (uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_UDP << IPSCAN_PROTO_SHIFT) ),\
 						udpindirecthost);
 					if (result < 0)
@@ -1452,7 +1466,7 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result() returned UNKNOWN: UDP port scan results table\n" );
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address: %s\n", saferemoteaddrstring);
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at starttime %"PRIu64", session %"PRIu64"\n", (uint64_t)starttime, (uint64_t)session);
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at ms_since_epoch %"PRIu64", session %"PRIu64"\n", ms_since_epoch, (uint64_t)session);
 				}
 
 				#ifdef UDPDEBUG
@@ -1556,10 +1570,10 @@ int main(void)
 					{
 						unsigned int todo = (remaining > MAXPORTSPERCHILD) ? MAXPORTSPERCHILD : (unsigned int)remaining;
 						#ifdef PARLLDEBUG
-						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,starttime,session,portlist)\n",saferemoteaddrstring,porti,todo);
+						IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(%s,%d,%d,host_msb,host_lsb,ms_since_epoch,session,portlist)\n",saferemoteaddrstring,porti,todo);
 						#endif
 						// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
-						rc |= check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, &portlist[0]);
+						rc |= check_tcp_ports_parll(remoteaddrstring, porti, todo, remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session, &portlist[0]);
 						porti += todo;
 						numchildren ++;
 						remaining = (int)(numports - porti);
@@ -1586,7 +1600,7 @@ int main(void)
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
                         	// Write the new value back to the database
-                        	rc = update_result_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete);
+                        	rc = update_result_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete);
                         	if (0 != rc)
                         	{
                                 	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for text-mode IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
@@ -1603,22 +1617,22 @@ int main(void)
 
 			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
-                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session);
+                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session);
 			if (num_rows < 0)
 			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned error: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned error: %d, %s ms_after_epopch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_after_epopch, (uint64_t)session );
 			}
                         else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
                         {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
                         }
                         else
                         {  
                                 #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after TCP) returned rows: %d, %s starttime %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, (uint64_t)starttime, (uint64_t)session );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after TCP) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
                                 #endif
                         }
 			#endif
@@ -1639,7 +1653,7 @@ int main(void)
 				int result = -1;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 				{
-					result = read_db_result(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session,\
+					result = read_db_result(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session,\
 					(uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT)+ (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)),\
 					tcpindirecthost );
 					if (result < 0)
@@ -1674,8 +1688,8 @@ int main(void)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result() returned UNKNOWN: TCP port scan results table\n" );
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: for remote address : %s\n", saferemoteaddrstring);
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at starttime %"PRIu64", session %"PRIu64"\n",\
-							(uint64_t)starttime, (uint64_t)session);
+					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: at ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
+							ms_since_epoch, (uint64_t)session);
 				}
 
 				#ifdef RESULTSDEBUG
@@ -1871,9 +1885,9 @@ int main(void)
 				// if we're deleting things at the end of the test (ie NOT just relying on tidy up)
 				#ifndef IPSCAN_TIDY_UP_ONLY
 				#ifdef IPSCAN_TESTEND_DELETE_RESULTS_ONLY
-				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_DELETE_RESULTS_ONLY);
+				rc = delete_from_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session, IPSCAN_DELETE_RESULTS_ONLY);
 				#else
-				rc = delete_from_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_DELETE_EVERYTHING);
+				rc = delete_from_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session, IPSCAN_DELETE_EVERYTHING);
 				#endif
 				#else
 				IPSCAN_LOG( LOGPREFIX "ipscan: WARN: text-only delete_from_db DISABLED\n");
@@ -1905,7 +1919,7 @@ int main(void)
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 			{
 				// Mark test as completed successfully
-				rc = update_result_db(remotehost_msb, remotehost_lsb, (uint64_t)starttime, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete);
+				rc = update_result_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete);
                         	if (0 != rc)
                         	{
                         		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
@@ -1971,24 +1985,10 @@ int main(void)
 			#ifdef CLIENTDEBUG
 			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
 			fetch_to_string(fetchnum, &fetchstring[0]);
-                	timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
 			IPSCAN_LOG( LOGPREFIX "ipscan: Fetch indicated %s completion for remote host: %s at querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 				 fetchstring, saferemoteaddrstring, querystarttime, querysession );
 			#endif
 
-			// report time-difference
-                        if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                        saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
-                        }  
-                        else
-                        {
-				#ifdef CLIENTDEBUG
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                        saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
-				#endif
-                        }
 			#if (CLIENTDEBUG > 1)
 			// Check we know about this client
 			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
@@ -2051,9 +2051,6 @@ int main(void)
 			if (0 > result)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned bad value: %d\n", result);
-				// report time-difference
-                               	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                    		 	saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
 				result = PORTUNKNOWN;
 			}
 			uint64_t write_result = (uint64_t)result;
@@ -2173,10 +2170,6 @@ int main(void)
                         if (rc != 0)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: dump_db return code was %d (expected 0)\n", rc);
-				// report time-difference
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                      		 saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
-                                return(EXIT_SUCCESS);
                         }
 			// Replacement for dummy output
 		}
@@ -2192,18 +2185,6 @@ int main(void)
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, query database fetch\n",\
 					saferemoteaddrstring, querystarttime, querysession );
-			// report time-difference
-                	timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-                        if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                        saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
-                        }  
-                        else
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                        saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
-                        }
 			#endif
 
 			#if (CLIENTDEBUG > 1)
@@ -2241,10 +2222,6 @@ int main(void)
 			if (rc != 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: dump_db return code was %d (expected 0)\n", rc);
-				// report time-difference
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                       		 saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
-				return(EXIT_SUCCESS);
 			}
 			// Check the current running state and if it's NOT running then update it to running
 			// effectively clear timeout bit, etc. if we've had a successful fetch
@@ -2337,24 +2314,9 @@ int main(void)
 			report_ipscan_versions(ipscan_main_ver(), ipscan_general_ver(), ipscan_tcp_ver(), ipscan_udp_ver(), ipscan_icmpv6_ver(), ipscan_db_ver(),\
 				 ipscan_web_ver(), ipscan_h_ver(), ipscan_portlist_ver());
         		#endif
-			// Calculate and report time-difference
-                	timedifference = ( (int64_t)(querystarttime & INT64_MAX) - (int64_t)(nowtimeref & INT64_MAX) );
-			if (IPSCAN_DELETE_RESULTS_SHORT_OFFSET <= timedifference || timedifference <= (int64_t)(-1 * IPSCAN_DELETE_RESULTS_SHORT_OFFSET))
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, excessive time difference = %"PRId64", sending redirect.\n",\
-					saferemoteaddrstring, querystarttime, querysession, timedifference );
-				// send a redirect in the hope that the client will reload the page
-				create_redirect_header(302, URIPATH"/"EXENAME);
-				return(EXIT_SUCCESS);
-			}
-			else
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, time difference = %"PRId64"\n",\
-					saferemoteaddrstring, querystarttime, querysession, timedifference );
-			}
 			#endif
-// ----
-// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			const char unusedfield[] = "unused";
                         rc = -1;
                         unsigned int z;
@@ -2906,9 +2868,6 @@ int main(void)
 				if (0 > directresult)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript TCP stats read_db_result() returned bad value: %d\n", directresult );
-					// Calculate and report time-difference
-                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                       		 	saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
 					directresult = PORTUNKNOWN;
 				}
 				if ( PORTUNKNOWN == directresult )
@@ -3075,9 +3034,6 @@ int main(void)
 				if (0 > result)
 				{
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript waiting read_db_result() returned bad value: %d\n", result);
-					// Calculate and report time-difference
-                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: host : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, fetchnum = %d, diff = %"PRId64"\n",\
-                                       		 	saferemoteaddrstring, querystarttime, querysession, fetchnum, timedifference );
 					result = PORTUNKNOWN;
 				}
 				if ( PORTUNKNOWN == result )
@@ -3318,12 +3274,12 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) attempt %u returned %d\n", (z+1), rc);
 			// Wait to improve chances of missing a database deadlock
 			struct timespec rem;
-                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
-                        int rc2 = nanosleep( &req, &rem);
-                        if (0 != rc2)
-                        {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
-                        }
+			const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+			int rc2 = nanosleep( &req, &rem);
+			if (0 != rc2)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+			}
 		}
 	}
 	if (0 != rc)
@@ -3346,12 +3302,12 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) attempt %u returned %d\n", (z+1), rc);
 			// Wait to improve chances of missing a database deadlock
 			struct timespec rem;
-                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
-                        int rc2 = nanosleep( &req, &rem);
-                        if (0 != rc2)
-                        {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
-                        }
+			const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+			int rc2 = nanosleep( &req, &rem);
+			if (0 != rc2)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+			}
 		}
 	}
 	if (0 != rc)
@@ -3362,5 +3318,8 @@ int main(void)
 	{
 		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited after %u attempts with rc: %d\n", z, rc);
 	}
+	//
+	// exit successfully
+	//
 	return(EXIT_SUCCESS);
 }
