@@ -483,9 +483,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" var navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession.toString() + \"&starttime=\" + myTimeStamp.toString() + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
 	// set various global variables to out-of-range/non-sensical values
 	printf(" lastUpdate = 1;");
-	printf(" mySession = -1n;");//BigInt
-	printf(" myTimeStamp = -1;");
-	printf(" fetch = 900;");
+	printf(" sessionStorage.clear();");
+	printf(" window.name = null;");
 	// clear various timeouts and interval timers
 	printf(" clearTimeout(myHTTPTimeout);");
         printf(" clearInterval(myInterval);");
@@ -511,16 +510,16 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myXmlHttpErrObj.open(\"GET\", dbErrorURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");
 	printf(" }\n");
+
 	// Page Exit Handler
 	printf("const pageExitHandler = function(peh)");
 	printf(" {");
+	// Tell the server we're done ...
 	printf(" HTTPNavAway();");
 	printf(" peh.preventDefault();"); // Firefox requires this
 	printf(" const message = \"Do you wish to end the IPv6 port scan prematurely?\";");
 	// For Chrome and some legacy browsers
 	printf(" peh.returnValue = message;");
-	printf(" sessionStorage.clear();");
-	printf(" window.name = null;");
 	// For modern browsers
 	printf(" return message;");
 	printf(" };\n");

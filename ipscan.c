@@ -127,9 +127,10 @@
 // 1.06 - add PORTINDIRECT reporting for test purposes
 // 1.07 - add additional PORT states for TCP connections
 // 1.08 - move to millisecond resolution for time since epoch for both text and javascript tests
+// 1.09 - remove 302 redirects for duplicate test sessions
 
 //
-#define IPSCAN_MAIN_VER "1.08"
+#define IPSCAN_MAIN_VER "1.09"
 //
 
 #include "ipscan.h"
@@ -1982,7 +1983,7 @@ int main(void)
 		else if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 0 && fetch == 1 && addrfetch == 0 \
 				&& termsaccepted == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum)
 		{
-			#ifdef CLIENTDEBUG
+			#if (CLIENTDEBUG >= 1 || IPSCAN_LOGVERBOSITY >= 1)
 			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
 			fetch_to_string(fetchnum, &fetchstring[0]);
 			IPSCAN_LOG( LOGPREFIX "ipscan: Fetch indicated %s completion for remote host: %s at querystarttime %"PRIu64", querysession %"PRIu64"\n",\
@@ -2316,6 +2317,13 @@ int main(void)
         		#endif
 			#endif
 
+			time_t scanstart = time(NULL);
+			if (scanstart < 0)
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for scanstart %d (%s)\n", errno, strerror(errno));
+				return(EXIT_SUCCESS); // new
+			}
+
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			const char unusedfield[] = "unused";
                         rc = -1;
@@ -2344,86 +2352,6 @@ int main(void)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript write_db for IPSCAN_PROTO_TESTSTATE INIT loop exited with rc: %d\n", rc);
                         }
-// ----
-
-			#if (CLIENTDEBUG > 1)
-			// Start of check for existing test with same parameters - how many rows exist for this mix of address, starttime and session?
-			int num_rows = count_rows_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-			if (num_rows < 0)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode count_rows_db() at duplicate initiation test returned error: %d\n", num_rows);
-			}
-			else if (num_rows > 0)
-			{
-				char indtemphost[INET6_ADDRSTRLEN+1];
-				// one or more rows exist, so check for any holding IPSCAN_TESTSTATE_AS_PORTNUM
-				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
-				rc = -1;
-				int result = -1;
-				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
-				{
-					result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, indtemphost );
-					if (result < 0)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for running state 3 returned: %d\n", result);
-						// Wait to improve chances of missing a database deadlock
-						struct timespec rem;
-       	                                	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
-       	                                	int rc2 = nanosleep( &req, &rem);
-       	                                	if (0 != rc2)
-       	                                	{
-       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread 3 returned %d(%s)\n", rc2, strerror(errno) );
-       	                                	}
-					}
-				}
-				if (0 <= result && z > 1)
-				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result running state 3 loop exited after %u attempts with result: %d\n", z, result);
-				}
-				if (0 > result)
-				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result running state 3 loop exited after %u attempts with result: %d\n", z, result);
-				}
-				if (0 > result)
-				{
-					// error condition - map result as PORTUNKNOWN
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode read_db_result() at duplicate initiation test returned bad value: %d\n", result);
-					result = PORTUNKNOWN;
-				}
-				// if the database entry is NOT in the INIT running state then report an error
-				if ( IPSCAN_TESTSTATE_INIT_BIT != result )
-				{
-					if ( (result & IPSCAN_TESTSTATE_RUNNING_BIT) == IPSCAN_TESTSTATE_RUNNING_BIT)
-					{
-						// database held a valid IPSCAN_TESTSTATE_AS_PORTNUM entry, so a test is already running with these session parameters
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters is already running: %d\n", result );
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
-						create_redirect_header(302, URIPATH"/"EXENAME);
-						return(EXIT_SUCCESS);
-					}
-					else
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: another javascript-mode test with these session parameters exists but is not running: %d\n", result );
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
-					}
-				}
-			}
-			else if (num_rows == 0)
-			{
-				// 0 rows were returned for this host and session parameters
-				// see if non-0 for same session parameters (starttime, session) for another host - the session parameters should be unique - so report anyway
-				int other_num_rows = count_teststate_rows_db(querystarttime, querysession);
-				if (0 != other_num_rows)
-				{
-       		                        IPSCAN_LOG( LOGPREFIX "ipscan: INFO but ERROR: count_rows_db() javascript duplicate initiation test returned 0, BUT count_teststate_rows_db() returned %d\n", other_num_rows );
-					IPSCAN_LOG( LOGPREFIX "ipscan: INFO but ERROR: session parameters: client %s, querystarttime %"PRIu64", querysession %"PRIu64"\n", saferemoteaddrstring, querystarttime, querysession );
-       		                        IPSCAN_LOG( LOGPREFIX "ipscan: INFO but ERROR: count_rows_db() javascript duplicate initiation test found same session for different host, sending redirect\n" );
-					// create_redirect_header(302, URIPATH"/"EXENAME);
-					// return(EXIT_SUCCESS);
-				}
-			}
-			// End of check for existing test with same parameters
-			#endif
 
 			// Update the database to reflect the test is now running
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
@@ -2452,13 +2380,6 @@ int main(void)
 			if (0 != rc )
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_result_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited with rc: %d\n", rc);
-			}
-
-			time_t scanstart = time(NULL);
-			if (scanstart < 0)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: time(NULL) returned bad value for scanstart %d (%s)\n", errno, strerror(errno));
-				return(EXIT_SUCCESS); // new
 			}
 
 			#if (CLIENTDEBUG >1)
@@ -3224,7 +3145,7 @@ int main(void)
 			#endif
 			// Finish the output
 			create_html_body_end();
-			IPSCAN_LOG( LOGPREFIX "ipscan: Something untoward happened, numqueries = %u\n", numqueries);
+			IPSCAN_LOG( LOGPREFIX "ipscan: Something untoward happened, numqueries = %u, termsaccepted = %d\n", numqueries, termsaccepted);
 			IPSCAN_LOG( LOGPREFIX "ipscan: includeexisting = %d, beginscan = %d, fetch = %d, addrfetch = %d, ipv6addrquery = %d\n", \
 					includeexisting, beginscan, fetch, addrfetch, ipv6addrquery);
 			IPSCAN_LOG( LOGPREFIX "ipscan: querysession = %"PRIu64" querystarttime = %"PRIu64" numports = %d and numcustomports = %u.\n", \
