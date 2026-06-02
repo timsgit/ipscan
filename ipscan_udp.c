@@ -1,4 +1,3 @@
-//    Copyright (C) 2011-2026 Tim Chappell.
 //
 //    This file is part of IPscan.
 //
@@ -62,9 +61,11 @@
 // 1.03			add UDP SIP OPTIONS packet generator
 // 1.04			replace mention of DUT with HUT (Host Under Test) for consistency
 // 1.05			minor changes to midpoint logging to help debug and test
+// 1.06			Add random backoff to reduced chances of database table lock deadlock
+// 1.07			Add sleep to ensure minimum time per port tested
 
 //
-#define IPSCAN_UDP_VER "1.05"
+#define IPSCAN_UDP_VER "1.07"
 //
 
 #include "ipscan.h"
@@ -132,6 +133,8 @@ int regain_privileges();
 void result_to_string(uint32_t result, char * retstring);
 uint32_t get_random32(void);
 uint16_t get_ephemeral(void);
+unsigned int fork_safe_seedval();
+uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt);
 //
 #ifndef IP_MAXPACKET
 #define IP_MAXPACKET 65535
@@ -2825,6 +2828,8 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 		}
 	}
 	#endif
+	// If we received any non-stealth feedback then make sure we wait at least IPSCAN_UDPMINTIME_PER_PORT secs
+	if (UDPSTEALTH != retval) sleep(IPSCAN_UDPMINTIME_PER_PORT);
 	return (retval+indirect);
 }
 // ----------------------
@@ -2846,6 +2851,8 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		#ifdef UDPPARLLDEBUG
 		IPSCAN_LOG( LOGPREFIX "check_udp_ports_parll(): startindex %d and todo %d\n",portindex,todo);
 		#endif
+		// determine a seed value unique for this child, so backoff is unsynchronised 
+                unsigned int seedval = fork_safe_seedval();
 		// child - actually do the work here - and then exit successfully
 		for (unsigned int i = 0 ; i <todo ; i++)
 		{
@@ -2866,17 +2873,22 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 					IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db attempt %u returned %d\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
-                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+                                        uint32_t backoff = backoff_in_microseconds( &seedval, z);
+                                        struct timespec req;
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+                                        req.tv_nsec = (backoff % 1000000LL) * 1000LL;
+                                        IPSCAN_LOG( LOGPREFIX "check_udp_ports_parll(): ERROR: backoff req.tv_sec = %ld, req.tv_nsec = %ld\n", req.tv_sec, req.tv_nsec);
                                         int rc2 = nanosleep( &req, &rem);
                                         if (0 != rc2)
                                         {
-                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: check_udp_port_parll() write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         }
 				}
 			}
 			if (0 != rc)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: check_udp_port_parll(): ERROR: write_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+				IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()

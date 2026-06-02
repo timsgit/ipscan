@@ -277,7 +277,7 @@
 	//
 	// Some database accesses use locks - allow up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 	//
-	#define IPSCAN_DB_ACCESS_ATTEMPTS (3)
+	#define IPSCAN_DB_ACCESS_ATTEMPTS (6)
 	//
 	// Wait between DB ACCESS ATTEMPTS - in seconds and nanoseconds
 	//
@@ -322,6 +322,9 @@
 		#define IPSCAN_LOGVERBOSITY 3
 		#define MIDPOINTDEBUG 1
 	#endif
+	//
+	// Dump random number and backoff delay calculations
+	// #define IPSCAN_RANDDEBUG 1
 	//
 	// Dump first 16 bytes of packets to support BPF debug
 	// #define IPSCAN_BPF_DEBUG 1
@@ -572,8 +575,11 @@
 	#define TIMEOUTSECS 1
 	#define TIMEOUTMICROSECS 20000
 
-	// Minimum time between ports (s)
-	#define IPSCAN_MINTIME_PER_PORT 1
+	// Minimum time between TCP ports and ICMPv6 pings (s) - set to same as TCP/ICMPv6 timeout
+	#define IPSCAN_MINTIME_PER_PORT (TIMEOUTSECS)
+
+	// Minimum time between UDP ports (s) - set to same as UDP timeout
+	#define IPSCAN_UDPMINTIME_PER_PORT (UDPTIMEOUTSECS)
 
 	// JSON fetch period (seconds) - tradeoff between update rate and webserver load
 	#define JSONFETCHEVERY 6
@@ -593,6 +599,11 @@
 
 	// UDP buffer size
 	#define UDP_BUFFER_SIZE 768
+
+	// Backoff timing calculation
+	// base of 10ms and maximum of 2s
+	#define IPSCAN_BACKOFF_BASE_DELAY_US (10000)
+	#define IPSCAN_BACKOFF_MAX_DELAY_US (2000000)
 
 	// UDP timeout (seconds) - needs to exceed UPnP/SSDP response request time (MX field) which is 1
 	#define UDPTIMEOUTSECS 2

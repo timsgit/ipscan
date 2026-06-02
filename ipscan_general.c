@@ -43,9 +43,10 @@
 // 0.23 - clamp session to 52-bits maximum (javascript number can only represent 53-bits losslessly)
 // 0.24 - update copyright year
 // 0.25 - raw socket functions
+// 0.26 - added random seed generator and backoff delay calculation
 
 //
-#define IPSCAN_GENERAL_VER "0.25"
+#define IPSCAN_GENERAL_VER "0.26"
 //
 
 #include "ipscan.h"
@@ -81,6 +82,9 @@
 #if (LOGMODE == 1)
 #include <syslog.h>
 #endif
+
+// fcntl
+#include <fcntl.h>
 
 //
 // report version
@@ -130,6 +134,56 @@ uint64_t get_session(void)
 	return (sessionnum);
 }
 
+//
+// -----------------------------------------------------------------------------
+//
+unsigned int fork_safe_seedval()
+{
+	unsigned int seedval;
+	FILE *fp;
+	fp = fopen("/dev/urandom", "r");
+	if (NULL == fp)
+	{
+		seedval = ( (unsigned int)time(NULL) ^ (unsigned int)getpid() ); // Fallback
+		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : Cannot open /dev/urandom, %d (%s), defaulting seedval to 'time mixed with PID' = %u\n", errno, strerror(errno), seedval);
+	}
+	else
+	{
+		size_t numitems = fread( &seedval, sizeof(seedval), 1, fp);
+		fclose(fp);
+		if (1 != numitems)
+		{
+			seedval = ( (unsigned int)time(NULL) ^ (unsigned int)getpid() ); // Fallback
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : fread() of /dev/urandom returned unexpected amount, defaulting seedval to 'time mixed with PID' = %u\n", seedval);
+		}
+	}
+	#ifdef IPSCAN_RANDDEBUG
+	IPSCAN_LOG( LOGPREFIX "ipscan: INFO : returning seedval = %u\n", seedval);
+	#endif
+	return(seedval);
+}
+//
+// -----------------------------------------------------------------------------
+//
+uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt)
+{
+	// roughly exponential with each attempt
+	uint32_t current_ceiling = (uint32_t)IPSCAN_BACKOFF_BASE_DELAY_US*(1<<attempt);
+	#ifdef IPSCAN_RANDDEBUG
+	IPSCAN_LOG( LOGPREFIX "ipscan: INFO : raw current_ceiling = %u\n", current_ceiling);
+	#endif
+	// BUT limited to IPSCAN_BACKOFF_MAX_DELAY_US
+	if (current_ceiling > IPSCAN_BACKOFF_MAX_DELAY_US) current_ceiling = IPSCAN_BACKOFF_MAX_DELAY_US;
+	#ifdef IPSCAN_RANDDEBUG
+	IPSCAN_LOG( LOGPREFIX "ipscan: INFO : clamped current_ceiling = %u\n", current_ceiling);
+	#endif
+	//
+	uint32_t jittered_delay = 1 + ((unsigned int)rand_r(seedval) % current_ceiling);
+	#ifdef IPSCAN_RANDDEBUG
+	IPSCAN_LOG( LOGPREFIX "ipscan: INFO : jittered_delay = %u\n", jittered_delay);
+	#endif
+	return jittered_delay;
+}
 //
 // -----------------------------------------------------------------------------
 //

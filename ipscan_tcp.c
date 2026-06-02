@@ -46,9 +46,11 @@
 // 1.03			handle more TCP flags for HUT and mid-point devices
 // 1.04			Add further address checks for TCP flags from non-HUT case
 // 1.05			Minor midpoint logging differences to aid debug
+// 1.06			Add random backoff to reduced chances of database table lock deadlock
+// 1.07			Add sleep to ensure minimum time per port tested
 
 //
-#define IPSCAN_TCP_VER "1.05"
+#define IPSCAN_TCP_VER "1.07"
 //
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -113,6 +115,8 @@ uint16_t get_ephemeral(void);
 void print_ids(const char * place);
 int drop_privileges();
 int regain_privileges();
+unsigned int fork_safe_seedval();
+uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt);
 void result_to_string(uint32_t result, char * retstring);
 
 //
@@ -969,6 +973,8 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 		}
 	}
 	#endif
+	// If we received any non-stealth feedback then make sure we wait at least IPSCAN_MINTIME_PER_PORT secs
+	if (PORTINPROGRESS != retval) sleep(IPSCAN_MINTIME_PER_PORT);
 	return (retval+indirect);
 }
 //
@@ -989,7 +995,11 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		#ifdef PARLLDEBUG
 		IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): startindex %d, todo %d\n",portindex,todo);
 		#endif
+		// determine a seed value unique for this child, so backoff is unsynchronised
+		unsigned int seedval = fork_safe_seedval();
+		//
 		// child - actually do the work here - and then exit successfully
+		//
 		for (unsigned int i = 0 ; i < todo ; i++)
 		{
 			uint16_t port = portlist[portindex+i].port_num;
@@ -1011,20 +1021,25 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 				rc = write_db(host_msb, host_lsb, timestamp, session, (uint64_t)(port + ((special & IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT)), write_result, indirecthost );
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: check_tcp_port_parll() write_db attempt %u returned %d\n", (z+1), rc);
+					IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: write_db attempt %u returned %d\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
-                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &seedval, z);
+                                        struct timespec req;
+					// Convert microseconds to seconds and nanoseconds
+					req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
+					IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: backoff req.tv_sec = %ld, req.tv_nsec = %ld\n", req.tv_sec, req.tv_nsec);
                                         int rc2 = nanosleep( &req, &rem);
                                         if (0 != rc2)
                                         {
-                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: check_tcp_port_parll() write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                IPSCAN_LOG( LOGPREFIX "check_tcp_port_parll(): ERROR: write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         }
 				}
 			}
 			if (0 != rc)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: check_tcp_ports_parll(): ERROR: write_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+				IPSCAN_LOG( LOGPREFIX "check_tcp_ports_parll(): ERROR: write_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()
