@@ -1,4 +1,3 @@
-//    IPscan - an HTTP-initiated IPv6 port scanner.
 //
 //    Copyright (C) 2011-2026 Tim Chappell.
 //
@@ -128,9 +127,10 @@
 // 1.07 - add additional PORT states for TCP connections
 // 1.08 - move to millisecond resolution for time since epoch for both text and javascript tests
 // 1.09 - remove 302 redirects for duplicate test sessions
+// 1.10 - only tidyup at start/end of test to minimise database locks, add random backoffs for database accesses from main
 
 //
-#define IPSCAN_MAIN_VER "1.09"
+#define IPSCAN_MAIN_VER "1.10"
 //
 
 #include "ipscan.h"
@@ -215,6 +215,8 @@ void create_html_body_end(void);
 uint64_t get_session(void);
 void fetch_to_string(int fetchnum, char * retstring);
 char * state_to_string(int statenum, char * retstringptr, size_t retstringfree);
+unsigned int fork_safe_seedval();
+uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt);
 // create_results_key_table is only referenced if creating the text-only version of the scanner
 #if (1 == TEXTMODE)
 void create_results_key_table(char * hostname, time_t timestamp);
@@ -298,6 +300,12 @@ int main(void)
 	#endif
 	#endif
 
+	// tidyup only called for start and end of test
+	int tidyup_required = 0;
+
+	// determine a seed value for the main function
+	unsigned int mainseedval = fork_safe_seedval();
+
 	// List of ports to be tested and their results
 	struct portlist_struc portlist[MAXPORTS];
 
@@ -335,7 +343,9 @@ int main(void)
 	}
 	// Convert seconds to milliseconds and nanoseconds to milliseconds
     	uint64_t ms_since_epoch = ((uint64_t)ts_for_now.tv_sec * 1000) + ((uint64_t)ts_for_now.tv_nsec / 1000000);
+	#if (IPSCAN_LOGVERBOSITY >=1)
 	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: clock_gettime() returned ms_since_epoch = %"PRIu64"\n", ms_since_epoch);
+	#endif
 	#endif
 
 	// Parallel scanning related
@@ -1148,6 +1158,9 @@ int main(void)
 
 		if ( numqueries >= (NUMUSERDEFPORTS + 2) && (numcustomports == NUMUSERDEFPORTS) && (0 != includeexisting) && (1 == termsaccepted) )
 		{
+			// cause tidyup to happen at the end of this call
+			tidyup_required = 1;
+
 			// Take a note of the time we started running
 			#if (1 <= IPSCAN_LOGVERBOSITY)
 			time_t scanstart = starttime;
@@ -1180,14 +1193,18 @@ int main(void)
 					 IPSCAN_TESTSTATE_AS_PORTNUM, IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
                         	if (rc != 0)
                         	{
-                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING attempt %u returned non-zero: %d\n", (z+1), rc);
+                               		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING attempt %u returned non-zero: %d\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
-					const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        struct timespec req;
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                 			int rc2 = nanosleep( &req, &rem);
 					if (0 != rc2)
 					{
-                               			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                               			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
 					}
                         	}
 			}
@@ -1295,14 +1312,18 @@ int main(void)
 					(uint64_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), pingwrite, indirecthost);
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db() for ping result returned : %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode write_db() for ping result returned : %d\n", rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
-                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        struct timespec req;
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         int rc2 = nanosleep( &req, &rem);
                                         if (0 != rc2)
                                         {
-                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db ping nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode write_db ping nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         }
 				}
 			}
@@ -1429,6 +1450,8 @@ int main(void)
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				rc = -1;
 				int result = -1;
+				struct timespec rem;
+                                struct timespec req;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 				{
 					result = read_db_result(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session,\
@@ -1436,14 +1459,27 @@ int main(void)
 						udpindirecthost);
 					if (result < 0)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result for UDP port %u returned: %d\n", port, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: read_db_result for UDP port %u returned: %d\n", port, result);
 						// Wait to improve chances of missing a database deadlock
-						struct timespec rem;
-                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+						uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        	// Convert microseconds to seconds and nanoseconds
+                                        	req.tv_sec = (backoff / 1000000LL);
+						req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         	int rc2 = nanosleep( &req, &rem);
                                         	if (0 != rc2)
                                         	{
-                                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
+					}
+					else
+					{
+						// pause between database reads to give chance for other tasks
+                                        	req.tv_sec = 0;
+						req.tv_nsec = 3000000LL;
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP stats pause returned %d(%s)\n", rc2, strerror(errno) );
                                         	}
 					}
 				}
@@ -1604,7 +1640,7 @@ int main(void)
                         	rc = update_result_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete);
                         	if (0 != rc)
                         	{
-                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for text-mode IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: update_db for text-mode IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
                         	}
 			}
 			if ( rc == 0 && z > 1 )
@@ -1652,6 +1688,8 @@ int main(void)
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				rc = -1;
 				int result = -1;
+				struct timespec rem;
+                                struct timespec req;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 				{
 					result = read_db_result(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session,\
@@ -1659,14 +1697,27 @@ int main(void)
 					tcpindirecthost );
 					if (result < 0)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result for TCP port %u returned: %d\n", port, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: read_db_result for TCP port %u returned: %d\n", port, result);
 						// Wait to improve chances of missing a database deadlock
-						struct timespec rem;
-                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+						uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        	// Convert microseconds to seconds and nanoseconds
+                                        	req.tv_sec = (backoff / 1000000LL);
+						req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         	int rc2 = nanosleep( &req, &rem);
                                         	if (0 != rc2)
                                         	{
-                                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
+					}
+					else
+					{
+						// pause between database reads to give chance for other tasks
+                                        	req.tv_sec = 0;
+						req.tv_nsec = 3000000LL;
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP stats pause returned %d(%s)\n", rc2, strerror(errno) );
                                         	}
 					}
 				}
@@ -1896,14 +1947,18 @@ int main(void)
 				#endif
 				if (0 != rc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db attempt %u return code was %d (expected 0)\n", (z+1), rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-only delete_from_db attempt %u return code was %d (expected 0)\n", (z+1), rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
-                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        struct timespec req;
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         int rc2 = nanosleep( &req, &rem);
                                         if (0 != rc2)
                                         {
-                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode delete_from_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode delete_from_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         }
 				}
 			}
@@ -1913,7 +1968,7 @@ int main(void)
                         }
                         if ( 0 != rc )
                         {
-                        	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-only delete_from_db loop exited with rc: %d\n", rc);
+                        	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-only delete_from_db loop exited with rc: %d\n", rc);
                         }
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			rc = -1;
@@ -1923,7 +1978,7 @@ int main(void)
 				rc = update_result_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session, IPSCAN_TESTSTATE_AS_PORTNUM, write_state_complete);
                         	if (0 != rc)
                         	{
-                        		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
+                        		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: text-mode update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
                         	}
 			}
                         if ( 0 == rc && z > 1 )
@@ -2025,19 +2080,23 @@ int main(void)
 			rc = -1;
 			int result = -1;
 			unsigned int z;
+			struct timespec rem;
+                        struct timespec req;
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 			{
 				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, tempindhost );
 				if (result < 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for running state returned: %d\n", result);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result for running state returned: %d\n", result);
 					// Wait to improve chances of missing a database deadlock
-					struct timespec rem;
-                                       	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                        	int rc2 = nanosleep( &req, &rem);
                                        	if (0 != rc2)
                                        	{
-                                       		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
+                                       		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: read_db_result nanosleep() reread returned %d(%s)\n", rc2, strerror(errno) );
                                        	}
 				}
 			}
@@ -2048,12 +2107,8 @@ int main(void)
 			if (0 > result)
                         {
                         	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result running state loop exited after %u attempts with result: %d\n", z, result);
-                        }
-			if (0 > result)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result() javascript returned bad value: %d\n", result);
 				result = PORTUNKNOWN;
-			}
+                        }
 			uint64_t write_result = (uint64_t)result;
 			if ( PORTUNKNOWN == result )
 			{
@@ -2072,14 +2127,16 @@ int main(void)
 					rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result, unusedfield);
 					if (rc != 0)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for IPSCAN_PROTO_TESTSTATE rewrite returned non-zero: %d\n", rc);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: write_db for IPSCAN_PROTO_TESTSTATE rewrite returned non-zero: %d\n", rc);
 						// Wait to improve chances of missing a database deadlock
-						struct timespec rem;
-                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+						uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        	// Convert microseconds to seconds and nanoseconds
+                                        	req.tv_sec = (backoff / 1000000LL);
+						req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         	int rc2 = nanosleep( &req, &rem);
                                         	if (0 != rc2)
                                         	{
-                                               		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db nanosleep() rewrite returned %d(%s)\n", rc2, strerror(errno) );
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: write_db nanosleep() rewrite returned %d(%s)\n", rc2, strerror(errno) );
                                         	}
 					}
 				}
@@ -2151,7 +2208,7 @@ int main(void)
 					rc = update_result_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result);
 					if (0 != rc)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: javascript-mode ERROR: update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
+						IPSCAN_LOG( LOGPREFIX "ipscan: javascript-mode INFO: update_db for IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
 					}
 				}
 				if (0 == rc && z > 1)
@@ -2236,14 +2293,18 @@ int main(void)
 				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, tempindhost );
 				if (result < 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for running state 2 returned: %d\n", result);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result for running state 2 returned: %d\n", result);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
-                                       	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        struct timespec req;
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                        	int rc2 = nanosleep( &req, &rem);
                                        	if (0 != rc2)
                                        	{
-                                       		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread 2 returned %d(%s)\n", rc2, strerror(errno) );
+                                       		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: read_db_result nanosleep() reread 2 returned %d(%s)\n", rc2, strerror(errno) );
                                        	}
 				}
 			}
@@ -2254,12 +2315,9 @@ int main(void)
 			if (0 > result)
                         {
                         	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result running state 2 loop exited after %u attempts with result: %d\n", z, result);
-                        }
-			if (0 > result)
-			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript fetch read_db_result() returned bad value: %d forcing to IPSCAN_TESTSTATE_IDLE\n", result);
 				result = IPSCAN_TESTSTATE_IDLE;
-			}
+                        }
 			// if teststate is not running and its not complete then set it to running
 			if (((IPSCAN_TESTSTATE_RUNNING_BIT & result) != IPSCAN_TESTSTATE_RUNNING_BIT) && ((IPSCAN_TESTSTATE_COMPLETE_BIT & result) != IPSCAN_TESTSTATE_COMPLETE_BIT))
 			{
@@ -2276,14 +2334,18 @@ int main(void)
                         		rc = update_result_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, write_result);
                         		if (0 != rc)
                         		{
-                               			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: update_db for javascript-mode fetch IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
+                               			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: update_db for javascript-mode fetch IPSCAN_TESTSTATE UPDATE attempt %u returned non-zero: %d\n", (z+1), rc);
 						// Wait to improve chances of missing a database deadlock
 						struct timespec rem;
-                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+						uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        	struct timespec req;
+                                        	// Convert microseconds to seconds and nanoseconds
+                                        	req.tv_sec = (backoff / 1000000LL);
+						req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         	int rc2 = nanosleep( &req, &rem);
                                         	if (0 != rc2)
                                         	{
-                                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_db fetch nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode update_db fetch nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         	}
                         		}
 				}
@@ -2306,6 +2368,9 @@ int main(void)
 		else if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 1 \
 				&& termsaccepted == 1 && includeexisting != 0 && fetch == 0 && addrfetch == 0)
 		{
+			// cause tidyup to happen at the end of this call
+			tidyup_required = 1;
+
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, initiate scan\n",\
 					saferemoteaddrstring, querystarttime, querysession );
@@ -2333,14 +2398,18 @@ int main(void)
                                 rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, IPSCAN_TESTSTATE_INIT_BIT, unusedfield);
                                 if (rc != 0)
                                 {
-                                        IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript write_db for IPSCAN_PROTO_TESTSTATE INIT attempt %u returned non-zero: %d\n", (z+1), rc);
+                                        IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript write_db for IPSCAN_PROTO_TESTSTATE INIT attempt %u returned non-zero: %d\n", (z+1), rc);
                                         // Wait to improve chances of missing a database deadlock
                                         struct timespec rem;
-                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        struct timespec req;
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         int rc2 = nanosleep( &req, &rem);
                                         if (0 != rc2)
                                         {
-                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript write_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         }
                                 }
                         }
@@ -2362,14 +2431,18 @@ int main(void)
                         	rc = update_result_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, IPSCAN_TESTSTATE_RUNNING_BIT);
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_result_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode update_result_db for IPSCAN_PROTO_TESTSTATE RUNNING returned non-zero: %d\n", rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
-                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        struct timespec req;
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         int rc2 = nanosleep( &req, &rem);
                                         if (0 != rc2)
                                         {
-                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode update_result_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode update_result_db nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         }
 				}
 			}
@@ -2479,20 +2552,24 @@ int main(void)
 					(uint64_t)(0 + (IPSCAN_PROTO_ICMPV6 << IPSCAN_PROTO_SHIFT)), write_ping_result, indirecthost);
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: write_db for ping result returned non-zero: %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: write_db for ping result returned non-zero: %d\n", rc);
 					// Wait to improve chances of missing a database deadlock
 					struct timespec rem;
-                                        const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+					uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        struct timespec req;
+                                        // Convert microseconds to seconds and nanoseconds
+                                        req.tv_sec = (backoff / 1000000LL);
+					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         int rc2 = nanosleep( &req, &rem);
                                         if (0 != rc2)
                                         {
-                                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db ping nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+                                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode write_db ping nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
                                         }
 				}
 			}
 			if (0 != rc || (0 == rc && z>1))
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for ping result loop exited after %u attempts with rc: %d\n", z, rc);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript-mode write_db for ping result loop exited after %u attempts with rc: %d\n", z, rc);
 			}
 			if (0 != rc)
 			{
@@ -2678,6 +2755,8 @@ int main(void)
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				rc = -1;
 				int result = -1;
+				struct timespec rem;
+                                struct timespec req;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 				{
 					result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
@@ -2685,15 +2764,28 @@ int main(void)
 					tempindhost );
 					if (result < 0)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for UDP stats port %u returned: %d\n", port, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result for UDP stats port %u returned: %d\n", port, result);
 						// Wait to improve chances of missing a database deadlock
-						struct timespec rem;
-       	                                	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+						uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        	// Convert microseconds to seconds and nanoseconds
+                                        	req.tv_sec = (backoff / 1000000LL);
+						req.tv_nsec = (backoff % 1000000LL) * 1000LL;
        	                                	int rc2 = nanosleep( &req, &rem);
        	                                	if (0 != rc2)
        	                                	{
-       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread UDP stats returned %d(%s)\n", rc2, strerror(errno) );
+       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: read_db_result nanosleep() reread UDP stats returned %d(%s)\n", rc2, strerror(errno) );
        	                                	}
+					}
+					else
+					{
+						// pause between database reads to give chance for other tasks
+                                        	req.tv_sec = 0;
+						req.tv_nsec = 3000000LL;
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP stats pause returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
 					}
 				}
 				if (0 <= result && z > 1)
@@ -2759,21 +2851,36 @@ int main(void)
 				// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 				rc = -1;
 				int result = -1;
+                                struct timespec req;
+				struct timespec rem;
 				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 				{
 					result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession,\
 				 	(uint64_t)(port + ((special & (unsigned)IPSCAN_SPECIAL_MASK) << IPSCAN_SPECIAL_SHIFT) + (IPSCAN_PROTO_TCP << IPSCAN_PROTO_SHIFT) ), tempindhost);
 					if (result < 0)
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for TCP stats port %u returned: %d\n", port, result);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result for TCP stats port %u returned: %d\n", port, result);
 						// Wait to improve chances of missing a database deadlock
-						struct timespec rem;
-       	                                	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+						uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        	// Convert microseconds to seconds and nanoseconds
+                                        	req.tv_sec = (backoff / 1000000LL);
+						req.tv_nsec = (backoff % 1000000LL) * 1000LL;
        	                                	int rc2 = nanosleep( &req, &rem);
        	                                	if (0 != rc2)
        	                                	{
-       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: read_db_result nanosleep() reread TCP stats returned %d(%s)\n", rc2, strerror(errno) );
+       	                                		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: read_db_result nanosleep() reread TCP stats returned %d(%s)\n", rc2, strerror(errno) );
        	                                	}
+					}
+					else
+					{
+						// pause between database reads to give chance for other tasks
+                                        	req.tv_sec = 0;
+						req.tv_nsec = 3000000LL;
+                                        	int rc2 = nanosleep( &req, &rem);
+                                        	if (0 != rc2)
+                                        	{
+                                               		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP stats pause returned %d(%s)\n", rc2, strerror(errno) );
+                                        	}
 					}
 				}
 				if (0 <= result && z > 1)
@@ -2936,7 +3043,11 @@ int main(void)
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result for test complete returned: %d\n", result);
 						// Wait to improve chances of missing a database deadlock
 						struct timespec rem;
-       	                                	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+						uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        	struct timespec req;
+                                        	// Convert microseconds to seconds and nanoseconds
+                                        	req.tv_sec = (backoff / 1000000LL);
+						req.tv_nsec = (backoff % 1000000LL) * 1000LL;
        	                                	int rc2 = nanosleep( &req, &rem);
        	                                	if (0 != rc2)
        	                                	{
@@ -3046,7 +3157,11 @@ int main(void)
 					{
 						IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript delete_from_db attempt %u return code was %d (expected 0)\n", (z+1),  rc);
 						struct timespec rem;
-                                        	const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
+						uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+                                        	struct timespec req;
+                                        	// Convert microseconds to seconds and nanoseconds
+                                        	req.tv_sec = (backoff / 1000000LL);
+						req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                         	int rc2 = nanosleep( &req, &rem);
                                         	if (0 != rc2)
                                         	{
@@ -3072,6 +3187,9 @@ int main(void)
 		else if (numqueries >= (NUMUSERDEFPORTS + 2) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 \
 				&& termsaccepted == 1 && fetch == 0 && addrfetch == 0)
 		{
+			// set flag so that tidyup happens at the end of this call
+			tidyup_required = 1;
+
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address : %s javascript-mode, create start page\n", saferemoteaddrstring);
 			#endif
@@ -3183,61 +3301,76 @@ int main(void)
 	#ifdef IPSCAN_NO_TIDY_UP_DB
 	IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) calls disabled\n");
 	#else
-	// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
-	rc = -1;
-	unsigned int z;
-	for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+	if (tidyup_required == 1)
 	{
-		// delete everything
-		rc = tidy_up_db(IPSCAN_DELETE_EVERYTHING);
-		if (0 != rc)
+		// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+		rc = -1;
+		unsigned int z;
+		for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) attempt %u returned %d\n", (z+1), rc);
-			// Wait to improve chances of missing a database deadlock
-			struct timespec rem;
-			const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
-			int rc2 = nanosleep( &req, &rem);
-			if (0 != rc2)
+			// delete everything
+			rc = tidy_up_db(IPSCAN_DELETE_EVERYTHING);
+			if (0 != rc)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) attempt %u returned %d\n", (z+1), rc);
+				// Wait to improve chances of missing a database deadlock
+				struct timespec rem;
+				uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+				struct timespec req;
+				// Convert microseconds to seconds and nanoseconds
+				req.tv_sec = (backoff / 1000000LL);
+				req.tv_nsec = (backoff % 1000000LL) * 1000LL;
+				int rc2 = nanosleep( &req, &rem);
+				if (0 != rc2)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+				}
 			}
 		}
-	}
-	if (0 != rc)
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) loop exited with rc: %d\n", rc);
-	}
-	if (0 == rc && z>1)
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) loop exited after %u attempts with rc: %d\n", z, rc);
+		if (0 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) loop exited with rc: %d\n", rc);
+		}
+		if (0 == rc && z>1)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_EVERYTHING  ) loop exited after %u attempts with rc: %d\n", z, rc);
+		}
 	}
 	#endif
-	// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
-	rc = -1;
-	for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+	if (tidyup_required == 1)
 	{
-		// Always purge expired results 
-		rc = tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY);
-		if (0 != rc)
+		// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
+		rc = -1;
+		unsigned int z;
+		for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 		{
-			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) attempt %u returned %d\n", (z+1), rc);
-			// Wait to improve chances of missing a database deadlock
-			struct timespec rem;
-			const struct timespec req = { IPSCAN_DB_DEADLOCK_WAIT_PERIOD_S, IPSCAN_DB_DEADLOCK_WAIT_PERIOD_NS };
-			int rc2 = nanosleep( &req, &rem);
-			if (0 != rc2)
+			// Always purge expired results 
+			rc = tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY);
+			if (0 != rc)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) attempt %u returned %d\n", (z+1), rc);
+				// Wait to improve chances of missing a database deadlock
+				struct timespec rem;
+				uint32_t backoff = backoff_in_microseconds( &mainseedval, z);
+				struct timespec req;
+				// Convert microseconds to seconds and nanoseconds
+				req.tv_sec = (backoff / 1000000LL);
+				req.tv_nsec = (backoff % 1000000LL) * 1000LL;
+				int rc2 = nanosleep( &req, &rem);
+				if (0 != rc2)
+				{
+					IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) nanosleep() returned %d(%s)\n", rc2, strerror(errno) );
+				}
 			}
 		}
-	}
-	if (0 != rc)
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited with rc: %d\n", rc);
-	}
-	if ((0 == rc && z>1))
-	{
-		IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited after %u attempts with rc: %d\n", z, rc);
+		if (0 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited with rc: %d\n", rc);
+		}
+		if ((0 == rc && z>1))
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: INFO: tidy_up_db(IPSCAN_DELETE_RESULTS_ONLY) loop exited after %u attempts with rc: %d\n", z, rc);
+		}
 	}
 	//
 	// exit successfully

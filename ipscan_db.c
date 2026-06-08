@@ -100,9 +100,11 @@
 // 1.03 - dump_db() returns RUNNING instead of COMPLETED
 // 1.04 - use various msysql api calls directly - commit, autocommit.
 // 1.05 - remove 'autocommit=0', add 'start transactions' and rollbacks to improve error-case handling
+// 1.06 - optimise database reads
+// 1.07 - more database optimisations
 
 //
-#define IPSCAN_DB_VER "1.05"
+#define IPSCAN_DB_VER "1.07"
 //
 
 #include "ipscan.h"
@@ -237,20 +239,24 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				// retval guaranteed to be -1 at this point, so removed from if
 				if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
+					// EXECUTE CREATE TABLE IF NOT EXISTS
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
-						qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` WRITE", MYSQL_TBLNAME);
-						// retval defaults to -1, and is set to positive values if an error condition occurs
-						if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						//
+						// mysql_autocommit(conn, 0);
+						// START TRANSACTION
+						// INSERT
+						// if INSERT failed ROLLBACK
+						// else COMMIT
+						// 	if COMMIT failed then ROLLBACK
+						// mysql_close()
+						//
+						rc = mysql_autocommit(connection, 0);
+						if (rc != 0)
 						{
-							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: LOCK TABLES failed, returned %d, %u(%s)\n", rc,\
-									mysql_errno(connection), mysql_error(connection));
-								retval = 192;
-							}
+							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+							retval = 811;
 						}
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
 						// retval defaults to -1, and is set to positive values if an error condition occurs
@@ -353,16 +359,6 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 									}
 								}
 							}
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
-							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-							{
-								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
-									retval = 194;
-								}
-							}
 						}
 						else
 						{
@@ -456,32 +452,22 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			}
 			else
 			{
+				// mysql_autocommit( connection, 0)
+				// SELECT * FROM results WHERE () FOR UPDATE
+				// if SELECT failed then ROLLBACK
+				// else
+				// COMMIT
+				
 				char query[MAXDBQUERYSIZE];
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` READ", MYSQL_TBLNAME);
-				// retval defaults to 0, set to positive values if an error condition occurs
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				rc = mysql_autocommit( connection, 0);
+				if (rc != 0)
 				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: LOCK TABLES failed, returned %d\n", rc);
-						retval = 392;
-					}
-				}
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
-				// retval defaults to 0, set to positive values if an error condition occurs
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: START TRANSACTION failed, returned %d\n", rc);
-						retval = 312;
-					}
-				}
+					IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: AUTOCOMMIT disable failed, returned %d\n", rc);
+					retval = 398;
+				} 
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") LOCK IN SHARE MODE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				// retval defaults to 0, set to positive values if an error condition occurs
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -504,6 +490,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 						 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session);
                                 	#endif
 
+					// execute the SELECT
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
@@ -620,38 +607,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 										retval = 97;
 									}
 								}
-								else // original approach
-								{
-									printf("%s, ", row[num_fields-1]);
-									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: MySQL returned num_fields : %u expecting 9\n", num_fields);
-									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR - you NEED to update to the new database format - please see the README for details!\n");
-									#ifdef RESULTSDEBUG
-									#if (IPSCAN_LOGVERBOSITY >= 1)
-									nump += 1;
-									#endif
-									#endif
-								}
-							}
-							rc = mysql_commit( connection );
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: COMMIT failed, returned %d\n", rc);
-								retval = 392;
-								rc = mysql_rollback( connection );
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
-								}
-							}
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
-							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-							{
-								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
-									retval = 392;
-								}
 							}
 
 							if (0 == dumped_running_state)
@@ -667,7 +622,21 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							// End of json array
 							printf(" -9999, -9999, \"::1\" ]\n");
 
+							rc = mysql_commit(connection);
+							if (0 != rc)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: unsuccessful COMMIT failed, returned %d\n", rc);
+								retval = 591;
+								rc = mysql_rollback(connection);
+								if (0 != rc)
+								{
+									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: unsuccessful COMMIT failed ROLLBACK failed, returned %d\n", rc);
+									retval = 591;
+								}
+							}
+							// free results
 							mysql_free_result(result);
+
 							#ifdef RESULTSDEBUG
 							#if (IPSCAN_LOGVERBOSITY >= 1)
 							IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: reported %u actual results to the client.\n", nump);
@@ -676,7 +645,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 						}
 						else
 						{
-							if(mysql_error(connection)[0])
+							// store can return NULL if it failed or it returned 0 rows
+							if(mysql_errno(connection) != 0)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: mysql_store_result() returned NULL, error: %s\n", mysql_error(connection));
 							}
@@ -685,11 +655,28 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: surprisingly mysql_field_count() expected to return 0 fields\n");
 								retval = 95;
+								// COMMIT
+								rc = mysql_commit(connection);
+								if (0 != rc)
+								{
+									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: mysql_commit() for 0 fields error : %s\n", mysql_error(connection));
+									rc = mysql_rollback(connection);
+									if (0 != rc)
+									{
+										IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: commit then mysql_rollback() error : %s\n", mysql_error(connection));
+									}
+								}
 							}
 							else
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: mysql_store_result() error : %s\n", mysql_error(connection));
 								retval = 10;
+								// ROLLBACK
+								rc = mysql_rollback(connection);
+								if (0 != rc)
+								{
+									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: mysql_rollback() error : %s\n", mysql_error(connection));
+								}
 							}
 						}
 					}
@@ -698,6 +685,12 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 						IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = 5;
+						// ROLLBACK
+						rc = mysql_rollback(connection);
+						if (0 != rc)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: mysql_rollback() after select failed error : %s\n", mysql_error(connection));
+						}
 					}
 				}
 				else
@@ -775,18 +768,14 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` WRITE", MYSQL_TBLNAME);
-				// retval defaults to 0, set to positive values if an error condition occurs
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				rc = mysql_autocommit(connection, 0);
+				if (0 != rc)
 				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: LOCK TABLES failed, returned %d\n", rc);
-						retval = 392;
-					}
+					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					retval = 332;
 				}
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
+
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
 				// retval defaults to 0, set to positive values if an error condition occurs
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -877,16 +866,6 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
 							}
-						}
-					}
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
-					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-					{
-						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
-							retval = 394;
 						}
 					}
 				}
@@ -983,34 +962,26 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` READ", MYSQL_TBLNAME);
-				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
-				if (-1 == retres && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+
+				// mysql_autocommit( connection, 0)
+				// SELECT * FROM results WHERE () FOR UPDATE
+				// if SELECT failed then ROLLBACK
+				// else
+				// COMMIT
+
+				rc = mysql_autocommit(connection, 0);
+				if (0 != rc)
 				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: LOCK TABLES failed, returned %d\n", rc);
-						retres = -192;
-					}
-				}
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
-				// retres defaults to -1, set to other negative values if an error condition occurs
-				if (-1 == retres && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: START TRANSACTION failed, returned %d\n", rc);
-						retres = -322;
-					}
+					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					retres = -191;
 				}
 				// SELECT x FROM t1 WHERE ( a = b ) ORDER BY x DESC;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u) ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u) LOCK IN SHARE MODE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
 				if (-1 == retres && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
+					// Perform the SELECT
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
@@ -1121,35 +1092,22 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 										retres = -20;
 									}
 								}
-								else
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Unexpected num_fields results - num_fields() = %u, not 9\n", num_fields);
-									retres = -21;
-								}
 							}
-							rc = mysql_commit( connection );
+							rc = mysql_commit(connection);
 							if (0 != rc)
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: COMMIT failed, returned %d\n", rc);
-								retres = -293;
-								rc = mysql_rollback ( connection );
+								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: unsuccessful COMMIT failed, returned %d\n", rc);
+								retres = -591;
+								rc = mysql_rollback(connection);
 								if (0 != rc)
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
-								}
-							}
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
-							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-							{
-								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
-									retres = -294;
+									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: unsuccessful COMMIT failed ROLLBACK failed, returned %d\n", rc);
+									retres = -592;
 								}
 							}
 							// free the results
 							mysql_free_result(result);
+
 						}
 						else
 						{
@@ -1165,6 +1123,13 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: mysql_store_result() error : %s\n", mysql_error(connection));
 								retres = -6;
 							}
+
+							rc = mysql_rollback(connection);
+							if (0 != rc)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: unsuccessful COMMIT failed ROLLBACK failed, returned %d\n", rc);
+								retres = -582;
+							}
 						}
 					}
 					else
@@ -1172,6 +1137,12 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retres = -7;
+						rc = mysql_rollback(connection);
+						if (0 != rc)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: select query failed ROLLBACK failed, returned %d\n", rc);
+							retres = -582;
+						}
 					}
 				}
 				else
@@ -1246,18 +1217,14 @@ int tidy_up_db(int8_t deleteall)
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` WRITE", MYSQL_TBLNAME);
-				// retval defaults to 0, set to non-0 for error conditions
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				rc = mysql_autocommit(connection, 0);
+				if (0 != rc)
 				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: INFO: LOCK TABLES failed, returned %d\n", rc);
-						retval = 492;
-					}
+					IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: SET AUTOCOMMIT = 0 failed, returned %d\n", rc);
+					retval = 491;
 				}
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
+
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
 				// retval defaults to 0, set to non-0 for error conditions
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1275,14 +1242,14 @@ int tidy_up_db(int8_t deleteall)
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete based on time only
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( ts <= (NOW(6) - INTERVAL %u SECOND ) ) ORDER BY ts ASC",\
-						 MYSQL_TBLNAME, (uint32_t)IPSCAN_DELETE_EVERYTHING_LONG_OFFSET );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( ts <= (NOW(6) - INTERVAL %u SECOND ) ) ORDER BY ts ASC LIMIT %u",\
+						 MYSQL_TBLNAME, (uint32_t)IPSCAN_DELETE_EVERYTHING_LONG_OFFSET, IPSCAN_DATABASE_DELETE_LIMIT );
 				}
 				else
 				{
 					// delete based on time and row is not test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= ( NOW(6) - INTERVAL %u SECOND ) ) ORDER BY ts ASC",\
-						 MYSQL_TBLNAME, IPSCAN_TESTSTATE_AS_PORTNUM, (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= ( NOW(6) - INTERVAL %u SECOND ) ) ORDER BY ts ASC LIMIT %u",\
+						 MYSQL_TBLNAME, IPSCAN_TESTSTATE_AS_PORTNUM, (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET, IPSCAN_DATABASE_DELETE_LIMIT );
 				}
 				// retval defaults to 0, set to non-0 for error conditions
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -1314,7 +1281,10 @@ int tidy_up_db(int8_t deleteall)
 						retval = 10;
 						rolledback = 1;
 						rc = mysql_rollback( connection );
-						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: INFO: ROLLBACK returned %d\n", rc );
+						if (0 != rc)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: INFO: ROLLBACK returned %d\n", rc );
+						}
 						
 					}
 					if (0 == rolledback) // no rollback performed, so commit
@@ -1329,16 +1299,6 @@ int tidy_up_db(int8_t deleteall)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
 							}
-						}
-					}
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
-					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-					{
-						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
-							retval = 494;
 						}
 					}
 				}
@@ -1446,16 +1406,11 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
-						qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` WRITE", MYSQL_TBLNAME);
-						// retval defaults to -1, set positive for error conditions
-						if (-1 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+						rc = mysql_autocommit(connection,0);
+						if (0 != rc)
 						{
-							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: LOCK TABLES failed, returned %d\n", rc);
-								retval = 202;
-							}
+							IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+							retval = 201;
 						}
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
 						// retval defaults to -1, set positive  for error conditions
@@ -1518,6 +1473,7 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 											}
 										}
 										#endif
+
 								  		mysql_free_result(dbresult);
 								  	}
 								  	else
@@ -1576,16 +1532,6 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 									{
 										IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: COMMIT ROLLBACK returned %d\n", rc);
 									}
-								}
-							}
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
-							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-							{
-								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
-									retval = 204;
 								}
 							}
 						}
@@ -1675,31 +1621,15 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` READ", MYSQL_TBLNAME);
-				// retval defaults to 0, set to negative value for error condition
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				rc = mysql_autocommit(connection, 0);
+				if (0 != rc)
 				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: LOCK TABLES failed, returned %d\n", rc);
-						retval = -192;
-					}
-				}
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
-				// retval defaults to 0, set negative for error conditions
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: START TRANSACTION failed, returned %d\n", rc);
-						retval = -112;
-					}
+					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					retval = -192;
 				}
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
 				// LOCK TABLES results READ ; START TRANSACTION ; SELECT x FROM t1 WHERE a = b ORDER BY x;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				// retval defaults to 0, set to negative value for error condition
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1720,6 +1650,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id\n",\
 						 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session);
 					#endif
+					// actually perform the SELECT
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
@@ -1742,27 +1673,19 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 							{
 								retval = (int)num_rows;
 							}
-							rc = mysql_commit( connection );
+							rc = mysql_commit(connection);
 							if (0 != rc)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT failed, returned %d\n", rc);
-								retval = -293;
-								rc = mysql_rollback( connection );
+								retval = -284;
+								rc = mysql_rollback(connection);
 								if (0 != rc)
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
+									IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT failed ROLLBACK failed, returned %d\n", rc);
+									retval = -283;
 								}
 							}
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
-							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-							{
-								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
-									retval = -294;
-								}
-							}
+
 							// free the results
 							mysql_free_result(result);
 						}
@@ -1773,11 +1696,29 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: surprisingly mysql_field_count() expected to return 0 fields\n");
 								retval = -12;
+								rc = mysql_commit(connection);
+								if (0 != rc)
+								{
+									IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT failed , returned %d\n", rc);
+									retval = -283;
+									rc = mysql_rollback(connection);
+									if (0 != rc)
+									{
+										IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT failed ROLLBACK failed, returned %d\n", rc);
+										retval = -282;
+									}
+								}
 							}
 							else
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: mysql_store_result() error : %s\n", mysql_error(connection));
 								retval = -10;
+								rc = mysql_rollback(connection);
+								if (0 != rc)
+								{
+									IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: ROLLBACK failed, returned %d\n", rc);
+									retval = -281;
+								}
 							}
 						}
 					}
@@ -1786,6 +1727,12 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 						IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = -5;
+						rc = mysql_rollback(connection);
+						if (0 != rc)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: QUERY failed ROLLBACK failed, returned %d\n", rc);
+							retval = -272;
+						}
 					}
 				}
 				else
@@ -1862,31 +1809,16 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "LOCK TABLES `%s` READ", MYSQL_TBLNAME);
-				// retval defaults to 0, set to negative values for error conditions
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+				rc = mysql_autocommit(connection, 0);
+				if (0 != rc)
 				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: LOCK TABLES failed, returned %d\n", rc);
-						retval = -192;
-					}
+					IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					retval = -182;
 				}
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "START TRANSACTION");
-				// retval defaults to 0, set negative for error conditions
-				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 != rc)
-					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: START TRANSACTION failed, returned %d\n", rc);
-						retval = -102;
-					}
-				}
+
 				// uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b ORDER BY x;
-				qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 				// retval defaults to 0, set to negative values for error conditions
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1940,17 +1872,9 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 									thisrow++;
 								}
 							}
-							rc = mysql_commit( connection );
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: COMMIT failed, returned %d\n", rc);
-								retval = -293;
-								rc = mysql_rollback( connection );
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
-								}
-							}
+							// free results
+							mysql_free_result(result);
+
 							qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
 							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 							{
@@ -1961,8 +1885,6 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 									retval = -294;
 								}
 							}
-							// free results
-							mysql_free_result(result);
 						}
 						else
 						{
@@ -1971,11 +1893,29 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: surprisingly mysql_field_count() expected to return 0 fields\n");
 								retval = -12;
+								rc = mysql_commit(connection);
+								if (0 != rc)
+								{
+									IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: COMMIT failed, returned %d\n", rc);
+									retval = -295;
+									rc = mysql_rollback(connection);
+									if (0 != rc)
+									{
+										IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: COMMIT failed ROLLBACK failed, returned %d\n", rc);
+										retval = -285;
+									}
+								}
 							}
 							else
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: mysql_store_result() error : %s\n", mysql_error(connection));
 								retval = -10;
+								rc = mysql_rollback(connection);
+								if (0 != rc)
+								{
+									IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: ROLLBACK failed, returned %d\n", rc);
+									retval = -282;
+								}
 							}
 						}
 					}
@@ -1984,6 +1924,12 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 						IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = -5;
+						rc = mysql_rollback(connection);
+						if (0 != rc)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: SELECT failed ROLLBACK failed, returned %d\n", rc);
+							retval = -283;
+						}
 					}
 				}
 				else

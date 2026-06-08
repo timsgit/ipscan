@@ -208,9 +208,10 @@
 	// 2.00 additional ICMPv6 types and first raw socket implementation
 	// 2.01 add PORTINDIRECT reporting
 	// 2.02 expand TCP flags handling for HUT and INDIRECT mid-points
+	// 2.03	Multiple database handling improvements
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "2.02"
+	#define IPSCAN_VERNUM "2.03"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -277,7 +278,12 @@
 	//
 	// Some database accesses use locks - allow up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 	//
-	#define IPSCAN_DB_ACCESS_ATTEMPTS (6)
+	#define IPSCAN_DB_ACCESS_ATTEMPTS (9)
+	// Backoff timing calculation
+	// base of 30ms and maximum of 3s
+	#define IPSCAN_BACKOFF_BASE_DELAY_US (5000)
+	#define IPSCAN_BACKOFF_MAX_DELAY_US  (1000000)
+
 	//
 	// Wait between DB ACCESS ATTEMPTS - in seconds and nanoseconds
 	//
@@ -320,7 +326,6 @@
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 3
-		#define MIDPOINTDEBUG 1
 	#endif
 	//
 	// Dump random number and backoff delay calculations
@@ -600,11 +605,6 @@
 	// UDP buffer size
 	#define UDP_BUFFER_SIZE 768
 
-	// Backoff timing calculation
-	// base of 10ms and maximum of 2s
-	#define IPSCAN_BACKOFF_BASE_DELAY_US (10000)
-	#define IPSCAN_BACKOFF_MAX_DELAY_US (2000000)
-
 	// UDP timeout (seconds) - needs to exceed UPnP/SSDP response request time (MX field) which is 1
 	#define UDPTIMEOUTSECS 2
 	#define UDPTIMEOUTMICROSECS 20000
@@ -699,11 +699,16 @@
 	// Delete minimum time - only delete from database if > this value
 	//
 	#define IPSCAN_DELETE_MINIMUM_TIME (1746449000)
-
+	//
 	// TIDY UP - either delete everything in the database or 'just' results
 	//
 	#define IPSCAN_DELETE_EVERYTHING (1)
 	#define IPSCAN_DELETE_RESULTS_ONLY (0)
+	//
+	// IPSCAN_DATABASE_DELETE_LIMIT - maximum number of rows to delete - primarily to limit execution time
+	// One full set is 82(TCP)+4(CUSTOM)+16(UDP)+1(ICMPv6)+state
+	#define IPSCAN_DATABASE_DELETE_LIMIT ((unsigned int)105)
+
 	//
 	// At the end of the test - delete only the results - if defined, otherwise delete all
 	//
