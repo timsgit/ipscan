@@ -1,3 +1,4 @@
+//    IPscan - an HTTP-initiated IPv6 port scanner.
 //
 //    Copyright (C) 2011-2026 Tim Chappell.
 //
