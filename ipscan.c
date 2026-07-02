@@ -1134,12 +1134,6 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address : %s text-mode, initiate scan\n", saferemoteaddrstring);
 			#endif
 
-/* DELETE
-			#if (CLIENTDEBUG >1)
-			int num_rows;
-			#endif
-DELETE */
-
 			//
 			// Record TESTSTATE as RUNNING even though not necessary for text-mode
 			//
@@ -1177,29 +1171,6 @@ DELETE */
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited with rc: %d\n", rc);
 			}
-/* DELETE
-			#if (CLIENTDEBUG > 1)
-			// Check we know about this client
-                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session);
-			if (num_rows < 0)
-			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned error: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-			}
-                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after init) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-                        }
-                        else
-                        {  
-                                #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after init) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-                                #endif
-                        }
-			#endif
-DELETE */
 
 			// Create the header
 			HTML_HEADER();
@@ -1297,30 +1268,6 @@ DELETE */
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode write_db pingstate loop exited with rc: %d\n", rc);
 			}
 
-/* DELETE
-			#if (CLIENTDEBUG > 1)
-			// Check we know about this client
-                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session);
-			if (num_rows < 0)
-			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned error: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-			}
-                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after ping) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-                        }
-                        else
-                        {  
-                                #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after ping) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-                                #endif
-                        }
-			#endif
-DELETE */
-
 			printf("<p>ICMPv6 ECHO-Request:</p>\n");
 			printf("<table>\n");
 			printf("<tr style=\"text-align:left\">\n");
@@ -1375,30 +1322,6 @@ DELETE */
 					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
 				}
 			}
-
-/* DELETE
-			#if (CLIENTDEBUG >1)
-			// Check we know about this client
-                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session);
-			if (num_rows < 0)
-			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned error: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-			}
-                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after UDP) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-                        }
-                        else
-                        {  
-                                #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after UDP) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-                                #endif
-                        }
-			#endif
-DELETE */
 
 			printf("<p>Individual UDP port scan results:</p>\n");
 			// Start of UDP port scan results table
@@ -1615,29 +1538,6 @@ DELETE */
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode update_db loop exited with rc: %d\n", rc);
 			}
-/* DELETE
-			#if (CLIENTDEBUG > 1)
-			// Check we know about this client
-                        num_rows = count_rows_db(remotehost_msb, remotehost_lsb, ms_since_epoch, (uint64_t)session);
-			if (num_rows < 0)
-			{
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned error: %d, %s ms_after_epopch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-			}
-                        else if (num_rows == 0 || num_rows > IPSCAN_DB_MAX_EXPECTED_ROWS)
-                        {
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() text-mode (after TCP) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-                        }
-                        else
-                        {  
-                                #if (1 <= IPSCAN_LOGVERBOSITY)
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() text-mode (after TCP) returned rows: %d, %s ms_since_epoch %"PRIu64", session %"PRIu64"\n",\
-					num_rows, saferemoteaddrstring, ms_since_epoch, (uint64_t)session );
-                                #endif
-                        }
-			#endif
-DELETE */
 
 			// Start of TCP port scan results table
  			printf("<table border=\"1\">\n");
@@ -2210,9 +2110,6 @@ DELETE */
 					saferemoteaddrstring, querystarttime, querysession );
 			#endif
 
-//#if (CLIENTDEBUG > 1)
-// Should have for loop around this count
-// and only check num_rows once exited
 			// Check we know about this client
 			int num_rows = -1;
 			unsigned int z;
@@ -2258,7 +2155,7 @@ DELETE */
 					num_rows, saferemoteaddrstring, querystarttime, querysession );
                                 #endif
                         }
-//#endif DELETE
+
 			// Simplified header in which to wrap array of results
 			create_json_header();
 			// Dump the current port results for this client, querystarttime and querysession
@@ -2276,7 +2173,6 @@ DELETE */
 			result = -1;
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0; z++)
 			{
-// TJC check read_db_result returns negative
 				result = read_db_result(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, tempindhost );
 				if (result < 0)
 				{
