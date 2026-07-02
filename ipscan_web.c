@@ -101,8 +101,11 @@
 // 1.03 - yet more changes to hard reload functionality
 // 1.04 - improved getUniqueTabId() - to handle tab duplication
 // 1.05 - remove address-change detection and use millisecond resolution for timestamp
+// 1.06 - update HTTPNavAway() to remove variable clearing - just reported to server now
+// 1.07	- update initialisation to clear myXmlHttpInitObj if required and wait so that myXmlHttpInitObj GET has occurred
+// 	  before periodic update() is schedule.
 
-#define IPSCAN_WEB_VER "1.05"
+#define IPSCAN_WEB_VER "1.07"
 
 #include "ipscan.h"
 
@@ -245,7 +248,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// myTimeStamp becomes the starttime query parameter
 	printf(" let myTimeStamp = -1;");
 	// mySession becomes the session query parameter - multiple runs on the same browser should be unique
-	printf(" let mySession = -1n;"); //BigInt
+	printf(" let mySession = -1n;"); // BigInt
 	printf(" let statusresult = 0;");
 	printf(" let lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
 	printf(" const cleanUrl = window.location.protocol + \"//\" + window.location.host + window.location.pathname;");
@@ -268,7 +271,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myBlink = 0;");
 	printf(" fetches = 0;");
 	printf(" myTimeStamp = -1;");
-	printf(" mySession = -1n;"); //BigInt
+	printf(" mySession = -1n;"); // BigInt
 	printf(" statusresult = 0;");
 	printf(" lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
 	printf(" serverRunningState = -1;\n");
@@ -311,8 +314,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
         printf(" console.log('ERROR: myTimeStamp: ',myTimeStamp.toString());");
         printf(" console.log('ERROR: mySession  : ',mySession.toString());");
         #endif
-	// Have one more go at settign up session parameters - previously called reload
-	printf(" mySession = -1n;");//BigInt
+	// Have one more go at settign up session parameters
+	printf(" mySession = -1n;");// BigInt
 	printf(" myTimeStamp = -1;");
 	printf(" window.name = null;");
 	printf(" myTabId = getUniqueTabId();");
@@ -325,13 +328,20 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// so don't reuse myXmlHttpInitObj object for other transfers
 	//
 	printf(" var startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession.toString() + \"&starttime=\" + myTimeStamp.toString() + \"&%s\";", MAGICBEGIN, reconquery);
+	printf(" if (myXmlHttpInitObj.readyState < 4) { myXmlHttpInitObj.abort(); }");
 	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
 	printf(" myXmlHttpInitObj.send(null);");
 
+// WAIT
+	// Wait 3s before enabling periodic update() so that myXmlHttpInitObj GET has occurred
+	// NOTE: non-blocking call so initialisation below this step will occur
+	printf(" setTimeout(() => {");
 	//
 	// (4) finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
 	//
 	printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
+	printf(" }, 3000);");
+// WAIT
 
 	// create a prefilled array containing the potential states returned for each port
 	printf("const retVals = [");
@@ -481,10 +491,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function HTTPNavAway()");
 	printf(" {");
 	printf(" var navAwayURL = \""URIPATH"/"EXENAME"?session=\" + mySession.toString() + \"&starttime=\" + myTimeStamp.toString() + \"&%s&fetch=%d\";", reconquery, IPSCAN_NAVIGATE_AWAY);
-	// set various global variables to out-of-range/non-sensical values
-	printf(" lastUpdate = 1;");
-	printf(" sessionStorage.clear();");
-	printf(" window.name = null;");
 	// clear various timeouts and interval timers
 	printf(" clearTimeout(myHTTPTimeout);");
         printf(" clearInterval(myInterval);");

@@ -330,8 +330,8 @@
 	//
 	// Dump random number and backoff delay calculations
 	// #define IPSCAN_RANDDEBUG 1
-	//
 	// Dump first 16 bytes of packets to support BPF debug
+	//
 	// #define IPSCAN_BPF_DEBUG 1
 	//
 	// Log test data related to MIDPOINT (INDIRECT) responses

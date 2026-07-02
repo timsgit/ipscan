@@ -523,8 +523,8 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
         	};
 
 		// adjust the dummy port numbers above to match the ones we actually transmitted/expect
-		BPF_code[1].k = my_tx_dst_port; //the source port we're comparing was the destination port of our transmission
-		BPF_code[3].k = my_tx_src_port; //the destination port we're comparing was the source port of our transmission
+		BPF_code[1].k = my_tx_dst_port; // the source port we're comparing was the destination port of our transmission
+		BPF_code[3].k = my_tx_src_port; // the destination port we're comparing was the source port of our transmission
 
 		Filter.len = sizeof(BPF_code) / sizeof(struct sock_filter);
 		Filter.filter = BPF_code;
@@ -881,14 +881,14 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 					len++;
 				}
 				// SNMP version 1
-				txmessage[len] = 0x02; //int
+				txmessage[len] = 0x02; // int
 				len++;
-				txmessage[len] = 0x01; //length of 1
+				txmessage[len] = 0x01; // length of 1
 				len++;
 				txmessage[len] = (special & 0xff); // 0 = SNMPv1, 1 = SNMPv2c
 				len++;
 				// Community name
-				txmessage[len] = 0x04; //string
+				txmessage[len] = 0x04; // string
 				len++;
 				rc_st = strnlen(community[special],(size_t)(UDP_BUFFER_SIZE-len));
 				if (rc_st == (UDP_BUFFER_SIZE-len))
@@ -934,26 +934,26 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 					len++;
 
 					// Error status (0=noError)
-					txmessage[len] = 0x02; //int
+					txmessage[len] = 0x02; // int
 					len++;
-					txmessage[len] = 0x01; //length of 1
+					txmessage[len] = 0x01; // length of 1
 					len++;
 					txmessage[len] = 0x00; // SNMP error status
 					len++;
 					// Error index (0)
-					txmessage[len] = 0x02; //int
+					txmessage[len] = 0x02; // int
 					len++;
-					txmessage[len] = 0x01; //length of 1
+					txmessage[len] = 0x01; // length of 1
 					len++;
 					txmessage[len] = 0x00; // SNMP error index
 					len++;
 					// Variable bindings
-					txmessage[len] = 0x30; //var-bind sequence
+					txmessage[len] = 0x30; // var-bind sequence
 					len++;
 					txmessage[len] = (char)(8 + miblen);
 					len++;
 
-					txmessage[len] = 0x30; //var-bind
+					txmessage[len] = 0x30; // var-bind
 					len++;
 					txmessage[len] = (char)(miblen +6 );
 					len++;
@@ -1113,21 +1113,21 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				len++;
 
 				// Error status (0=noError)
-				txmessage[len] = 0x02; //int
+				txmessage[len] = 0x02; // int
 				len++;
-				txmessage[len] = 0x01; //length of 1
+				txmessage[len] = 0x01; // length of 1
 				len++;
 				txmessage[len] = 0x00; // SNMP error status
 				len++;
 				// Error index (0)
-				txmessage[len] = 0x02; //int
+				txmessage[len] = 0x02; // int
 				len++;
-				txmessage[len] = 0x01; //length of 1
+				txmessage[len] = 0x01; // length of 1
 				len++;
 				txmessage[len] = 0x00; // SNMP error index
 				len++;
 				// Variable bindings (none)
-				txmessage[len] = 0x30; //var-bind sequence
+				txmessage[len] = 0x30; // var-bind sequence
 				len++;
 				txmessage[len] = 0x00;
 				len++;
@@ -2336,7 +2336,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			txmessage[len++] = 0x0A;
 			txmessage[len++] = 0x0D;
 			txmessage[len++] = 0x0;
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2026 Tim Chappell. See https://ipv6.chappell-family.com/ipv6udptest/ This message is destined for UDP port %d\n", port);
+			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2026 Tim Chappell. See https://ipv6.chappell-family.com/ipv6tcptest/ This message is destined for UDP port %d\n", port);
 			if (rc < 0 || rc >= (UDP_BUFFER_SIZE-(int)len))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);

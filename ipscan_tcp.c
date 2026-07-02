@@ -396,8 +396,8 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	};
 
 	// adjust the dummy port numbers and ACK sequence number above to match the ones we actually transmitted/expect
-	BPF_code[1].k = my_tx_dst_port; //the source port we're comparing was the destination port of our transmission
-	BPF_code[3].k = my_tx_src_port; //the destination port we're comparing was the source port of our transmission
+	BPF_code[1].k = my_tx_dst_port; // the source port we're comparing was the destination port of our transmission
+	BPF_code[3].k = my_tx_src_port; // the destination port we're comparing was the source port of our transmission
 	BPF_code[5].k = (my_tx_seq+1);  // response sequence number is (our transmission + 1)
 
 	struct sock_fprog Filter;

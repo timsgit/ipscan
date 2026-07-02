@@ -102,9 +102,11 @@
 // 1.05 - remove 'autocommit=0', add 'start transactions' and rollbacks to improve error-case handling
 // 1.06 - optimise database reads
 // 1.07 - more database optimisations
+// 1.08 - remove final UNLOCK TABLES and ensure commit/rollback
+// 1.09 - add missing LOCK IN SHARE MODE for some SELECT
 
 //
-#define IPSCAN_DB_VER "1.07"
+#define IPSCAN_DB_VER "1.09"
 //
 
 #include "ipscan.h"
@@ -269,7 +271,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 								retval = 112;
 							}
 						}
-						// LOCK TABLES `%s` WRITE; START TRANSACTION; INSERT .... ; COMMIT; UNLOCK TABLES
+						// START TRANSACTION; INSERT .... ; COMMIT;
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indirecthost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %u, %u, '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
 						// retval defaults to -1, and is set to positive values if an error condition occurs
 						if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -453,7 +455,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			else
 			{
 				// mysql_autocommit( connection, 0)
-				// SELECT * FROM results WHERE () FOR UPDATE
+				// SELECT * FROM results WHERE () LOCK IN SHARE MODE
 				// if SELECT failed then ROLLBACK
 				// else
 				// COMMIT
@@ -466,7 +468,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 					retval = 398;
 				} 
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
-				// SELECT x FROM t1 WHERE a = b ORDER BY x;
+				// SELECT x FROM t1 WHERE a = b LOCK IN SHARE MODE;
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") LOCK IN SHARE MODE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				// retval defaults to 0, set to positive values if an error condition occurs
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -486,7 +488,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
                                         {
                                         	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: failed to convert remote host address to a safe variant\n" );
                                         }
-                                	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id\n",\
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") LOCK IN SHARE MODE\n",\
 						 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session);
                                 	#endif
 
@@ -631,7 +633,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								if (0 != rc)
 								{
 									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: unsuccessful COMMIT failed ROLLBACK failed, returned %d\n", rc);
-									retval = 591;
+									retval = 590;
 								}
 							}
 							// free results
@@ -786,7 +788,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						retval = 322;
 					}
 				}
-				// LOCK TABLES `%s` WRITE; START TRANSACTION ; DELETE .... ; COMMIT; UNLOCK TABLES
+				// START TRANSACTION ; DELETE .... ; COMMIT;
 				// DELETE FROM t1 WHERE ( a = b ) ORDER BY id;
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
@@ -964,7 +966,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				char query[MAXDBQUERYSIZE];
 
 				// mysql_autocommit( connection, 0)
-				// SELECT * FROM results WHERE () FOR UPDATE
+				// SELECT * FROM results WHERE () LOCK IN SHARE MODE
 				// if SELECT failed then ROLLBACK
 				// else
 				// COMMIT
@@ -975,7 +977,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
 					retres = -191;
 				}
-				// SELECT x FROM t1 WHERE ( a = b ) ORDER BY x DESC;
+				// SELECT x FROM t1 WHERE ( a = b ) LOCK IN SHARE MODE;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u) LOCK IN SHARE MODE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
@@ -1235,7 +1237,7 @@ int tidy_up_db(int8_t deleteall)
 						retval = 412;
 					}
 				}
-				// LOCK TABLES `%s` WRITE; START TRANSACTION ; DELETE .... ; COMMIT; UNLOCK TABLES
+				// START TRANSACTION ; DELETE .... ; COMMIT;
 				//
 				// Delete old (expired) results - DELETE FROM t1 WHERE ( ts <= NOW(6) - INTERVAL xx ) ORDER BY id
 				//
@@ -1423,7 +1425,7 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 								retval = 212;
 							}
 						}
-						// LOCK TABLES `%s` WRITE; START TRANSACTION ; UPDATE .... ; COMMIT; UNLOCK TABLES
+						// START TRANSACTION ; UPDATE .... ; COMMIT;
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` SET portresult = %u WHERE (hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u)" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port);
 						// retval defaults to -1, set positive for error conditions
 						if (-1 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -1628,8 +1630,8 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 					retval = -192;
 				}
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
-				// LOCK TABLES results READ ; START TRANSACTION ; SELECT x FROM t1 WHERE a = b ORDER BY x;
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				// START TRANSACTION ; SELECT x FROM t1 WHERE a = b LOCK IN SHARE MODE
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") LOCK IN SHARE MODE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				// retval defaults to 0, set to negative value for error condition
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1647,7 +1649,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
                                         {
                                         	IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: failed to convert remote host address to a safe variant\n" );
                                         }
-					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id\n",\
+					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") LOCK IN SHARE MODE\n",\
 						 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session);
 					#endif
 					// actually perform the SELECT
@@ -1817,11 +1819,12 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 				}
 
 				// uint64_t timestamp, uint64_t session
-				// SELECT x FROM t1 WHERE a = b ORDER BY x;
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") ORDER BY id", MYSQL_TBLNAME, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
+				// SELECT x FROM t1 WHERE a = b LOCK IN SHARE MODE
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") LOCK IN SHARE MODE", MYSQL_TBLNAME, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 				// retval defaults to 0, set to negative values for error conditions
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
+					// ACTUALLY perform the SELECT
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
@@ -1872,19 +1875,21 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 									thisrow++;
 								}
 							}
-							// free results
-							mysql_free_result(result);
 
-							qrylen = snprintf(query, MAXDBQUERYSIZE, "UNLOCK TABLES");
-							if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+							rc = mysql_commit(connection);
+							if (0 != rc)
 							{
-								rc = mysql_real_query(connection, query, (unsigned long)qrylen);
+								IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: successful COMMIT failed, returned %d\n", rc);
+								retval = -691;
+								rc = mysql_rollback(connection);
 								if (0 != rc)
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: UNLOCK TABLES failed, returned %d\n", rc);
-									retval = -294;
+									IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: successful COMMIT failed ROLLBACK failed, returned %d\n", rc);
+									retval = -692;
 								}
 							}
+							// free results
+							mysql_free_result(result);
 						}
 						else
 						{
