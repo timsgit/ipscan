@@ -332,16 +332,15 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
 	printf(" myXmlHttpInitObj.send(null);");
 
-// WAIT
-	// Wait 3s before enabling periodic update() so that myXmlHttpInitObj GET has occurred
-	// NOTE: non-blocking call so initialisation below this step will occur
-	printf(" setTimeout(() => {");
 	//
 	// (4) finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
 	//
+	// Wait 3s before enabling periodic update() so that myXmlHttpInitObj GET has occurred
+	// NOTE: non-blocking call so initialisation below this step will occur
+	//
+	printf(" setTimeout(() => {");
 	printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
 	printf(" }, 3000);");
-// WAIT
 
 	// create a prefilled array containing the potential states returned for each port
 	printf("const retVals = [");
