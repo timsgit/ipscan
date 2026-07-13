@@ -370,7 +370,7 @@
 	// Client (remote) debug - signalling, etc.
 	// Primarily for troublesome Javascript clients.
 	// #define CLIENTDEBUG 1
-
+	//
 	// Client JavaScript Console logging
 	// #define IPSCAN_JS_CONSOLE_LOGGING 1
 
