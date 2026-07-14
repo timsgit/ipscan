@@ -43,6 +43,7 @@
 # 0.23 - update copyright year
 # 0.24 - further compiler warnings added
 # 0.25 - update copyright year to 2026
+# 0.26 - add the new header files
 
 # Support servers where SETUID is not available
 # Set this variable to 0 if you don't have permissions to call SETUID
@@ -109,7 +110,7 @@ FASTTXTPARAMS=$(CFLAGS) -DTEXTMODE=1 -DFAST=1 $(CMNPARAMS)
 FASTJSPARAMS =$(CFLAGS) -DTEXTMODE=0 -DFAST=1 $(CMNPARAMS)
 
 # Common header files which are always a dependancy
-HEADERFILES=ipscan.h ipscan_portlist.h
+HEADERFILES=ipscan.h ipscan_db.h ipscan_portlist.h ipscan_db.h ipscan_general.h ipscan_web.h ipscan_tcp.h ipscan_udp.h ipscan_icmpv6.h
 # Any other files on which we depend
 DEPENDFILE=Makefile
 

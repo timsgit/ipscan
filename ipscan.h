@@ -326,6 +326,8 @@
 	#if (DEBUG == 1)
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 3
+		#define CLIENTDEBUG 1
+		#define MIDPOINTDEBUG 1
 	#endif
 	//
 	// Dump random number and backoff delay calculations

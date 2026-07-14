@@ -133,9 +133,10 @@
 // 1.12 - fork() the scanning process, so parent can exit, releasing cgi process
 // 1.13 - further improvements to restart case
 // 1.14 - nanosleep() improvements - no need for remainders
+// 1.15 - replace forward definition of functions with includes
 
 //
-#define IPSCAN_MAIN_VER "1.14"
+#define IPSCAN_MAIN_VER "1.15"
 //
 
 #include "ipscan.h"
@@ -178,61 +179,14 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost);
-int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
-int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, char * indhost);
-int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, int8_t deleteall);
-int tidy_up_db(int8_t deleteall);
-int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result);
-int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session);
-#if (CLIENTDEBUG > 1)
-int count_teststate_rows_db(uint64_t timestamp, uint64_t session);
-#endif
-// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
-int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *udpportlist);
-// hostname for check_udp_ports_parll and check_tcp_ports_parll must be the FULL 128-bit host address - NOT the safe version
-int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int todo, uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, const struct portlist_struc *portlist);
-void create_json_header(void);
-void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery);
-// starttime is of type time_t in create_html_body() calls:
-void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
-void report_useragent_strings(char *uavar, char *secchuavar, char *secchuaarchvar, char *secchuaarchplatvar);
-void report_ipscan_versions(const char *mainver, const char *generalver, const char *tcpver, const char *udpver, const char *icmpv6ver, const char *dbver,\
-         const char *webver, const char *hver, const char *plver);
-int querystring_is_alphanum(char check);
-int querystring_is_valid(char check);
-int querystring_is_number(char check);
-const char* ipscan_general_ver(void);
-const char* ipscan_tcp_ver(void);
-const char* ipscan_udp_ver(void);
-const char* ipscan_icmpv6_ver(void);
-const char* ipscan_db_ver(void);
-const char* ipscan_web_ver(void);
-bool ipv6_address_to_string( uint64_t msb, uint64_t lsb, char * buffer, unsigned char bufflen, bool slash48 );
-#ifdef IPSCAN_HTML5_ENABLED
-void create_html5_common_header(void);
-void create_html5_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
-#else
-void create_html_form(uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);
-#endif
-void create_html_common_header(void);
-void create_html_body_end(void);
-uint64_t get_session(void);
-void fetch_to_string(int fetchnum, char * retstring);
-char * state_to_string(int statenum, char * retstringptr, size_t retstringfree);
-unsigned int fork_safe_seedval();
-uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt);
-// create_results_key_table is only referenced if creating the text-only version of the scanner
-#if (1 == TEXTMODE)
-void create_results_key_table(char * hostname, time_t timestamp);
-#endif
-// Only include reference to ping-test function if compiled in
-#if (1 == IPSCAN_INCLUDE_PING)
-int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t session, char * router);
-#endif
-
+#include "ipscan_db.h"
+#include "ipscan_general.h"
+#include "ipscan_web.h"
+#include "ipscan_tcp.h"
+#include "ipscan_udp.h"
+#include "ipscan_icmpv6.h"
 //
-// End of prototypes declarations
+// End of Prototype declarations
 //
 
 //
@@ -1879,7 +1833,7 @@ int main(void)
 
 			#if (CLIENTDEBUG >= 1 || IPSCAN_LOGVERBOSITY >= 1)
 			char fetchstring[IPSCAN_FETCHNUM_STRING_MAX+1];
-			fetch_to_string(fetchnum, &fetchstring[0]);
+			fetch_to_string((uint32_t)fetchnum, &fetchstring[0]);
 			IPSCAN_LOG( LOGPREFIX "ipscan: Fetch indicated %s completion for remote host: %s at querystarttime %"PRIu64", querysession %"PRIu64"\n",\
 				 fetchstring, saferemoteaddrstring, querystarttime, querysession );
 			#endif
@@ -2105,7 +2059,6 @@ int main(void)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode dump_db loop exited with rc: %d\n", rc);
 			}
-			// Replacement for dummy output
 		}
 
 		// *IF* we have everything we need to query the database ...
@@ -3036,7 +2989,7 @@ int main(void)
 				}
 
 				#ifdef CLIENTDEBUG
-				flagsrc = state_to_string(result, &flags[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
+				flagsrc = state_to_string((uint64_t)result, &flags[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
 				#if (1 <= IPSCAN_LOGVERBOSITY)
 				if (NULL != flagsrc)
 				{

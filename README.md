@@ -33,9 +33,9 @@ IPscan can now provide feedback on mid-point devices and all ICMPv6 response typ
 
 Installation Steps:
 ===================
-IMPORTANT: when UPGRADING from versions before 1.97: a database change has occurred and consequently 
+IMPORTANT: when UPGRADING from versions before 2.03: a database change has occurred and consequently 
 it is necessary that you remove your existing database prior to building and installing 
-versions 1.97 and later. See step 4 below for details.
+versions 2.03 and later. See step 4 below for details.
 
     1.  edit the Makefile and adjust the following entries as required:
          a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
@@ -68,7 +68,7 @@ versions 1.97 and later. See step 4 below for details.
         mysql> create database ipscan;
         Query OK, 1 row affected (0.00 sec)
 
-        Note: it is unnecessary to re-create the user if upgrading from a previous version.
+        Note: it is not necessary to re-create the user if upgrading from a previous version.
        
         mysql> create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
         Query OK, 0 rows affected (0.01 sec)
@@ -79,7 +79,8 @@ versions 1.97 and later. See step 4 below for details.
         mysql> exit
         Bye
        
-        If performing an upgrade from an earlier version of IPscan then either drop the table within a mysql shell, e.g. :
+	**IMPORTANT NOTE:** If performing an upgrade from an earlier version of IPscan then either 
+	manually drop the table within a mysql shell, e.g. :
         
         mysql> use ipscan;
         mysql> drop table if exists results;
@@ -91,10 +92,10 @@ versions 1.97 and later. See step 4 below for details.
        
     5.  make && make install
        
-        Given that the suid bit is set on the installed executables, in order to support raw sockets for ICMPv6 testing, 
+        Given that the suid bit is set on the installed executables, in order to support raw sockets, 
         it is necessary to perform the 'make install' stage as root user. 
        
-        Note: when updating an existing installation to version 1.10 and beyond it may be necessary to manually 
+        Note: when updating an existing installation to version 1.10 and beyond it is necessary to manually 
         remove the ipscan_checks.c file, if it remains in your install directory, prior to building. 
         The functionality within ipscan_checks.c has been redistributed to separate files which 
         handle TCP, UDP and ICMPv6 testing.

@@ -40,7 +40,7 @@ if [ -r "${SRC}" ] ; then
 	MYSQL_TBLNAME=$(awk 'BEGIN{u="TJC369"};{if ($1 == "#define" && $2 == "MYSQL_TBLNAME") {u=$3;gsub("\"","",u)}};END{print u}' ${SRC})
 	if [[ "${MYSQL_HOST}" = "TJC369"  || "${MYSQL_USER}" = "TJC369" || "${MYSQL_PASSWD}" = "TJC369" || "${MYSQL_DBNAME}" = "TJC369" || "${MYSQL_TBLNAME}" = "TJC369" ]] ; then
 		echo ""
-		echo "ERROR: Failed to find a complete set of MYSQL_ variables:"
+		echo "ERROR: Failed to find a complete set of MYSQL_ variables in $SRC:"
 		echo "MYSQL_HOST   ="$MYSQL_HOST
 		echo "MYSQL_USER   ="$MYSQL_USER
 		echo "MYSQL_PASSWD ="$MYSQL_PASSWD

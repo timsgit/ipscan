@@ -112,6 +112,7 @@
 //
 
 #include "ipscan.h"
+#include "ipscan_db.h"
 //
 #include <stdlib.h>
 #include <strings.h>
@@ -173,7 +174,7 @@ const char* ipscan_db_ver(void)
 //
 // ----------------------------------------------------------------------------------------
 
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result, const char *indirecthost )
+int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost )
 {
 
 	// 0	ID                 	BIGINT UNSIGNED
@@ -242,7 +243,9 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				if (IPSCAN_TESTSTATE_AS_PORTNUM == port)
 				{
 					// Use the default engine - sensitive data may persist until next tidy_up_db() call
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					// Unique key is used to trigger update of existing rows rather than allow duplicate entries
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY `idx_scan_identity` (hostmsb, hostlsb, createdate, session, portnum) ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+
 					// retval defaults to -1, and is set to positive values if an error condition occurs
 					// retval guaranteed to be -1 at this point, so removed from if
 					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -277,8 +280,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
 							retval = 811;
 						}
-						// @autocommit=0; INSERT .... ; COMMIT;
-						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indirecthost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %u, %u, '%s' )", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
+						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indirecthost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", '%s' ) ON DUPLICATE KEY UPDATE portresult = VALUES(portresult), indirecthost = VALUES(indirecthost), ts = CURRENT_TIMESTAMP(6)", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
 						// retval defaults to -1, and is set to positive values if an error condition occurs
 						if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 						{
@@ -849,7 +851,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 //
 // Fetch a single result
 //
-int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, char * indhost)
+int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, char * indhost)
 {
 
 	//
@@ -922,7 +924,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				}
 				// @autocommit = 0; SELECT x FROM t1 WHERE ( a = b ) FOR UPDATE;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u) FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
 				if (-1 == retres && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1287,7 +1289,7 @@ int tidy_up_db(int8_t deleteall)
 //
 // ---------------------------------------------------------------------------------------------------------
 
-int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint32_t port, uint32_t result)
+int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result)
 {
 
 	// ID                 BIGINT UNSIGNED
@@ -1360,7 +1362,7 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 					retval = 201;
 				}
 				// @autocommit = 0 ; UPDATE .... ; COMMIT;
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` SET portresult = %u WHERE (hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u)" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` SET portresult = %"PRIu64" WHERE (hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64")" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port);
 				// retval defaults to -1, set positive for error conditions
 				if (-1 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{

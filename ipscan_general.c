@@ -137,7 +137,7 @@ uint64_t get_session(void)
 //
 // -----------------------------------------------------------------------------
 //
-unsigned int fork_safe_seedval()
+unsigned int fork_safe_seedval(void)
 {
 	unsigned int seedval;
 	FILE *fp;
@@ -817,7 +817,7 @@ void print_ids(const char * place)
 //
 // -----------------------------------------------------------------------------
 //
-int drop_privileges()
+int drop_privileges(void)
 {
 	// Set effective UID to the real UID (non-root)
 	if (seteuid(getuid()) != 0) 
@@ -834,7 +834,7 @@ int drop_privileges()
 //
 // -----------------------------------------------------------------------------
 //
-int regain_privileges()
+int regain_privileges(void)
 {
 	// Set effective UID back to root (0)
 	if (seteuid(0) != 0) 
