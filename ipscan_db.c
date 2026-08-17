@@ -106,9 +106,11 @@
 // 1.09 - add missing LOCK IN SHARE MODE for some SELECT
 // 1.10 - change SELECT "LOCK IN SHARE MODE" for "FOR UPDATE", delete redundant START TRANSACTIONs
 // 1.11 - add missing mysql_store_result() checks, make CREATE TABLE IF NOT EXISTS only apply to runningstate writes, fix potential commit instead of rollback
+// 1.12 - add missing retval for dump_db() and count_teststate_rows_db()
+// 1.13 - set autocommit true for everything - simplify delete handling
 
 //
-#define IPSCAN_DB_VER "1.11"
+#define IPSCAN_DB_VER "1.13"
 //
 
 #include "ipscan.h"
@@ -148,12 +150,11 @@
 
 // ----------------------------------------------------------------------------------------
 //
-// Prototype functions from ipscan_general.c
+// Prototype functions
 //
-void proto_to_string(uint32_t proto, char * retstring);
-char * state_to_string(uint64_t statenum, char * retstringptr, int retstringfree);
-void result_to_string(uint64_t result, char * retstring);
-bool ipv6_address_to_string( uint64_t msb, uint64_t lsb, char * buffer, unsigned char bufflen, bool slash48 );
+//
+#include "ipscan_general.h"
+#include "ipscan_web.h"
 // ----------------------------------------------------------------------------------------
 
 //
@@ -267,17 +268,14 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				if (retval < 0)
 				{
 						//
-						// mysql_autocommit(conn, 0);
+						// mysql_autocommit(conn, 1);
 						// INSERT
-						// if INSERT failed ROLLBACK
-						// else COMMIT
-						// 	if COMMIT failed then ROLLBACK
 						// mysql_close()
 						//
-						rc = mysql_autocommit(connection, 0);
+						rc = mysql_autocommit(connection, 1);
 						if (rc != 0)
 						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
 							retval = 811;
 						}
 						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indirecthost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", '%s' ) ON DUPLICATE KEY UPDATE portresult = VALUES(portresult), indirecthost = VALUES(indirecthost), ts = CURRENT_TIMESTAMP(6)", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
@@ -307,12 +305,12 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 								if (NULL != staterc)
 								{
 
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64", portnum = %u, TESTSTATE = %u (%s), indirecthost = '%s')\n",\
+									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64", portnum = %"PRIu64", TESTSTATE = %"PRIu64" (%s), indirecthost = '%s')\n",\
 										MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, port, result, staterc, indirecthost); 
 								}
 								else
 								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64", portnum = %u, TESTSTATE = %u, indirecthost = '%s')\n",\
+									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64", portnum = %"PRIu64", TESTSTATE = %"PRIu64", indirecthost = '%s')\n",\
 									 	MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, port, result, indirecthost); 
 								}
 							}
@@ -340,34 +338,10 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 							#endif
 							// ACTUALLY perform the INSERT
 							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-							int rolledback = 0;
 							if (0 == rc)
 							{
 								// retval set to 0 if INSERT completed successfully
 								retval = 0;
-							}
-							else
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to execute insert query \"%s\" %u (%s)\n",\
-										query, mysql_errno(connection), mysql_error(connection) );
-								retval = 7;
-								rc = mysql_rollback( connection );
-								rolledback = 1;
-								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INFO: ROLLBACK returned %d\n", rc);
-							}
-							if (0 == rolledback) // no rollback performed, so commit
-							{
-								rc = mysql_commit( connection );
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: COMMIT failed, returned %d\n", rc);
-									retval = 193;
-									rc = mysql_rollback( connection );
-									if (0 != rc)
-									{
-										IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
-									}
-								}
 							}
 						}
 						else
@@ -446,26 +420,22 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			}
 			else
 			{
-				// mysql_autocommit( connection, 0)
-				// SELECT * FROM results WHERE () LOCK IN SHARE MODE
-				// if SELECT failed then ROLLBACK
-				// else
-				// COMMIT
-				
+				// mysql_autocommit( connection, 1)
+				// SELECT * FROM results WHERE () FOR UPDATE
 				char query[MAXDBQUERYSIZE];
-				rc = mysql_autocommit( connection, 0);
+				rc = mysql_autocommit( connection, 1);
 				if (rc != 0)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: AUTOCOMMIT disable failed, returned %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: AUTOCOMMIT enable failed, returned %d\n", rc);
 					retval = 398;
 				} 
+
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
 				// SELECT x FROM t1 WHERE a = b FOR UPDATE;
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY portnum ASC FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				// retval defaults to 0, set to positive values if an error condition occurs
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
-
 					#ifdef DBDEBUG
                                         char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
 					memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
@@ -480,7 +450,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
                                         {
                                         	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: failed to convert remote host address to a safe variant\n" );
                                         }
-                                	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") LOCK IN SHARE MODE\n",\
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY portnum ASC FOR UPDATE\n",\
 						 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session);
                                 	#endif
 
@@ -511,20 +481,21 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							uint32_t port = 0;
 							uint32_t res = 0;
 							
-							// Start of json array
 							int dumped_running_state = 0;
+
+							// put out the standard json header
+							create_json_header();
+							// Start of json array
 							printf("[ ");
 
 							while ((row = mysql_fetch_row(result)))
 							{
-// ADDED NULL check TJC
-								if (9 == num_fields && NULL != row) // database includes indirect host and timestamp fields
+								if (9 == num_fields) // database includes indirect host and timestamp fields
 								{
 									char hostind[INET6_ADDRSTRLEN+1];
 									uint64_t ui64_port;
 									uint64_t ui64_res;
 									int rcport = sscanf(row[5], "%"SCNu64, &ui64_port);
-									int rcres = sscanf(row[6], "%"SCNu64, &ui64_res);
 									if (1 == rcport && ui64_port <= INT_MAX)
 									{
 										port = (uint32_t)ui64_port;
@@ -534,6 +505,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 										IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: sscanf() failed - rcport %d, ui64_port %"PRIu64"\n", rcport, ui64_port);
 										rcport = 0;
 									}
+									int rcres = sscanf(row[6], "%"SCNu64, &ui64_res);
 									if (1 == rcres && ui64_res <= INT_MAX)
 									{
 										res = (uint32_t)ui64_res;
@@ -620,19 +592,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							// free results
 							mysql_free_result(result);
 
-							rc = mysql_commit(connection);
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: unsuccessful COMMIT failed, returned %d\n", rc);
-								retval = 591;
-								rc = mysql_rollback(connection);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: unsuccessful COMMIT failed ROLLBACK failed, returned %d\n", rc);
-									retval = 590;
-								}
-							}
-
 							#ifdef RESULTSDEBUG
 							#if (IPSCAN_LOGVERBOSITY >= 1)
 							IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: reported %u actual results to the client.\n", nump);
@@ -641,15 +600,11 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 						}
 						else
 						{
+							retval = 678;
 							// store can return NULL if it failed or it returned 0 rows
 							if(mysql_errno(connection) != 0)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: mysql_store_result() returned NULL, error: %s\n", mysql_error(connection));
-							}
-							rc = mysql_rollback(connection);
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: commit then mysql_rollback() error : %s\n", mysql_error(connection));
 							}
 						}
 					}
@@ -658,12 +613,6 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 						IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = 5;
-						// ROLLBACK
-						rc = mysql_rollback(connection);
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: mysql_rollback() after select failed error : %s\n", mysql_error(connection));
-						}
 					}
 				}
 				else
@@ -741,95 +690,44 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				rc = mysql_autocommit(connection, 0);
+				//
+				// @autocommit = 1
+				//
+				rc = mysql_autocommit(connection, 1);
 				if (0 != rc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
 					retval = 332;
 				}
 
-				// @autocommit = 0 ; SELECT id FROM results WHERE () FOR UPDATE;
-				// DELETE FROM t1 WHERE ( id = ? );
-				// COMMIT; 
+				//
+				// @autocommit = 1
+				// DELETE FROM t1 WHERE ( expression );
+				//
 				int qrylen;
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete everything for this test
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT id FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id ASC", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				}
 				else
 				{
 					// delete everything for this test except the test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT id FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %"PRIu64") ORDER BY id ASC", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 				}
-				MYSQL_RES *result;
-				int rolledback = 0;
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
-					// perform the SELECT
+					// perform the DELETE
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
-						int delete_failed = 0;
-						result = mysql_store_result(connection);
-						if (NULL == result)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: mysql_store_result() returned NULL (%s)\n", mysql_error(connection) );
-							retval = 993;
-						}
-						else
-						{
-							MYSQL_ROW row;
-							// Loop through each row returned by Statement 1
-							while ((row = mysql_fetch_row(result)))
-							{
-								// row[0] contains the 'id'
-								qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE id = %s", MYSQL_TBLNAME, row[0]);
-								int rc2 = mysql_real_query(connection, query, (unsigned long)qrylen);
-								if (rc2 != 0)
-								{
-            								delete_failed = 1;
-            								break; // Exit loop to trigger rollback
-								}
-        						}
-    							// Free the result set memory
-    							mysql_free_result(result);
-						}
-
-						if (delete_failed == 1)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: DELETE failed, returned %d (%s).\n", rc, mysql_error(connection) );
-							retval = 110;
-							rc = mysql_rollback( connection );
-							IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: INFO: DELETE rollback returned %d\n", rc );
-                                                	rolledback = 1;
-						}
+						my_ulonglong affectedrows = mysql_affected_rows(connection);
+						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: INFO: DELETE success, rows affected = %llu\n", affectedrows );
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: SELECT failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: DELETE failed, returned %d (%s).\n", rc, mysql_error(connection) );
 						retval = 910;
-						rc = mysql_rollback( connection );
-						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: INFO: SELECT rollback returned %d\n", rc );
-                                                rolledback = 1;
-					}
-				}
-				// retval defaults to 0, set to positive values if an error condition occurs
-				if (0 == retval)
-				{
-					if (0 == rolledback) // no rollback performed, so commit
-					{
-						rc = mysql_commit( connection );
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: COMMIT failed, returned %d\n", rc);
-							retval = 393;
-							rc = mysql_rollback( connection );
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
-							}
-						}
 					}
 				}
 			}
@@ -916,13 +814,13 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				rc = mysql_autocommit(connection, 0);
+				rc = mysql_autocommit(connection, 1);
 				if (0 != rc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
 					retres = -191;
 				}
-				// @autocommit = 0; SELECT x FROM t1 WHERE ( a = b ) FOR UPDATE;
+				// @autocommit = 1; SELECT x FROM t1 WHERE ( a = b ) FOR UPDATE;
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
@@ -941,7 +839,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 							if (0 == num_rows)
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: returned num_rows = %"PRIu64", num_fields = %u, query = \"%s\"\n", num_rows, num_fields, query);
-								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: remote address : %s session = %"PRIu64" timestamp = %"PRIu64" port = %u\n",\
+								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: remote address : %s session = %"PRIu64" timestamp = %"PRIu64" port = %"PRIu64"\n",\
                                       					saferemoteaddrstring, session, timestamp, port);
 							}
 							#endif
@@ -1044,19 +942,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 							}
 							// free the results
 							mysql_free_result(result);
-
-							rc = mysql_commit(connection);
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: unsuccessful COMMIT failed, returned %d\n", rc);
-								retres = -591;
-								rc = mysql_rollback(connection);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: unsuccessful COMMIT failed ROLLBACK failed, returned %d\n", rc);
-									retres = -592;
-								}
-							}
 						}
 						else
 						{
@@ -1072,13 +957,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: mysql_store_result() error : %s\n", mysql_error(connection));
 								retres = -6;
 							}
-
-							rc = mysql_rollback(connection);
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: unsuccessful COMMIT failed ROLLBACK failed, returned %d\n", rc);
-								retres = -582;
-							}
 						}
 					}
 					else
@@ -1086,12 +964,6 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 						IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retres = -7;
-						rc = mysql_rollback(connection);
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: select query failed ROLLBACK failed, returned %d\n", rc);
-							retres = -582;
-						}
 					}
 				}
 				else
@@ -1166,105 +1038,49 @@ int tidy_up_db(int8_t deleteall)
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				rc = mysql_autocommit(connection, 0);
+				rc = mysql_autocommit(connection, 1);
 				if (0 != rc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: SET AUTOCOMMIT = 0 failed, returned %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: SET AUTOCOMMIT = 1 failed, returned %d\n", rc);
 					retval = 491;
 				}
 
-				// @autocommit = 0 ; SELECT id FROM results WHERE () FOR UPDATE
-				// DELETE FROM results WHERE (id = ? )
-				// COMMIT
+				// @autocommit = 1
+				// DELETE FROM results WHERE ( expression )
 				//
-				// Delete old (expired) results - DELETE FROM t1 WHERE ( ts <= NOW(6) - INTERVAL xx ) ORDER BY id
+				// Delete old (expired) results - DELETE FROM t1 WHERE ( ts <= NOW(6) - INTERVAL xx ) ORDER BY id ASC
 				//
 				int qrylen;
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete based on time only
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT id FROM `%s` WHERE ( ts <= (NOW(6) - INTERVAL %u SECOND ) ) FOR UPDATE",\
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( ts <= (NOW(6) - INTERVAL %u SECOND ) ) ORDER BY id ASC",\
 						 MYSQL_TBLNAME, (uint32_t)IPSCAN_DELETE_EVERYTHING_LONG_OFFSET );
 				}
 				else
 				{
 					// delete based on time and row is not test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT id FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= ( NOW(6) - INTERVAL %u SECOND ) ) FOR UPDATE",\
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= ( NOW(6) - INTERVAL %u SECOND ) ) ORDER BY id ASC",\
 						 MYSQL_TBLNAME, IPSCAN_TESTSTATE_AS_PORTNUM, (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET );
 				}
 				// retval defaults to 0, set to non-0 for error conditions
-				int rolledback = 0;
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
 
 					#if (DBDEBUG > 1)
-					IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: MySQL SELECT query is : %s\n", query);
+					IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: MySQL DELETE query is : %s\n", query);
 					#endif
-					// perform the SELECT
+					// perform the DELETE
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					MYSQL_RES *result;
 					if (0 == rc)
 					{
-						int delete_failed = 0;
-						result = mysql_store_result(connection);
-						if (NULL == result)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: mysql_store_result() returned NULL (%s).\n", mysql_error(connection) );
-							retval = 963;
-						}
-						else
-						{
-							MYSQL_ROW row;
-							// Loop through each row returned by Statement 1
-							while ((row = mysql_fetch_row(result)))
-							{
-								// row[0] contains the 'id'
-								qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE id = %s", MYSQL_TBLNAME, row[0]);
-								int rc2 = mysql_real_query(connection, query, (unsigned long)qrylen);
-								if (rc2 != 0)
-								{
-            								delete_failed = 1;
-            								break; // Exit loop to trigger rollback
-								}
-        						}
-    							// Free the result set memory
-    							mysql_free_result(result);
-						}
-
-						if (delete_failed == 1)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: DELETE failed, returned %d (%s).\n", rc, mysql_error(connection) );
-							retval = 110;
-							rc = mysql_rollback( connection );
-							IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: INFO: DELETE rollback returned %d\n", rc );
-                                                	rolledback = 1;
-						}
+						my_ulonglong affectedrows = mysql_affected_rows(connection);
+						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: INFO: DELETE affected rows = %llu\n", affectedrows );
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: SELECT failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: DELETE failed, returned %d (%s).\n", rc, mysql_error(connection) );
 						retval = 910;
-						rc = mysql_rollback( connection );
-						IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: INFO: SELECT rollback returned %d\n", rc );
-                                                rolledback = 1;
-					}
-				}
-				// retval defaults to 0, set to positive values if an error condition occurs
-				if (0 == retval)
-				{
-					if (0 == rolledback) // no rollback performed, so commit
-					{
-						rc = mysql_commit( connection );
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: COMMIT failed, returned %d\n", rc);
-							retval = 393;
-							rc = mysql_rollback( connection );
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: COMMIT ROLLBACK failed, returned %d\n", rc);
-							}
-						}
 					}
 				}
 			}
@@ -1355,13 +1171,13 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 			{
 				// retval defaults to -1, and is set to other values if an error condition occurs
 				char query[MAXDBQUERYSIZE];
-				rc = mysql_autocommit(connection,0);
+				rc = mysql_autocommit(connection,1);
 				if (0 != rc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
 					retval = 201;
 				}
-				// @autocommit = 0 ; UPDATE .... ; COMMIT;
+				// @autocommit = 1 ; UPDATE .... 
 				int qrylen = snprintf(query, MAXDBQUERYSIZE, "UPDATE `%s` SET portresult = %"PRIu64" WHERE (hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64")" , MYSQL_TBLNAME, result, host_msb, host_lsb, timestamp, session, port);
 				// retval defaults to -1, set positive for error conditions
 				if (-1 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -1380,11 +1196,10 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
                                         {
                                         	IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: failed to convert remote host address to a safe variant\n" );
                                         }
-					IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: UPDATE `%s` SET portresult = %u WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %u)\n",\
+					IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: UPDATE `%s` SET portresult = %"PRIu64" WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64")\n",\
 						MYSQL_TBLNAME, result, saferemoteaddrstring, timestamp, session, port);
 					#endif
 					// PERFORM the actual UPDATE
-					int rolledback = 0;
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 					if (0 == rc)
 					{
@@ -1438,9 +1253,6 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 								IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: from mysql_next_result() in while() loop : %d, %u(%s)\n",\
 									 rc, mysql_errno(connection), mysql_error(connection));
 								retval = 911;
-								int rc2 = mysql_rollback( connection );
-								IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: mysql_next_result() ERROR: ROLLBACK returned %d\n", rc2);
-								rolledback = 1;
 							}
 						} while (rc == 0);
 						//
@@ -1456,24 +1268,6 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 						IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to execute update query \"%s\" %u (%s)\n",\
 								query, mysql_errno(connection), mysql_error(connection) );
 						retval = 7;
-						rc = mysql_rollback( connection );
-						IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: INFO: ROLLBACK returned %d\n", rc);
-						rolledback = 1;
-						
-					}
-					if (0 == rolledback) // no rollback performed, so commit
-					{
-						rc = mysql_commit( connection );
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: COMMIT failed, returned %d\n", rc);
-							retval = 203;
-							rc = mysql_rollback( connection );
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: COMMIT ROLLBACK returned %d\n", rc);
-							}
-						}
 					}
 				}
 				else
@@ -1549,15 +1343,15 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				rc = mysql_autocommit(connection, 0);
+				rc = mysql_autocommit(connection, 1);
 				if (0 != rc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
 					retval = -192;
 				}
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
-				// @autocommit = 0 ; SELECT x FROM t1 WHERE a = b FOR UPDATE
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT id FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				// @autocommit = 1 ; SELECT x FROM t1 WHERE a = b FOR UPDATE
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				// retval defaults to 0, set to negative value for error condition
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1575,7 +1369,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
                                         {
                                         	IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: failed to convert remote host address to a safe variant\n" );
                                         }
-					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") LOCK IN SHARE MODE\n",\
+					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") FOR UPDATE\n",\
 						 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session);
 					#endif
 					// actually perform the SELECT
@@ -1601,19 +1395,6 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 							{
 								retval = (int)num_rows;
 							}
-							rc = mysql_commit(connection);
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT failed, returned %d\n", rc);
-								retval = -284;
-								rc = mysql_rollback(connection);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT failed ROLLBACK failed, returned %d\n", rc);
-									retval = -283;
-								}
-							}
-
 							// free the results
 							mysql_free_result(result);
 						}
@@ -1624,29 +1405,11 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: surprisingly mysql_field_count() expected to return 0 fields\n");
 								retval = -12;
-								rc = mysql_commit(connection);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT failed , returned %d\n", rc);
-									retval = -283;
-									rc = mysql_rollback(connection);
-									if (0 != rc)
-									{
-										IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: COMMIT failed ROLLBACK failed, returned %d\n", rc);
-										retval = -282;
-									}
-								}
 							}
 							else
 							{
 								IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: mysql_store_result() error : %s\n", mysql_error(connection));
 								retval = -10;
-								rc = mysql_rollback(connection);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: ROLLBACK failed, returned %d\n", rc);
-									retval = -281;
-								}
 							}
 						}
 					}
@@ -1655,12 +1418,6 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 						IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = -5;
-						rc = mysql_rollback(connection);
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: QUERY failed ROLLBACK failed, returned %d\n", rc);
-							retval = -272;
-						}
 					}
 				}
 				else
@@ -1737,10 +1494,10 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 			else
 			{
 				char query[MAXDBQUERYSIZE];
-				rc = mysql_autocommit(connection, 0);
+				rc = mysql_autocommit(connection, 1);
 				if (0 != rc)
 				{
-					IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: AUTOCOMMIT=0 failed, returned %d\n", rc);
+					IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
 					retval = -182;
 				}
 
@@ -1804,33 +1561,15 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 
 							// free results
 							mysql_free_result(result);
-
-							rc = mysql_commit(connection);
-							if (0 != rc)
-							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: successful COMMIT failed, returned %d\n", rc);
-								retval = -691;
-								rc = mysql_rollback(connection);
-								if (0 != rc)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: successful COMMIT failed ROLLBACK failed, returned %d\n", rc);
-									retval = -692;
-								}
-							}
 						}
 						else
 						{
 							// store can return NULL if it failed or it returned 0 rows
+							retval = -891;
                                                         if(mysql_errno(connection) != 0)
                                                         {
                                                                 IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: mysql_store_result() returned NULL, error: %s\n", mysql_error(connection));
                                                         }
-                                                        rc = mysql_rollback(connection);
-                                                        if (0 != rc)
-                                                        {
-                                                                IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: commit then mysql_rollback() error : %s\n", mysql_error(connection));
-                                                        }
-
 						}
 					}
 					else
@@ -1838,12 +1577,6 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 						IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: Failed to execute select query \"%s\" %u (%s)\n",\
                                                                                         query, mysql_errno(connection), mysql_error(connection) );
 						retval = -5;
-						rc = mysql_rollback(connection);
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: SELECT failed ROLLBACK failed, returned %d\n", rc);
-							retval = -283;
-						}
 					}
 				}
 				else

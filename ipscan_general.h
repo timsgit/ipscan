@@ -27,6 +27,7 @@
 
 #include "ipscan.h"
 #include <stdint.h>
+#include <stdbool.h>
 //
 #ifndef IPSCAN_GENERAL_H
 #define IPSCAN_GENERAL_H 1
@@ -54,6 +55,8 @@ uint16_t get_ephemeral(void);
 void print_ids(const char * place);
 int drop_privileges(void);
 int regain_privileges(void);
+int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip);
+unsigned short checksum(unsigned short *ptr, int nbytes);
 //
 //
 //

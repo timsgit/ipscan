@@ -94,8 +94,7 @@ const char* ipscan_icmpv6_ver(void)
 }
 
 // Function prototypes
-int drop_privileges();
-int regain_privileges();
+#include "ipscan_general.h"
 
 //
 // Send an ICMPv6 ECHO-REQUEST and see whether we receive an ECHO-REPLY in response

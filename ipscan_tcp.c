@@ -107,18 +107,8 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost );
-unsigned short checksum(unsigned short *ptr, int nbytes) ; // RAW
-int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip);
-uint32_t get_random32(void);
-uint16_t get_ephemeral(void);
-void print_ids(const char * place);
-int drop_privileges();
-int regain_privileges();
-unsigned int fork_safe_seedval();
-uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt);
-void result_to_string(uint32_t result, char * retstring);
-
+#include "ipscan_general.h"
+#include "ipscan_db.h"
 //
 // report version
 //
@@ -1010,9 +1000,7 @@ int check_tcp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			IPSCAN_LOG ( LOGPREFIX "check_tcp_ports_parll(): DEBUG: hostname = %s, port = %u, special = %u\n", hostname, port, special);
 			#endif
 			int result = check_tcp_port_raw(hostname, port, special, &indirecthost[0]);
-			uint64_t write_result = 0;
-			if (result >= 0) { write_result = (uint64_t)result; }
-
+			uint64_t write_result = (uint64_t)result;
 			// Put results into database
 			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			int rc = -1;

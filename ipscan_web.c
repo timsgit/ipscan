@@ -224,6 +224,7 @@ void create_html5_common_header(void)
 
 void create_json_header(void)
 {
+	// standard JSON header
 	printf("%s%c%c\n","Content-type:application/json;charset=utf-8",13,10);
 }
 

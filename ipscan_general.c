@@ -44,9 +44,10 @@
 // 0.24 - update copyright year
 // 0.25 - raw socket functions
 // 0.26 - added random seed generator and backoff delay calculation
+// 0.27 - add clamp for backoff delay calculation
 
 //
-#define IPSCAN_GENERAL_VER "0.26"
+#define IPSCAN_GENERAL_VER "0.27"
 //
 
 #include "ipscan.h"
@@ -167,6 +168,8 @@ unsigned int fork_safe_seedval(void)
 //
 uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt)
 {
+	// clamp attempts - in reality we expect far fewer retries
+	if (attempt > 15) attempt = 15;
 	// roughly exponential with each attempt
 	uint32_t current_ceiling = (uint32_t)IPSCAN_BACKOFF_BASE_DELAY_US*(1<<attempt);
 	#ifdef IPSCAN_RANDDEBUG
@@ -178,7 +181,7 @@ uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt)
 	IPSCAN_LOG( LOGPREFIX "ipscan: INFO : clamped current_ceiling = %u\n", current_ceiling);
 	#endif
 	//
-	uint32_t jittered_delay = 1 + ((unsigned int)rand_r(seedval) % current_ceiling);
+	uint32_t jittered_delay = 1 + ((uint32_t)rand_r(seedval) % current_ceiling);
 	#ifdef IPSCAN_RANDDEBUG
 	IPSCAN_LOG( LOGPREFIX "ipscan: INFO : jittered_delay = %u\n", jittered_delay);
 	#endif
@@ -686,7 +689,8 @@ bool ipv6_address_to_string( uint64_t msb, uint64_t lsb, char * buffer, unsigned
 // RAW
 // -----------------------------------------------------------------------------
 //
-unsigned short checksum(unsigned short *ptr, int nbytes) {
+unsigned short checksum(unsigned short *ptr, int nbytes)
+{
     long sum = 0;
     while (nbytes > 1) { sum += *ptr++; nbytes -= 2; }
     if (nbytes == 1) sum += *(unsigned char*)ptr;
@@ -697,7 +701,8 @@ unsigned short checksum(unsigned short *ptr, int nbytes) {
 //
 // -----------------------------------------------------------------------------
 //
-int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip) {
+int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip)
+{
     
 	int udp_sock = socket(AF_INET6, SOCK_DGRAM, 0);
 	// any service will do - we're just interested in which address we'd use to connect to the remote device

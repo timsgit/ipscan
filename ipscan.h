@@ -209,9 +209,10 @@
 	// 2.01 add PORTINDIRECT reporting
 	// 2.02 expand TCP flags handling for HUT and INDIRECT mid-points
 	// 2.03	Multiple database handling improvements
+	// 2.04 Further database and gcc/build adjustments
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "2.03"
+	#define IPSCAN_VERNUM "2.04"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -327,7 +328,6 @@
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 3
 		#define CLIENTDEBUG 1
-		#define MIDPOINTDEBUG 1
 	#endif
 	//
 	// Dump random number and backoff delay calculations
@@ -680,10 +680,10 @@
 
 	// Timeout before results are deleted ...
 	// Should significantly exceed maximum test duration
-	#define IPSCAN_DELETE_TIMEOUT (300)
+	#define IPSCAN_DELETE_TIMEOUT (150)
 
 	// Sleep time between polls when waiting to delete results
-	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (5)
+	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (JSONFETCHEVERY+1)
 
 	// Time to wait before deleting database entries
 	// Should exceed time for multiple JSON fetches and sleep period
@@ -694,9 +694,9 @@
 	// or the client navigated away, etc. are deleted in relatively short order.
 	// All results, apart from the running state, older than the following will be deleted
 	// NOTE: time must be in seconds and exceed the longest time that a test can take to execute (IPSCAN_CLIENT_MAX_TIME_SECS above)
-	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (300)
+	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (180)
 	// Everything (results and running state) older than the following (in seconds) will be deleted
-	#define IPSCAN_DELETE_EVERYTHING_LONG_OFFSET (600)
+	#define IPSCAN_DELETE_EVERYTHING_LONG_OFFSET (240)
 	//
 	// Delete minimum time - only delete from database if > this value
 	//

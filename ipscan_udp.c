@@ -63,9 +63,10 @@
 // 1.05			minor changes to midpoint logging to help debug and test
 // 1.06			Add random backoff to reduced chances of database table lock deadlock
 // 1.07			Add sleep to ensure minimum time per port tested
+// 1.08			Updates to fix compilation warnings/errors in Ubuntu 24.04
 
 //
-#define IPSCAN_UDP_VER "1.07"
+#define IPSCAN_UDP_VER "1.08"
 //
 
 #include "ipscan.h"
@@ -124,17 +125,8 @@
 //
 // Prototype declarations
 //
-int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port, uint64_t result, const char *indirecthost );
-unsigned short checksum(unsigned short *ptr, int nbytes) ; // RAW
-int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip);
-void print_ids(const char * place);
-int drop_privileges();
-int regain_privileges();
-void result_to_string(uint32_t result, char * retstring);
-uint32_t get_random32(void);
-uint16_t get_ephemeral(void);
-unsigned int fork_safe_seedval();
-uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt);
+#include "ipscan_db.h"
+#include "ipscan_general.h"
 //
 #ifndef IP_MAXPACKET
 #define IP_MAXPACKET 65535
@@ -210,7 +202,7 @@ END OF FUNCTIONALITY OUTLINE: */
 //
 int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * indhost_ptr)
 {
-	char txmessage[UDP_BUFFER_SIZE+1];
+	unsigned char txmessage[UDP_BUFFER_SIZE+1];
 	struct sockaddr_in6 remoteaddr;
 	struct timeval timeout;
 	struct sockaddr_in6 localaddr;
@@ -633,12 +625,12 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			}
 			else
 			{
-				txmessage[len] = (char)(rc_st & 0xff);
+				txmessage[len] = (unsigned char)(rc_st & 0xff);
 				len++;
 			}
 			// Need one extra octet for trailing 0, however this will be overwritten
 			// by the length of the next part of the host name in standard DNS format
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery1);
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery1);
 			if (rc < 0 || rc >=( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
@@ -662,10 +654,10 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				}
 				else
 				{
-					txmessage[len] = (char)(rc_st & 0xff);
+					txmessage[len] = (unsigned char)(rc_st & 0xff);
 					len++;
 				}
-				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
+				rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery2);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
@@ -690,10 +682,10 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				}
 				else
 				{
-					txmessage[len] = (char)(rc_st & 0xff);
+					txmessage[len] = (unsigned char)(rc_st & 0xff);
 					len++;
 				}
-				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
+				rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery3);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
@@ -718,10 +710,10 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				}
 				else
 				{
-					txmessage[len] = (char)(rc_st & 0xff);
+					txmessage[len] = (unsigned char)(rc_st & 0xff);
 					len++;
 				}
-				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
+				rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", dnsquery4);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for DNS query, returned %d\n", rc);
@@ -784,7 +776,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				    the protocol.                                                   */
 
 			// Create a pseudo-random filename based on the current pid
-			int length = snprintf(&txmessage[0], UDP_BUFFER_SIZE, "%c%c%s%d%coctet%c",0,1,"/filename_tjc_",getpid(),0,0);
+			int length = snprintf((char *)&txmessage[0], UDP_BUFFER_SIZE, "%c%c%s%d%coctet%c",0,1,"/filename_tjc_",getpid(),0,0);
 			if (length < 0)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for tftp, returned %d\n", length);
@@ -861,15 +853,20 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				// SNMPv1 or SNMPv2c get
 				// Note this code will need amending if you modify the mib string and it includes IDs with values >=128
-				const char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
+				const unsigned char mib[32] = {1,2,1,1,1,0}; // system.sysDescr.0 - System Description minus 1.3.6 prefix
 				unsigned int miblen = 6;
 				// Use different community strings for SNMPv1 (index 0) and SNMPv2c (index 1)
-        			const char community[2][16] = { "public", "private" };
+        			const unsigned char community[2][16] = { "public", "private" };
 
 				// SNMP packet start
 				txmessage[len] = 0x30;
 				len++;
-				rc_st = strnlen(community[special],(size_t)(UDP_BUFFER_SIZE-len));
+				// Ubuntu24.04 fixes
+				size_t max_commstring = sizeof(community[special]);
+				size_t remaining_buffer = (size_t)(UDP_BUFFER_SIZE-len);
+				if (remaining_buffer > max_commstring) { remaining_buffer = max_commstring; }
+				rc_st = strnlen((const char *)community[special],remaining_buffer);
+				// Ubuntu24.04 fixes
 				if (rc_st == (UDP_BUFFER_SIZE-len))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad strnlen() for SNMP community, returned %lu\n", rc_st);
@@ -877,7 +874,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				}
 				else
 				{
-					txmessage[len] = (char)((29 + rc_st + miblen) & 0xff);
+					txmessage[len] = (unsigned char)((29 + rc_st + miblen) & 0xff);
 					len++;
 				}
 				// SNMP version 1
@@ -890,7 +887,12 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				// Community name
 				txmessage[len] = 0x04; // string
 				len++;
-				rc_st = strnlen(community[special],(size_t)(UDP_BUFFER_SIZE-len));
+				// Ubuntu24.04 fixes
+				max_commstring = sizeof(community[special]);
+				remaining_buffer = (size_t)(UDP_BUFFER_SIZE-len);
+				if (remaining_buffer > max_commstring) { remaining_buffer = max_commstring; }
+				rc_st = strnlen((const char *)community[special],remaining_buffer);
+				// Ubuntu24.04 fixes
 				if (rc_st == (UDP_BUFFER_SIZE-len))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad strnlen() for SNMP community, returned %lu\n", rc_st);
@@ -898,10 +900,10 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				}
 				else
 				{
-					txmessage[len] = (char)(rc_st & 0xff);
+					txmessage[len] = (unsigned char)(rc_st & 0xff);
 					len++;
 				}
-				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", community[special]);
+				rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s", community[special]);
 				if (rc < 0 || rc >= (UDP_BUFFER_SIZE-(int)len))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for SNMP, returned %d\n", rc);
@@ -917,7 +919,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				{
 					txmessage[len] = 0xA0; // SNMP GET request
 					len++;
-					txmessage[len] = (char)(22 + miblen); //0x1c
+					txmessage[len] = (unsigned char)(22 + miblen); //0x1c
 					len++;
 
 					txmessage[len] = 0x02; // Request ID
@@ -950,17 +952,17 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 					// Variable bindings
 					txmessage[len] = 0x30; // var-bind sequence
 					len++;
-					txmessage[len] = (char)(8 + miblen);
+					txmessage[len] = (unsigned char)(8 + miblen);
 					len++;
 
 					txmessage[len] = 0x30; // var-bind
 					len++;
-					txmessage[len] = (char)(miblen +6 );
+					txmessage[len] = (unsigned char)(miblen +6 );
 					len++;
 
 					txmessage[len] = 0x06; // Object
 					len++;
-					txmessage[len] = (char)(miblen + 2); // MIB length
+					txmessage[len] = (unsigned char)(miblen + 2); // MIB length
 					len++;
 
 					txmessage[len] = 0x2b;
@@ -1881,7 +1883,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			// UPnP
 			// taken from http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf
 			//
-			int length = snprintf(&txmessage[0], UDP_BUFFER_SIZE, \
+			int length = snprintf((char *)&txmessage[0], UDP_BUFFER_SIZE, \
 					"M-SEARCH * HTTP/1.1\r\nHost:[%s]:1900\r\nMan: \"ssdp:discover\"\r\nMX:1\r\nST: \"ssdp:all\"\r\nUSER-AGENT: linux/2.6 UPnP/1.1 TimsTester/1.0\r\n\r\n", hostname);
 			if (length < 0 || length >= UDP_BUFFER_SIZE)
 			{
@@ -2098,7 +2100,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			//
 
 			len = 0;
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "OPTIONS sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:5060 SIP/2.0\n",\
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "OPTIONS sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:5060 SIP/2.0\n",\
 				dest_ip.s6_addr[0], dest_ip.s6_addr[1], dest_ip.s6_addr[2], dest_ip.s6_addr[3],\
 				dest_ip.s6_addr[4], dest_ip.s6_addr[5], dest_ip.s6_addr[6], dest_ip.s6_addr[7],\
 				dest_ip.s6_addr[8], dest_ip.s6_addr[9], dest_ip.s6_addr[10], dest_ip.s6_addr[11],\
@@ -2112,7 +2114,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Via: SIP/2.0/UDP [%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u;branch=z9hG4bKtjc211401368n\n",\
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Via: SIP/2.0/UDP [%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u;branch=z9hG4bKtjc211401368n\n",\
 				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
 				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
 				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
@@ -2127,7 +2129,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Max-Forwards: 70\n");
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Max-Forwards: 70\n");
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip forwards statement, returned %d\n", rc);
@@ -2137,7 +2139,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "From: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u>;tag=7269925901\n",\
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "From: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u>;tag=7269925901\n",\
 				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
 				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
 				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
@@ -2152,7 +2154,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "To: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:5060>\n",\
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "To: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:5060>\n",\
 				dest_ip.s6_addr[0], dest_ip.s6_addr[1], dest_ip.s6_addr[2], dest_ip.s6_addr[3],\
 				dest_ip.s6_addr[4], dest_ip.s6_addr[5], dest_ip.s6_addr[6], dest_ip.s6_addr[7],\
 				dest_ip.s6_addr[8], dest_ip.s6_addr[9], dest_ip.s6_addr[10], dest_ip.s6_addr[11],\
@@ -2166,7 +2168,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Call-ID: ab%08x@%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n",\
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Call-ID: ab%08x@%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x\n",\
 				get_random32(),\
 				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
 				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
@@ -2181,7 +2183,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "CSeq: 1 OPTIONS\n");
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "CSeq: 1 OPTIONS\n");
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip cseq statement, returned %d\n", rc);
@@ -2191,7 +2193,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Contact: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u>\n",\
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Contact: <sip:[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x]:%u>\n",\
 				my_tx_ipaddr.s6_addr[0], my_tx_ipaddr.s6_addr[1], my_tx_ipaddr.s6_addr[2], my_tx_ipaddr.s6_addr[3],\
 				my_tx_ipaddr.s6_addr[4], my_tx_ipaddr.s6_addr[5], my_tx_ipaddr.s6_addr[6], my_tx_ipaddr.s6_addr[7],\
 				my_tx_ipaddr.s6_addr[8], my_tx_ipaddr.s6_addr[9], my_tx_ipaddr.s6_addr[10], my_tx_ipaddr.s6_addr[11],\
@@ -2206,7 +2208,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				len += (unsigned int)rc;
 			}
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Accept: application/sdp\n");
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Accept: application/sdp\n");
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip accept statement, returned %d\n", rc);
@@ -2217,7 +2219,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 				len += (unsigned int)rc;
 			}
 			// Header is terminated by empty line - so additional CRLF appended to this line
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Content-Length: 0\n\r\n");
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "Content-Length: 0\n\r\n");
 			if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for sip accept statement, returned %d\n", rc);
@@ -2257,7 +2259,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 
 				const char mccmd[] = "version";
 
-				rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
+				rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "%s\r\n", mccmd);
 				if (rc < 0 || rc >= ( UDP_BUFFER_SIZE-(int)len ))
 				{
 					IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for memcache command, returned %d\n", rc);
@@ -2336,7 +2338,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			txmessage[len++] = 0x0A;
 			txmessage[len++] = 0x0D;
 			txmessage[len++] = 0x0;
-			rc = snprintf(&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2026 Tim Chappell. See https://ipv6.chappell-family.com/ipv6tcptest/ This message is destined for UDP port %d\n", port);
+			rc = snprintf((char *)&txmessage[len], (size_t)(UDP_BUFFER_SIZE-len), "IPscan (c) 2011-2026 Tim Chappell. See https://ipv6.chappell-family.com/ipv6tcptest/ This message is destined for UDP port %d\n", port);
 			if (rc < 0 || rc >= (UDP_BUFFER_SIZE-(int)len))
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port: Bad snprintf() for unhandled port, returned %d\n", rc);
