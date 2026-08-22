@@ -108,9 +108,10 @@
 // 1.11 - add missing mysql_store_result() checks, make CREATE TABLE IF NOT EXISTS only apply to runningstate writes, fix potential commit instead of rollback
 // 1.12 - add missing retval for dump_db() and count_teststate_rows_db()
 // 1.13 - set autocommit true for everything - simplify delete handling
+// 1.14 - minor db tweaks (added index, non-null default for ts)
 
 //
-#define IPSCAN_DB_VER "1.13"
+#define IPSCAN_DB_VER "1.14"
 //
 
 #include "ipscan.h"
@@ -245,7 +246,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 				{
 					// Use the default engine - sensitive data may persist until next tidy_up_db() call
 					// Unique key is used to trigger update of existing rows rather than allow duplicate entries
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY `idx_scan_identity` (hostmsb, hostlsb, createdate, session, portnum) ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), INDEX idx_ts (ts), UNIQUE KEY `idx_scan_identity` (hostmsb, hostlsb, createdate, session, portnum) ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
 
 					// retval defaults to -1, and is set to positive values if an error condition occurs
 					// retval guaranteed to be -1 at this point, so removed from if
@@ -253,104 +254,99 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 					{
 						// EXECUTE CREATE TABLE IF NOT EXISTS
 						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-						if (0 == rc)
+						if (0 != rc)
 						{
-							// nothing to do in the successful case
-						}
-						else
-						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to complete CREATE TABLE IF NOT EXISTS, returned %d (%s)\n", rc, mysql_error(connection));
 							retval = 9999;
 						}
 					}
 				}
-
 				// if the previous steps completed without error the continue ...
 				if (retval < 0)
 				{
-						//
-						// mysql_autocommit(conn, 1);
-						// INSERT
-						// mysql_close()
-						//
-						rc = mysql_autocommit(connection, 1);
-						if (rc != 0)
+					//
+					// mysql_autocommit(conn, 1);
+					// INSERT
+					// mysql_close()
+					//
+					rc = mysql_autocommit(connection, 1);
+					if (rc != 0)
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
+						retval = 811;
+					}
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indirecthost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", '%s' ) ON DUPLICATE KEY UPDATE portresult = VALUES(portresult), indirecthost = VALUES(indirecthost), ts = CURRENT_TIMESTAMP(6)", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
+					// retval defaults to -1, and is set to positive values if an error condition occurs
+					if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
+					{
+						#ifdef DBDEBUG
+						uint32_t proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
+						char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+						memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
+						#if (1 < IPSCAN_LOGVERBOSITY)
+                        			// report host addresses as full 128-bit addresses
+                        			bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
+                        			#else
+                        			// report host addresses as 48-bit addresses
+                        			bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), true );
+                        			#endif
+                        			if (false == convertedok)
+                        			{
+                        				IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: failed to convert remote host address to a safe variant\n" );
+                        			}
+                               			if (IPSCAN_PROTO_TESTSTATE == proto)
 						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
-							retval = 811;
-						}
-						qrylen = snprintf(query, MAXDBQUERYSIZE, "INSERT INTO `%s` (hostmsb, hostlsb, createdate, session, portnum, portresult, indirecthost) VALUES ( %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", %"PRIu64", '%s' ) ON DUPLICATE KEY UPDATE portresult = VALUES(portresult), indirecthost = VALUES(indirecthost), ts = CURRENT_TIMESTAMP(6)", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port, result, indirecthost);
-						// retval defaults to -1, and is set to positive values if an error condition occurs
-						if (retval < 0 && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-						{
-							#ifdef DBDEBUG
-							uint32_t proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
-							char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
-							memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
-							#if (1 < IPSCAN_LOGVERBOSITY)
-                        				// report host addresses as full 128-bit addresses
-                        				bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
-                        				#else
-                        				// report host addresses as 48-bit addresses
-                        				bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), true );
-                        				#endif
-                        				if (false == convertedok)
-                        				{
-                        					IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: failed to convert remote host address to a safe variant\n" );
-                        				}
-                                                        if (IPSCAN_PROTO_TESTSTATE == proto)
+							char statestring[IPSCAN_FLAGSBUFFER_SIZE+1];
+							char * staterc;
+							staterc = state_to_string(result, &statestring[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
+							if (NULL != staterc)
 							{
-								char statestring[IPSCAN_FLAGSBUFFER_SIZE+1];
-								char * staterc;
-								staterc = state_to_string(result, &statestring[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
-								if (NULL != staterc)
-								{
-
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64", portnum = %"PRIu64", TESTSTATE = %"PRIu64" (%s), indirecthost = '%s')\n",\
+								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64", portnum = %"PRIu64", TESTSTATE = %"PRIu64" (%s), indirecthost = '%s')\n",\
 										MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, port, result, staterc, indirecthost); 
-								}
-								else
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64", portnum = %"PRIu64", TESTSTATE = %"PRIu64", indirecthost = '%s')\n",\
-									 	MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, port, result, indirecthost); 
-								}
 							}
 							else
 							{
-								#if (DBPSRDEBUG == 1)
-								uint32_t realport = (port >> IPSCAN_PORT_SHIFT) & IPSCAN_PORT_MASK;
-								uint32_t special = (port >> IPSCAN_SPECIAL_SHIFT) & IPSCAN_SPECIAL_MASK;
-								char protostring[IPSCAN_PROTO_STRING_MAX+1];
-								proto_to_string(proto, protostring);
-								char resultstring[IPSCAN_RESULT_STRING_MAX+1];
-								result_to_string(result, resultstring);
-								if (0 != special)
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64" proto = %u(%s), port = %u:%u, result = %u(%s), indirecthost = \"%s\")\n",\
-									 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, proto, protostring, realport, special, result, resultstring, indirecthost); 
-								}
-								else
-								{
-									IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64" proto = %u(%s), port = %u, result = %u(%s), indirecthost = \"%s\")\n",\
-									 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, proto, protostring, realport, result, resultstring, indirecthost);
-								}
-								#endif
-							}
-							#endif
-							// ACTUALLY perform the INSERT
-							rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-							if (0 == rc)
-							{
-								// retval set to 0 if INSERT completed successfully
-								retval = 0;
+								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64", portnum = %"PRIu64", TESTSTATE = %"PRIu64", indirecthost = '%s')\n",\
+									 	MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, port, result, indirecthost); 
 							}
 						}
 						else
 						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
-							retval = 8;
+							#if (DBPSRDEBUG == 1)
+							uint32_t realport = (port >> IPSCAN_PORT_SHIFT) & IPSCAN_PORT_MASK;
+							uint32_t special = (port >> IPSCAN_SPECIAL_SHIFT) & IPSCAN_SPECIAL_MASK;
+							char protostring[IPSCAN_PROTO_STRING_MAX+1];
+							proto_to_string(proto, protostring);
+							char resultstring[IPSCAN_RESULT_STRING_MAX+1];
+							result_to_string(result, resultstring);
+							if (0 != special)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64" proto = %u(%s), port = %u:%u, result = %u(%s), indirecthost = \"%s\")\n",\
+									 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, proto, protostring, realport, special, result, resultstring, indirecthost); 
+							}
+							else
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: write_db: INSERT INTO `%s` (host = %s, createdate = %"PRIu64", session = %"PRIu64" proto = %u(%s), port = %u, result = %u(%s), indirecthost = \"%s\")\n",\
+									 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session, proto, protostring, realport, result, resultstring, indirecthost);
+							}
+							#endif
+						}
+						#endif
+						// ACTUALLY perform the INSERT
+						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
+						if (0 == rc)
+						{
+							// retval set to 0 if INSERT completed successfully
+							retval = 0;
 						}
 					}
+					else
+					{
+						IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to create insert query, length returned was %d, max was %d\n", qrylen, MAXDBQUERYSIZE);
+						retval = 8;
+					}
 				}
+			}
 		} // MySQL options
 		else
 		{
@@ -421,7 +417,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			else
 			{
 				// mysql_autocommit( connection, 1)
-				// SELECT * FROM results WHERE () FOR UPDATE
+				// SELECT * FROM results WHERE ()
 				char query[MAXDBQUERYSIZE];
 				rc = mysql_autocommit( connection, 1);
 				if (rc != 0)
@@ -431,8 +427,8 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 				} 
 
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
-				// SELECT x FROM t1 WHERE a = b FOR UPDATE;
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY portnum ASC FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				// SELECT x FROM t1 WHERE a = b
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY portnum ASC", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				// retval defaults to 0, set to positive values if an error condition occurs
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -450,7 +446,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
                                         {
                                         	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: failed to convert remote host address to a safe variant\n" );
                                         }
-                                	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY portnum ASC FOR UPDATE\n",\
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY portnum ASC\n",\
 						 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session);
                                 	#endif
 
@@ -820,9 +816,9 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
 					retres = -191;
 				}
-				// @autocommit = 1; SELECT x FROM t1 WHERE ( a = b ) FOR UPDATE;
+				// @autocommit = 1; SELECT x FROM t1 WHERE ( a = b )
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, uint64_t port
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64")", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, port);
 				// retres defaults to -1, set to positive portresult value if no issues, set to other negative values for error conditions
 				if (-1 == retres && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1048,20 +1044,20 @@ int tidy_up_db(int8_t deleteall)
 				// @autocommit = 1
 				// DELETE FROM results WHERE ( expression )
 				//
-				// Delete old (expired) results - DELETE FROM t1 WHERE ( ts <= NOW(6) - INTERVAL xx ) ORDER BY id ASC
+				// Delete old (expired) results - DELETE FROM t1 WHERE ( ts <= NOW(6) - INTERVAL xx ) ORDER BY id ASC LIMIT <num>
 				//
 				int qrylen;
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete based on time only
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( ts <= (NOW(6) - INTERVAL %u SECOND ) ) ORDER BY id ASC",\
-						 MYSQL_TBLNAME, (uint32_t)IPSCAN_DELETE_EVERYTHING_LONG_OFFSET );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( ts <= (NOW(6) - INTERVAL %u SECOND ) ) ORDER BY id ASC LIMIT %u",\
+						 MYSQL_TBLNAME, (uint32_t)IPSCAN_DELETE_EVERYTHING_LONG_OFFSET, (uint32_t)IPSCAN_DATABASE_DELETE_LIMIT );
 				}
 				else
 				{
 					// delete based on time and row is not test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= ( NOW(6) - INTERVAL %u SECOND ) ) ORDER BY id ASC",\
-						 MYSQL_TBLNAME, IPSCAN_TESTSTATE_AS_PORTNUM, (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( portnum <> %"PRIu64" AND ts <= ( NOW(6) - INTERVAL %u SECOND ) ) ORDER BY id ASC LIMIT %u",\
+						 MYSQL_TBLNAME, IPSCAN_TESTSTATE_AS_PORTNUM, (uint32_t)IPSCAN_DELETE_RESULTS_SHORT_OFFSET, (uint32_t)IPSCAN_DATABASE_DELETE_LIMIT );
 				}
 				// retval defaults to 0, set to non-0 for error conditions
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
@@ -1350,8 +1346,8 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 					retval = -192;
 				}
 				// uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session
-				// @autocommit = 1 ; SELECT x FROM t1 WHERE a = b FOR UPDATE
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+				// @autocommit = 1 ; SELECT x FROM t1 WHERE a = b
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64")", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				// retval defaults to 0, set to negative value for error condition
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -1369,7 +1365,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
                                         {
                                         	IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: failed to convert remote host address to a safe variant\n" );
                                         }
-					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64") FOR UPDATE\n",\
+					IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: SELECT * FROM `%s` WHERE ( host = %s AND createdate = %"PRIu64" AND session = %"PRIu64")\n",\
 						 MYSQL_TBLNAME, saferemoteaddrstring, timestamp, session);
 					#endif
 					// actually perform the SELECT
@@ -1502,8 +1498,8 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 				}
 
 				// uint64_t timestamp, uint64_t session
-				// SELECT x FROM t1 WHERE a = b LOCK FOR UPDATE
-				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64") FOR UPDATE", MYSQL_TBLNAME, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
+				// SELECT x FROM t1 WHERE a = b LOCK
+				int qrylen = snprintf(query, MAXDBQUERYSIZE, "SELECT * FROM `%s` WHERE (createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64")", MYSQL_TBLNAME, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 				// retval defaults to 0, set to negative values for error conditions
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{

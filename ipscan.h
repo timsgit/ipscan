@@ -575,8 +575,8 @@
 	//
 
 	// Determine the maximum length of the query-string which is used to insert and select
-	// results into/out of the database. Currently queries are slightly in excess of 250 characters.
-	#define MAXDBQUERYSIZE 512
+	// results into/out of the database. Currently queries are slightly in excess of 512 characters.
+	#define MAXDBQUERYSIZE 768
 
 	// Timeout for TCP port response (in seconds)
 	#define TIMEOUTSECS 1
@@ -709,7 +709,8 @@
 	//
 	// IPSCAN_DATABASE_DELETE_LIMIT - maximum number of rows to delete - primarily to limit execution time
 	// One full set is 82(TCP)+4(CUSTOM)+16(UDP)+1(ICMPv6)+state
-	#define IPSCAN_DATABASE_DELETE_LIMIT ((unsigned int)105)
+	// but only perform small deletes since its unlikely to happen often and reduces lock time on database
+	#define IPSCAN_DATABASE_DELETE_LIMIT (10)
 
 	//
 	// At the end of the test - delete only the results - if defined, otherwise delete all

@@ -135,9 +135,11 @@
 // 1.14 - nanosleep() improvements - no need for remainders
 // 1.15 - replace forward definition of functions with includes
 // 1.16 - simplify tidy_up_db() calls
+// 1.17 - adjust tidy_up_db to cap number of deleted rows - primarily to limit time spent deleting rows.
+//        Multiple calls will be required to delete an entire result test
 
 //
-#define IPSCAN_MAIN_VER "1.16"
+#define IPSCAN_MAIN_VER "1.17"
 //
 
 #include "ipscan.h"
@@ -257,10 +259,8 @@ int main(void)
 	// restart_flag - -1 = unused, 0 = no restart required, 1 = attempt restart
 	int restart_flag = -1;
 
-	// tidyup only called for start and end of test
-	#ifndef IPSCAN_NO_TIDY_UP_DB
+	// tidyup only called for start of test
 	int tidyup_required = 0;
-	#endif
 
 	// determine a seed value for the main function
 	unsigned int mainseedval = fork_safe_seedval();
@@ -1075,6 +1075,9 @@ int main(void)
 
 		if ( numqueries >= (NUMUSERDEFPORTS + 2) && (numcustomports == NUMUSERDEFPORTS) && (0 != includeexisting) && (1 == termsaccepted) )
 		{
+			// tidyup only called for start of test
+			tidyup_required = 1;
+
 			// Take a note of the time we started running
 			#if (1 <= IPSCAN_LOGVERBOSITY)
 			time_t scanstart = starttime;
@@ -1885,9 +1888,9 @@ int main(void)
 		
 			// Fetch running state result from database so it can be updated
 			char tempindhost[INET6_ADDRSTRLEN+1];
-			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			rc = -1;
 			int result = -998;
+			// make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
 			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && result < 0 && result != -1; z++)
 			{
 				// read_db_result returns -1 for missing row
@@ -1896,8 +1899,8 @@ int main(void)
 				{
 					// Wait to improve chances of missing a database deadlock
 					uint32_t backoff = backoff_in_microseconds( &mainseedval, (z+1));
-                                        // Convert microseconds to seconds and nanoseconds
-                                        req.tv_sec = (backoff / 1000000LL);
+					// Convert microseconds to seconds and nanoseconds
+					req.tv_sec = (backoff / 1000000LL);
 					req.tv_nsec = (backoff % 1000000LL) * 1000LL;
                                        	int rc2 = nanosleep( &req, NULL);
                                        	if (0 != rc2)
@@ -2074,14 +2077,14 @@ int main(void)
 		// Check that fetch number is less than a value which indicates completion/failure
 
 		else if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 0 && fetch == 1 \
-				&& termsaccepted == 1 && includeexisting != 0  && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
+				&& termsaccepted == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)
 		{
 			// Start with no scan-restart required
 			restart_flag = 0;
 
 			#ifdef CLIENTDEBUG
-			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, query database fetch\n",\
-					saferemoteaddrstring, querystarttime, querysession );
+			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s querystarttime %"PRIu64", querysession %"PRIu64", javascript-mode, query database fetch %d\n",\
+					saferemoteaddrstring, querystarttime, querysession, fetchnum );
 			#endif
 
 			// Check we know about this client
@@ -2205,7 +2208,7 @@ int main(void)
 				if (((IPSCAN_TESTSTATE_RUNNING_BIT & result) != IPSCAN_TESTSTATE_RUNNING_BIT) && ((IPSCAN_TESTSTATE_COMPLETE_BIT & result) != IPSCAN_TESTSTATE_COMPLETE_BIT))
 				{
 					#ifdef CLIENTDEBUG
-					IPSCAN_LOG( LOGPREFIX "ipscan: javascript fetch attempting to rewrite result from %d to %d\n", result, IPSCAN_TESTSTATE_RUNNING_BIT );
+					IPSCAN_LOG( LOGPREFIX "ipscan: javascript fetch attempting to rewrite result from %d to %d(TESTSTATE RUNNING)\n", result, IPSCAN_TESTSTATE_RUNNING_BIT );
 					#endif
                         		const char unusedfield[] = "unused";
 					result = IPSCAN_TESTSTATE_RUNNING_BIT;
@@ -2243,13 +2246,19 @@ int main(void)
                         }
 		}
 
-		// *IF* we have everything we need to initiate the scan OR restart_flag is set (1)
+		// *IF* we have everything we need to initiate the scan
 		// (1)querysession, (2)querystarttime, (3)beginscan, (4)termsaccepted, (5)includeexisting
 		// Could also have one or more customports.
 		// Check that there is no fetch query.
 
-		if ( numqueries >= 5 && qsf > 0 && qstf > 0 && termsaccepted == 1 && includeexisting != 0 &&
-			(( beginscan == 1 && fetch == 0 && restart_flag == -1) || ( beginscan == 0 && fetch == 1 && restart_flag == 1 && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)))
+		// OR the restart_flag == 1 case:
+		// (1)querysession, (2)querystarttime, (3)termsaccepted, (4)includeexisting, (5)fetch
+		// Could also have one or more customports.
+		// Check that there is a fetch query.
+
+		if ( numqueries >= 5 && qsf > 0 && qstf > 0 && termsaccepted == 1 && includeexisting != 0 && \
+			(( beginscan == 1 && fetch == 0 && restart_flag == -1) || \
+			 ( beginscan == 0 && fetch == 1 && restart_flag == 1 && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)))
 		{
                         rc = -1;
                         unsigned int z;
@@ -3120,15 +3129,13 @@ int main(void)
 
 		// *IF* we have everything we need to create the standard HTML page
 		// we should have been passed (2+NUMUSERDEFPORTS) queries
-		// i.e. (+1)includeexisting (either +1 or -1) and (+2)termsaccepted and NUMUSERDEFPORTS
+		// i.e. (1)includeexisting (either +1 or -1) and (2)termsaccepted and NUMUSERDEFPORTS
 
 		else if (numqueries >= (NUMUSERDEFPORTS + 2) && numcustomports == NUMUSERDEFPORTS && includeexisting != 0 && beginscan == 0 \
 				&& termsaccepted == 1 && fetch == 0 && restart_flag == -1)
 		{
 			// set flag so that tidyup happens at the end of this call
-			#ifndef IPSCAN_NO_TIDY_UP_DB
 			tidyup_required = 1;
-			#endif
 
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address : %s javascript-mode, create start page\n", saferemoteaddrstring);
@@ -3172,11 +3179,6 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s common-mode, terms not accepted\n", saferemoteaddrstring);
 			#endif
 
-			// set flag so that tidyup happens at the end of this call
-			#ifndef IPSCAN_NO_TIDY_UP_DB
-			tidyup_required = 1;
-			#endif
-
 			// Tell the user that they haven't accepted the terms and conditions
 			HTML_HEADER();
 
@@ -3211,11 +3213,6 @@ int main(void)
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s common-mode, final else - hack?\n", saferemoteaddrstring);
 			#endif
 
-			// set flag so that tidyup happens at the end of this call
-			#ifndef IPSCAN_NO_TIDY_UP_DB
-			tidyup_required = 1;
-			#endif
-
 			// Dummy report - most likely to be triggered via a hackers attempt to pass unusual query parameters
 			HTML_HEADER();
 			printf("<title>IPv6 Port Scanner Version %s</title>\n", IPSCAN_VER);
@@ -3240,7 +3237,10 @@ int main(void)
 	}
 
 	#ifdef IPSCAN_NO_TIDY_UP_DB
-	IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: tidy_up_db( IPSCAN_DELETE_EVERYTHING ) calls disabled\n");
+	if (tidyup_required == 1)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan: WARNING: tidy_up_db( IPSCAN_DELETE_EVERYTHING ) calls disabled\n");
+	}
 	#else
 	if (tidyup_required == 1)
 	{
