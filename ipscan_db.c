@@ -109,9 +109,10 @@
 // 1.12 - add missing retval for dump_db() and count_teststate_rows_db()
 // 1.13 - set autocommit true for everything - simplify delete handling
 // 1.14 - minor db tweaks (added index, non-null default for ts)
+// 1.15 - further database parsing improvements
 
 //
-#define IPSCAN_DB_VER "1.14"
+#define IPSCAN_DB_VER "1.15"
 //
 
 #include "ipscan.h"
@@ -489,10 +490,15 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 								if (9 == num_fields) // database includes indirect host and timestamp fields
 								{
 									char hostind[INET6_ADDRSTRLEN+1];
-									uint64_t ui64_port;
-									uint64_t ui64_res;
-									int rcport = sscanf(row[5], "%"SCNu64, &ui64_port);
-									if (1 == rcport && ui64_port <= INT_MAX)
+									memset(hostind, 0, sizeof(hostind));
+									uint64_t ui64_port = 0;
+									uint64_t ui64_res = 0;
+									int rcport = 0;
+									if (NULL != row[5])
+									{
+										rcport = sscanf(row[5], "%"SCNu64, &ui64_port);
+									}
+									if (1 == rcport && ui64_port <= UINT32_MAX)
 									{
 										port = (uint32_t)ui64_port;
 									}
@@ -501,7 +507,11 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 										IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: sscanf() failed - rcport %d, ui64_port %"PRIu64"\n", rcport, ui64_port);
 										rcport = 0;
 									}
-									int rcres = sscanf(row[6], "%"SCNu64, &ui64_res);
+									int rcres = 0;
+									if (NULL != row[6])
+									{
+										rcres = sscanf(row[6], "%"SCNu64, &ui64_res);
+									}
 									if (1 == rcres && ui64_res <= INT_MAX)
 									{
 										res = (uint32_t)ui64_res;
@@ -511,7 +521,11 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 										IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: sscanf() failed - rcres %d, ui64_res %"PRIu64"\n", rcres, ui64_res);
 										rcres = 0;
 									}
-									int rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
+									int rchost = 0;
+									if (NULL != row[7])
+									{
+										rchost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", &hostind[0]);
+									}
 									if ( 1 == rcres && 1 == rchost && 1 == rcport )
 									{
 										uint32_t proto = (port >> IPSCAN_PROTO_SHIFT) & IPSCAN_PROTO_MASK;
@@ -584,6 +598,9 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							}
 							// End of json array
 							printf(" -9999, -9999, \"::1\" ]\n");
+	
+							// flush stdout
+							fflush(stdout);
 
 							// free results
 							mysql_free_result(result);
@@ -704,12 +721,12 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				if (IPSCAN_DELETE_EVERYTHING == deleteall)
 				{
 					// delete everything for this test
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64") ORDER BY id ASC", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64")", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session);
 				}
 				else
 				{
 					// delete everything for this test except the test state
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %"PRIu64") ORDER BY id ASC", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
+					qrylen = snprintf(query, MAXDBQUERYSIZE, "DELETE FROM `%s` WHERE ( hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum <> %"PRIu64")", MYSQL_TBLNAME, host_msb, host_lsb, timestamp, session, IPSCAN_TESTSTATE_AS_PORTNUM );
 				}
 				if (0 == retval && qrylen > 0 && qrylen < MAXDBQUERYSIZE)
 				{
@@ -755,7 +772,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 	//                        NOTE: actually a uint64_t BUT values in excess of INT_MAX are unexpected
 	// indhost		- set if not an error condition
 
-	uint64_t dbres; // database result
+	uint64_t dbres = 0; // database result
 	int retres = -1; // retres defaults to -1, set to other negative values for error conditions
 	MYSQL *connection;
 	MYSQL_ROW row;
@@ -847,8 +864,16 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 									// 7    INDIRECTHOST    VARCHAR(INET6_ADDRSTRLEN+1)
 									char tempindhost[INET6_ADDRSTRLEN+1];
 									memset(tempindhost, 0, sizeof(tempindhost));
-									int rcres = sscanf(row[6], "%"SCNu64, &dbres);
-									int rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", tempindhost);
+									int rcres = 0;
+									if (NULL != row[6])
+									{
+										rcres = sscanf(row[6], "%"SCNu64, &dbres);
+									}
+									int rcindhost = 0;
+									if (NULL != row[7])
+									{
+										rcindhost = sscanf(row[7], "%"TO_STR(INET6_ADDRSTRLEN)"s", tempindhost);
+									}
 									if (1 == rcres)
 									{
 										// Set the return result
@@ -862,7 +887,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 											// if indirect host
 											if (1 == rcindhost)
 											{
-												memcpy(indhost, tempindhost, INET6_ADDRSTRLEN);
+												memcpy(indhost, tempindhost, INET6_ADDRSTRLEN+1);
 											}
 										}
 										else
@@ -1526,12 +1551,26 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 								{
 									if (9 == num_fields) // only dump rows if it is a database format we understand
 									{
-										uint64_t ui64_hostmsb, ui64_hostlsb, dbresult;
+										uint64_t ui64_hostmsb = 0;
+										uint64_t ui64_hostlsb = 0;
+										uint64_t dbresult = 0;
 										char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
 										memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
-										int rchostmsb = sscanf(row[1], "%"SCNu64, &ui64_hostmsb);
-										int rchostlsb = sscanf(row[2], "%"SCNu64, &ui64_hostlsb);
-										int rcres = sscanf(row[6], "%"SCNu64, &dbresult);
+										int rchostmsb = 0;
+										if (NULL != row[1])
+										{
+											rchostmsb = sscanf(row[1], "%"SCNu64, &ui64_hostmsb);
+										}
+										int rchostlsb = 0;
+										if (NULL != row[2])
+										{
+											rchostlsb = sscanf(row[2], "%"SCNu64, &ui64_hostlsb);
+										}
+										int rcres = 0;
+										if (NULL != row[6])
+										{
+											rcres = sscanf(row[6], "%"SCNu64, &dbresult);
+										}
 										if (1 == rcres && 1 == rchostmsb && 1 == rchostlsb)
 										{
                                                         				#if (1 < IPSCAN_LOGVERBOSITY)

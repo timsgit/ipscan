@@ -705,6 +705,11 @@ int main(void)
 
 	if (0 == numqueries)
 	{
+		//
+		// if there were 0 queries then force a tidy up
+		//
+		tidyup_required = 1;
+
 		#ifdef CLIENTDEBUG
 		#if (1 < IPSCAN_LOGVERBOSITY)
 		IPSCAN_LOG( LOGPREFIX "ipscan: Remote host address: %s 0 queries\n", saferemoteaddrstring);
@@ -2043,12 +2048,13 @@ int main(void)
 			// Replacement for dummy output
                         // Dump the current port results for this client, querystarttime and querysession
 			rc = -1;
-			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0 && rc != 96; z++)
+			for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0 && rc != 96 && rc != 97; z++)
 			{	
 				// 0 - dump completed successfully, otherwise non-0
 				// 96 = running-state missing
+				// 97 = database scanf failure
                         	rc = dump_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-				if (0 != rc && rc != 96)
+				if (0 != rc && rc != 96 && rc != 97)
 				{
 					uint32_t backoff = backoff_in_microseconds( &mainseedval, (z+1));
                                 	// Convert microseconds to seconds and nanoseconds
@@ -2122,7 +2128,7 @@ int main(void)
 			{
 				// Attempt to restart the port scan
 				restart_flag = 1;
-                                IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: count_rows_db() javascript (query db) returned 0 rows, setting restart_flag = %d\n", restart_flag);
+                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (query db) returned 0 rows, setting restart_flag = %d\n", restart_flag);
 			}
                         else
                         {
@@ -2138,12 +2144,13 @@ int main(void)
 			{
 				// Dump the current port results for this client, querystarttime and querysession
 				rc = -1;
-				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0 && rc != 96; z++)
+				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0 && rc != 96 && rc != 97; z++)
 				{	
 					// 0 - dump completed successfully, otherwise non-0
 					// 96 = running-state missing
+					// 97 = database scanf failure
 					rc = dump_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-					if (0 != rc && rc != 96)
+					if (0 != rc && rc != 96 && rc != 97)
 					{
 						uint32_t backoff = backoff_in_microseconds( &mainseedval, (z+1));
 						// Convert microseconds to seconds and nanoseconds
@@ -2193,13 +2200,13 @@ int main(void)
                         {
                         	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result running state 2 loop exited after %u attempts with result: %d\n", (z+1), result);
                         }
-			if (0 > result)
+			if (0 > result && -1 != result)
                         {
                         	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result running state 2 loop exited after %u attempts with result: %d\n", (z+1), result);
 			}
 			if (-1 == result)
 			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript fetch read_db_result() returned missing row: %d forcing to IPSCAN_TESTSTATE_IDLE\n", result);
+				IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript fetch read_db_result() returned missing row: %d forcing to IPSCAN_TESTSTATE_IDLE\n", result);
 				result = IPSCAN_TESTSTATE_IDLE;
 				// Attempt to restart the port scan
 				restart_flag = 1;
@@ -2208,7 +2215,7 @@ int main(void)
 				if (((IPSCAN_TESTSTATE_RUNNING_BIT & result) != IPSCAN_TESTSTATE_RUNNING_BIT) && ((IPSCAN_TESTSTATE_COMPLETE_BIT & result) != IPSCAN_TESTSTATE_COMPLETE_BIT))
 				{
 					#ifdef CLIENTDEBUG
-					IPSCAN_LOG( LOGPREFIX "ipscan: javascript fetch attempting to rewrite result from %d to %d(TESTSTATE RUNNING)\n", result, IPSCAN_TESTSTATE_RUNNING_BIT );
+					IPSCAN_LOG( LOGPREFIX "ipscan: javascript fetch attempting to rewrite result from %d to %d (TESTSTATE RUNNING)\n", result, IPSCAN_TESTSTATE_RUNNING_BIT );
 					#endif
                         		const char unusedfield[] = "unused";
 					result = IPSCAN_TESTSTATE_RUNNING_BIT;
@@ -2258,7 +2265,7 @@ int main(void)
 
 		if ( numqueries >= 5 && qsf > 0 && qstf > 0 && termsaccepted == 1 && includeexisting != 0 && \
 			(( beginscan == 1 && fetch == 0 && restart_flag == -1) || \
-			 ( beginscan == 0 && fetch == 1 && restart_flag == 1 && IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)))
+			 ( beginscan == 0 && fetch == 1 && restart_flag == 1 && (int)IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)))
 		{
                         rc = -1;
                         unsigned int z;
@@ -2315,12 +2322,13 @@ int main(void)
 				// if we're restarting the scan then just send a json array - we are responding to an XML request
 				// Dump the current port results for this client, querystarttime and querysession
 				rc = -1;
-				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0 && rc != 96; z++)
+				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0 && rc != 96 && rc != 97; z++)
 				{	
 					// 0 - dump completed successfully, otherwise non-0
 					// 96 = running-state missing
+					// 97 = database scanf failure
 					rc = dump_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-					if (0 != rc && rc != 96)
+					if (0 != rc && rc != 96 && rc != 97)
 					{
 						uint32_t backoff = backoff_in_microseconds( &mainseedval, (z+1));
                                         	struct timespec req;
@@ -3175,6 +3183,9 @@ int main(void)
 
 		else if (termsaccepted == 0 && restart_flag == -1)
 		{
+			// tidyup only called for start of test
+			tidyup_required = 1;
+
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s common-mode, terms not accepted\n", saferemoteaddrstring);
 			#endif
@@ -3209,6 +3220,9 @@ int main(void)
 		}
 		else if (restart_flag == -1)
 		{
+			// tidyup only called for start of test
+			tidyup_required = 1;
+
 			#ifdef CLIENTDEBUG
 			IPSCAN_LOG( LOGPREFIX "ipscan: Remote address : %s common-mode, final else - hack?\n", saferemoteaddrstring);
 			#endif
@@ -3249,7 +3263,7 @@ int main(void)
 		unsigned int z;
 		for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
 		{
-			// delete everything
+			// delete all-types-of-data, even if only a limited number of rows
 			rc = tidy_up_db(IPSCAN_DELETE_EVERYTHING);
 			if (0 != rc)
 			{

@@ -710,7 +710,7 @@
 	// IPSCAN_DATABASE_DELETE_LIMIT - maximum number of rows to delete - primarily to limit execution time
 	// One full set is 82(TCP)+4(CUSTOM)+16(UDP)+1(ICMPv6)+state
 	// but only perform small deletes since its unlikely to happen often and reduces lock time on database
-	#define IPSCAN_DATABASE_DELETE_LIMIT (10)
+	#define IPSCAN_DATABASE_DELETE_LIMIT (23)
 
 	//
 	// At the end of the test - delete only the results - if defined, otherwise delete all
