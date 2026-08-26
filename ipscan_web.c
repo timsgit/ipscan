@@ -105,8 +105,9 @@
 // 1.07	- update initialisation to clear myXmlHttpInitObj if required and wait so that myXmlHttpInitObj GET has occurred
 // 	  before periodic update() is schedule.
 // 1.08 - move URL statements early, define as constants
+// 1.09 - improve Date.now() handling, catch BigInt parsing errors
 
-#define IPSCAN_WEB_VER "1.08"
+#define IPSCAN_WEB_VER "1.09"
 
 #include "ipscan.h"
 
@@ -260,7 +261,13 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" \"use strict\";"); 
 	// Handler to emulate Date.now() for IE8 and earlier - in all cases return milliseconds
-	printf(" Date.prototype.now = function() { return ( typeof(Date.now) == \"function\" ? Date.now() : new Date().getTime()); };");
+	printf(" if (typeof Date.now !== 'function')");
+	printf(" {");
+	printf(" Date.now = function ()");
+	printf(" {");
+	printf(" return new Date().getTime();");
+	printf(" };");
+	printf(" }");
 	//
 	// Remove query params without refreshing the page
 	//
@@ -285,7 +292,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
 	printf(" document.getElementById(\"scanstate\").title = 0;");
 	printf(" myBlink = setInterval(function(){blink(); }, 1000);");
-	printf(" let curTimeStamp = new Date().now();");
+	printf(" let curTimeStamp = Date.now();");
 	//
 	// create the various XML HTTP requestors
 	//
@@ -300,7 +307,22 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
         // myTimeStamp becomes the starttime query parameter
         printf(" myTimeStamp = sessionStorage.getItem(KEY_TS);");
         // mySession becomes the session query parameter - multiple runs on the same browser should each be unique
-        printf(" mySession = BigInt(sessionStorage.getItem(KEY_SN));");
+	printf(" try");
+	printf(" {");
+	printf(" const rawSession = sessionStorage.getItem(KEY_SN);");
+	printf(" if (rawSession !== null && rawSession !== 'undefined' && rawSession.trim() !== '')");
+	printf(" {");
+	printf(" mySession = BigInt(rawSession);");
+	printf(" }");
+	printf(" }");
+	printf(" catch (err)");
+	printf(" {");
+	printf(" mySession = 159912792199n;"); // just a number
+        #ifdef IPSCAN_JS_CONSOLE_LOGGING
+	printf(" console.warn('Failed to parse session BigInt from sessionStorage, falling back to ', mySession.toString(), ' : ',err);");
+        #endif
+	printf(" }");
+
         #ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('    myTabId: ',myTabId.toString());");
         printf(" console.log('myTimeStamp: ',myTimeStamp.toString());");
@@ -422,7 +444,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	// Generate new values and store them
 	printf(" tabId = crypto.randomUUID();");
-	printf(" timeStamp = new Date().now();");
+	printf(" timeStamp = Date.now();");
         printf(" sessionNumber = getSessionNumber();");
 	printf(" sessionStorage.setItem(KEY_ID, tabId);");
 	printf(" sessionStorage.setItem(KEY_TS, timeStamp);");
@@ -637,7 +659,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	// go around the latest received state and update display as required
 	//
-	printf(" let statusresult = 0;");
+	printf(" statusresult = 0;");
 	printf(" for (i = 0; i < (latestState.length - 3); i += 3)");
 	printf(" {");
 	printf(" textupdate = \"%s\";", resultsstruct[PORTUNKNOWN].label);
@@ -745,7 +767,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// for the scan status table cell. Also log the result for later use
 	//
 	printf(" document.getElementById(\"scanstate\").title = result;");
-	printf(" let statusresult = result;");
+	printf(" statusresult = result;");
 	printf(" }");
 	printf(" else"); // otherwise update standard port scan results
 	printf(" {");
@@ -759,7 +781,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" if ((statusresult & %d) == %d)", IPSCAN_TESTSTATE_DATABASE_ERROR_BIT, IPSCAN_TESTSTATE_DATABASE_ERROR_BIT);
 	printf(" {");
 	printf(" HTTPDBError();");
-	printf(" let statusresult = 0;");
+	printf(" statusresult = 0;");
 	printf(" }");
 
 	#if (IPSCAN_INCLUDE_PING == 1)

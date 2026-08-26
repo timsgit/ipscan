@@ -171,7 +171,7 @@ uint32_t backoff_in_microseconds(unsigned int * seedval, unsigned int attempt)
 	// clamp attempts - in reality we expect far fewer retries
 	if (attempt > 15) attempt = 15;
 	// roughly exponential with each attempt
-	uint32_t current_ceiling = (uint32_t)IPSCAN_BACKOFF_BASE_DELAY_US*(1<<attempt);
+	uint32_t current_ceiling = (uint32_t)IPSCAN_BACKOFF_BASE_DELAY_US*((uint32_t)(1<<attempt));
 	#ifdef IPSCAN_RANDDEBUG
 	IPSCAN_LOG( LOGPREFIX "ipscan: INFO : raw current_ceiling = %u\n", current_ceiling);
 	#endif

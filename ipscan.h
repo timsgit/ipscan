@@ -282,6 +282,9 @@
 	#define IPSCAN_DB_ACCESS_ATTEMPTS (9)
 	// Backoff timing calculation
 	// base of 30ms and maximum of 3s
+	//
+	// NOTE: 0 < IPSCAN_BACKOFF_BASE_DELAY_US <= 65536 (uS)
+	//
 	#define IPSCAN_BACKOFF_BASE_DELAY_US (5000)
 	#define IPSCAN_BACKOFF_MAX_DELAY_US  (1000000)
 
