@@ -106,8 +106,9 @@
 // 	  before periodic update() is schedule.
 // 1.08 - move URL statements early, define as constants
 // 1.09 - improve Date.now() handling, catch BigInt parsing errors
+// 1.10 - further improvements to forceHardReload() to ensure new sessions use new timestamps/session parameters
 
-#define IPSCAN_WEB_VER "1.09"
+#define IPSCAN_WEB_VER "1.10"
 
 #include "ipscan.h"
 
@@ -460,7 +461,11 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to force page reload
 	printf(" function forceHardReload()");
 	printf(" {");
+	// 0. ensure window unload function can't be called which could cause duplicate session
+	printf(" window.onbeforeunload = null;");
 	// 1. clear persistent storage
+	printf("sessionStorage.clear();");
+	printf("window.name = null;");
 	// 2. Force hard reload via cache-busting URL - support added to ipscan.c
 	printf(" const cleanUrl = new URL(window.location.origin + window.location.pathname);");
 	printf(" cleanUrl.searchParams.set('reload', Date.now());"); // adds ?reload=<numeric-time>

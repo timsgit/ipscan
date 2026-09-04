@@ -137,9 +137,11 @@
 // 1.16 - simplify tidy_up_db() calls
 // 1.17 - adjust tidy_up_db to cap number of deleted rows - primarily to limit time spent deleting rows.
 //        Multiple calls will be required to delete an entire result test
+// 1.18 - return to approach where NAVAWAY is flagged as both test complete and navigated away to
+//        minimise time to deletion
 
 //
-#define IPSCAN_MAIN_VER "1.17"
+#define IPSCAN_MAIN_VER "1.18"
 //
 
 #include "ipscan.h"
@@ -1825,10 +1827,9 @@ int main(void)
 		//
 		// ----------------------------------------------------------------------
 
-		// *IF* we have everything we need to query the database ...
+		// This statement handles cases where fetch (contents of fetchnum) indicates completion/failure.
 		// (1)querysession, (2)querystarttime, (3)fetch, (4)includeexisting and (5)termsaccepted. 
 		// Could also have one or more customports. 
-		// This statement handles cases where fetch (contents of fetchnum) indicates completion/failure.
 
 		if ( numqueries >= 5 && qsf > 0 && qstf > 0 && beginscan == 0 && fetch == 1 \
 				&& termsaccepted == 1 && includeexisting != 0 && IPSCAN_SUCCESSFUL_COMPLETION <= fetchnum)
@@ -1972,7 +1973,7 @@ int main(void)
 			{
 				if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
 				{
-					// Overwrite any other bits in this ONE case
+					// Overwrite any other bits in this case
 					result = IPSCAN_TESTSTATE_COMPLETE_BIT;
 				}
 				else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
@@ -1997,7 +1998,8 @@ int main(void)
 				}
 				else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
 				{
-					result |= IPSCAN_TESTSTATE_NAVAWAY_BIT; 
+					// Overwrite any other bits in this SPECIAL case - we want to exit and delete data
+					result = (IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT); 
 				}
 				else if (IPSCAN_BAD_JSON_ERROR == fetchnum)
 				{

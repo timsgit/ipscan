@@ -110,9 +110,10 @@
 // 1.13 - set autocommit true for everything - simplify delete handling
 // 1.14 - minor db tweaks (added index, non-null default for ts)
 // 1.15 - further database parsing improvements
+// 1.16 - add more debug to delete_from_db()
 
 //
-#define IPSCAN_DB_VER "1.15"
+#define IPSCAN_DB_VER "1.16"
 //
 
 #include "ipscan.h"
@@ -732,14 +733,15 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 				{
 					// perform the DELETE
 					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
+					pid_t pid = getpid();
 					if (0 == rc)
 					{
 						my_ulonglong affectedrows = mysql_affected_rows(connection);
-						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: INFO: DELETE success, rows affected = %llu\n", affectedrows );
+						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: INFO: DELETE success, rows affected = %llu, PID=%d, hostmsb = %"PRIu64", hostlsb = %"PRIu64", createdate = %"PRIu64", session = %"PRIu64"\n", affectedrows, pid, host_msb, host_lsb, timestamp, session );
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: DELETE failed, returned %d (%s).\n", rc, mysql_error(connection) );
+						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: DELETE failed, returned %d (%s) PID=%d, hostmsb = %"PRIu64", hostlsb = %"PRIu64", createdate = %"PRIu64", session = %"PRIu64"\n", rc, mysql_error(connection),  pid, host_msb, host_lsb, timestamp, session );
 						retval = 910;
 					}
 				}
