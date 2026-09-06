@@ -23,6 +23,7 @@
 // VERSION HISTORY
 //
 // 0.1  first version - to ensure database function APIs are consistent
+// 0.2	add update_teststate_db()
 
 #include "ipscan.h"
 #include <stdint.h>
@@ -44,4 +45,5 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 #if (CLIENTDEBUG > 1)
 int count_teststate_rows_db(uint64_t timestamp, uint64_t session);
 #endif
+int update_teststate_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t session, int fetchnum);
 #endif // IPSCAN_DB_H
