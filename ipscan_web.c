@@ -261,14 +261,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" return;");
 	printf(" }");
-	// initialise the myTimeStamp & mySession parameters
-	printf(" scanState = \"initialising\";");
-	printf(" scanIdentity = createScanIdentity();");
-	// myTimeStamp becomes the starttime query parameter
-	printf(" const myTimeStamp = scanIdentity.timestamp;");
-	// mySession becomes the session query parameter - multiple runs on the same browser should be unique
-	printf(" const mySession = scanIdentity.session;");
-
 	// Handler to emulate Date.now() for IE8 and earlier - in all cases return milliseconds
 	printf(" if (typeof Date.now !== 'function')");
 	printf(" {");
@@ -277,6 +269,13 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" return new Date().getTime();");
 	printf(" };");
 	printf(" }");
+	// initialise the myTimeStamp & mySession parameters
+	printf(" scanState = \"initialising\";");
+	printf(" scanIdentity = createScanIdentity();");
+	// myTimeStamp becomes the starttime query parameter
+	printf(" const myTimeStamp = scanIdentity.timestamp;");
+	// mySession becomes the session query parameter - multiple runs on the same browser should be unique
+	printf(" const mySession = scanIdentity.session;");
 	//
 	// Remove query params without refreshing the page
 	//
