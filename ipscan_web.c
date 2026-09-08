@@ -303,7 +303,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	printf(" var myXmlHttpReqObj = makeHttpObject();"); // for regular/frequent update fetches
 	printf(" var myXmlHttpInitObj = makeHttpObject();");// one-off initialisation fetch (begins the test)
-	printf(" var myXmlHttpIp6Obj = makeHttpObject();"); // for client IPv6 lookup (from server)
 	printf(" var myXmlHttpErrObj = makeHttpObject();"); // for error/done reporting
 
 	//
@@ -490,7 +489,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// abort current XmlHttp fetches (if there are any in progress) since we're navigating away and don't care
 	printf(" if (myXmlHttpInitObj.readyState < 4) { myXmlHttpInitObj.abort(); }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
-        printf(" if (myXmlHttpIp6Obj.readyState < 4) { myXmlHttpIp6Obj.abort(); }");
 	printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
 	// send an indication to the ipscan server that the user has navigated away
 	printf(" myXmlHttpErrObj.open(\"GET\", navAwayURL, true);");
