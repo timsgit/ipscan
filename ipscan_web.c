@@ -107,8 +107,9 @@
 // 1.08 - move URL statements early, define as constants
 // 1.09 - improve Date.now() handling, catch BigInt parsing errors
 // 1.10 - further improvements to forceHardReload() to ensure new sessions use new timestamps/session parameters
+// 1.11 - further improvements to minimise change of duplicate session/timestamp parameters
 
-#define IPSCAN_WEB_VER "1.10"
+#define IPSCAN_WEB_VER "1.11"
 
 #include "ipscan.h"
 
@@ -241,18 +242,12 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("<!--  to hide script contents from old browsers\n");
 
 	// Globals
+	printf(" let scanState = \"new\";");
+	printf(" let scanIdentity = null;");
 	printf(" let myInterval = 0;");
 	printf(" let myBlink = 0;");
 	printf(" let myHTTPTimeout;");
 	printf(" let fetches = 0;");
-	printf(" let myTabId = -1;");
-    	printf(" const KEY_ID = \"tabId\";");
-	printf(" const KEY_TS = \"TimeStamp\";");
-	printf(" const KEY_SN = \"SessionNumber\";");
-	// myTimeStamp becomes the starttime query parameter
-	printf(" let myTimeStamp = -1;");
-	// mySession becomes the session query parameter - multiple runs on the same browser should be unique
-	printf(" let mySession = -1n;"); // BigInt
 	printf(" let statusresult = 0;");
 	printf(" let lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
 	printf(" const cleanUrl = window.location.protocol + \"//\" + window.location.host + window.location.pathname;");
@@ -261,6 +256,19 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf("function main()");
 	printf(" {");
 	printf(" \"use strict\";"); 
+	// return immediately if this is not a new run
+	printf(" if (scanState !== \"new\")");
+	printf(" {");
+	printf(" return;");
+	printf(" }");
+	// initialise the myTimeStamp & mySession parameters
+	printf(" scanState = \"initialising\";");
+	printf(" scanIdentity = createScanIdentity();");
+	// myTimeStamp becomes the starttime query parameter
+	printf(" const myTimeStamp = scanIdentity.timestamp;");
+	// mySession becomes the session query parameter - multiple runs on the same browser should be unique
+	printf(" const mySession = scanIdentity.session;");
+
 	// Handler to emulate Date.now() for IE8 and earlier - in all cases return milliseconds
 	printf(" if (typeof Date.now !== 'function')");
 	printf(" {");
@@ -277,11 +285,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// set globals to their default values - in case main() is called again
 	//
 	printf(" myInterval = 0;");
-	printf(" myTabId = 0;");
 	printf(" myBlink = 0;");
 	printf(" fetches = 0;");
-	printf(" myTimeStamp = -1;");
-	printf(" mySession = -1n;"); // BigInt
 	printf(" statusresult = 0;");
 	printf(" lastUpdate = 0;\n"); // lastUpdate flags case when we've fetched enough (N) times for test to complete
 	printf(" serverRunningState = -1;\n");
@@ -301,51 +306,23 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" var myXmlHttpInitObj = makeHttpObject();");// one-off initialisation fetch (begins the test)
 	printf(" var myXmlHttpIp6Obj = makeHttpObject();"); // for client IPv6 lookup (from server)
 	printf(" var myXmlHttpErrObj = makeHttpObject();"); // for error/done reporting
-	//
-	// (2) initialise the session parameters
-	//
-	printf(" myTabId = getUniqueTabId();");
-        // myTimeStamp becomes the starttime query parameter
-        printf(" myTimeStamp = sessionStorage.getItem(KEY_TS);");
-        // mySession becomes the session query parameter - multiple runs on the same browser should each be unique
-	printf(" try");
-	printf(" {");
-	printf(" const rawSession = sessionStorage.getItem(KEY_SN);");
-	printf(" if (rawSession !== null && rawSession !== 'undefined' && rawSession.trim() !== '')");
-	printf(" {");
-	printf(" mySession = BigInt(rawSession);");
-	printf(" }");
-	printf(" }");
-	printf(" catch (err)");
-	printf(" {");
-	printf(" mySession = 159912792199n;"); // just a number
-        #ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.warn('Failed to parse session BigInt from sessionStorage, falling back to ', mySession.toString(), ' : ',err);");
-        #endif
-	printf(" }");
-
-        #ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.log('    myTabId: ',myTabId.toString());");
-        printf(" console.log('myTimeStamp: ',myTimeStamp.toString());");
-        printf(" console.log('mySession  : ',mySession.toString());");
-        #endif
 
 	//
 	// Check the timestamp and session variables have been initialised
 	//
 	printf(" if (myTimeStamp === null || mySession === null || myTimeStamp < 1 || mySession  < 1n)");
 	printf(" {");
-	printf(" console.log('ERROR:     myTabId: ',myTabId.toString());");
         printf(" console.log('ERROR: myTimeStamp: ',myTimeStamp.toString());");
         printf(" console.log('ERROR: mySession  : ',mySession.toString());");
 	printf(" }");
 
 	//
-	// (3) call test initiation URL with appropriate query parameters - will take duration of test to complete/return
+	// (2) call test initiation URL with appropriate query parameters - will take duration of test to complete/return
 	// so don't reuse myXmlHttpInitObj object for other transfers
 	//
 	printf(" const startURL = \""URIPATH"/"EXENAME"?beginscan=%d&session=\" + mySession.toString() + \"&starttime=\" + myTimeStamp.toString() + \"&%s\";", MAGICBEGIN, reconquery);
 	printf(" if (myXmlHttpInitObj.readyState < 4) { myXmlHttpInitObj.abort(); }");
+	printf(" scanState = \"starting\";");
 	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
 	printf(" myXmlHttpInitObj.send(null);");
 	//
@@ -368,7 +345,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	#endif
 
 	//
-	// (4) finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
+	// (3) finally the periodic call of update() is scheduled in order to retrieve and reflect the ongoing scan status.
 	//
 	// Wait 3s before enabling periodic update() so that myXmlHttpInitObj GET has occurred
 	// NOTE: non-blocking call so initialisation below this step will occur
@@ -426,53 +403,32 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" } ");
 	printf("}\n");
 
-	printf(" function getUniqueTabId()");
-	printf(" {");
-	printf(" const isDuplicate = sessionStorage.getItem(KEY_ID) && !window.name;");
-	printf(" if (isDuplicate)");
-	printf(" {");
-	printf(" sessionStorage.removeItem(KEY_ID);");
-	printf(" window.name = null;");
-        #ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.log('Duplicate tab detected - cleared sessionStorage');");
-        #endif
-	printf(" }");
-	// Try to read existing values
-	printf(" let tabId = sessionStorage.getItem(KEY_ID);");
-	printf(" let timeStamp = sessionStorage.getItem(KEY_TS);");
-	printf(" let sessionNumber = sessionStorage.getItem(KEY_SN);");
-	printf(" if (!tabId)");
-	printf(" {");
-	// Generate new values and store them
-	printf(" tabId = crypto.randomUUID();");
-	printf(" timeStamp = Date.now();");
-        printf(" sessionNumber = getSessionNumber();");
-	printf(" sessionStorage.setItem(KEY_ID, tabId);");
-	printf(" sessionStorage.setItem(KEY_TS, timeStamp);");
-	printf(" sessionStorage.setItem(KEY_SN, sessionNumber);");
-	printf(" window.name = tabId;");
-        #ifdef IPSCAN_JS_CONSOLE_LOGGING
-	printf(" console.log('Created new tabId, timeStamp and sessionNumber');");
-        #endif
-	printf(" }");
-	printf(" return tabId;");
-	printf(" }");
-
 	// function to force page reload
 	printf(" function forceHardReload()");
 	printf(" {");
-	// 0. ensure window unload function can't be called which could cause duplicate session
+	// ensure window unload function can't be called which could cause duplicate session
 	printf(" window.onbeforeunload = null;");
-	// 1. clear persistent storage
-	printf("sessionStorage.clear();");
-	printf("window.name = null;");
-	// 2. Force hard reload via cache-busting URL - support added to ipscan.c
-	printf(" const cleanUrl = new URL(window.location.origin + window.location.pathname);");
-	printf(" cleanUrl.searchParams.set('reload', Date.now());"); // adds ?reload=<numeric-time>
-	// 3. replace() ensures the current "dirty" state isn't in the back-button history
-	// changing the window location causes the page reload
-	printf(" window.location.replace(cleanUrl.toString());");
+	printf(" const reloadUrl = new URL(window.location.href);");
+	printf(" reloadUrl.search = \"\";");
+	printf(" reloadUrl.hash = \"\";");
+	printf(" reloadUrl.searchParams.set('reload',String(Date.now()));");
+	printf(" window.location.replace(reloadUrl.toString());");
 	printf(" }\n");
+
+	printf(" function createScanIdentity()");
+	printf(" {");
+	printf("   const timestamp = Date.now();");
+	printf("   const session = BigInt(getSessionNumber());");
+	printf("   if (!Number.isSafeInteger(timestamp) || timestamp < 1)");
+	printf("   {");
+	printf("     throw new Error(\"Invalid scan timestamp\");");
+	printf("   }");
+	printf("   if (typeof session !== \"bigint\" || session < 1n)");
+	printf("   {");
+	printf("     throw new Error(\"Invalid scan session\");");
+	printf("   }");
+	printf("   return Object.freeze({ timestamp: timestamp, session: session });");
+	printf(" }");
 
 	// function to report a HTTP transfer timed out
 	printf("function HTTPTimedOut()");
@@ -648,8 +604,6 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	#ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('HREF after: ',window.location.href );");
 	#endif
-	printf(" sessionStorage.clear();");
-	printf(" window.name = null;");
 	printf(" }");
 	printf(" else");
 	// we haven't received a complete array of results yet - check if test successfully running 
