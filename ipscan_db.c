@@ -1711,7 +1711,7 @@ int update_teststate_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp
 			{
 				write_result = (uint64_t)IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT;
 			}
-			else if (IPSCAN_EVAL_ERROR == fetchnum || IPSCAN_BAD_JSON_ERROR == fetchnum)
+			else if ((IPSCAN_EVAL_ERROR == fetchnum) || (IPSCAN_BAD_JSON_ERROR == fetchnum))
 			{
 				write_result = (uint64_t)IPSCAN_TESTSTATE_EVALERROR_BIT;
 			}
@@ -1736,7 +1736,7 @@ int update_teststate_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp
 			if (retval < 0)
 			{
 				int qrylen;
-				if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum || IPSCAN_NAVIGATE_AWAY == fetchnum)
+				if ((IPSCAN_SUCCESSFUL_COMPLETION == fetchnum) || (IPSCAN_NAVIGATE_AWAY == fetchnum))
 				{
 					qrylen = snprintf( query, MAXDBQUERYSIZE,\
 					"UPDATE `%s` SET portresult = CASE WHEN (portresult & %"PRIu64") <> 0 THEN portresult ELSE %"PRIu64" END WHERE hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64,\
@@ -1751,7 +1751,7 @@ int update_teststate_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp
 					 (uint64_t)IPSCAN_TESTSTATE_AS_PORTNUM);
 				}
 
-				if (qrylen <= 0 || qrylen >= MAXDBQUERYSIZE)
+				if ((qrylen <= 0) || (qrylen >= MAXDBQUERYSIZE))
 				{
 					IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: Failed to create update query\n");
 					retval = 8;

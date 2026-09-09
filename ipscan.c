@@ -2023,7 +2023,7 @@ int main(void)
 			{
 				// Dump the current port results for this client, querystarttime and querysession
 				rc = -1;
-				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0 && rc != 96 && rc != 97; z++)
+				for (z = 0 ; ((z < IPSCAN_DB_ACCESS_ATTEMPTS) && (rc != 0) && (rc != 96) && (rc != 97)); z++)
 				{	
 					// 0 - dump completed successfully, otherwise non-0
 					// 96 = running-state missing
