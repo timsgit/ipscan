@@ -112,9 +112,10 @@
 // 1.15 - further database parsing improvements
 // 1.16 - add more debug to delete_from_db()
 // 1.17 - add update_teststate_db to ensure running-state is updated as an atomic read-modify-write within the database
+// 1.18 - error handling added for dump_db fflush
 
 //
-#define IPSCAN_DB_VER "1.17"
+#define IPSCAN_DB_VER "1.18"
 //
 
 #include "ipscan.h"
@@ -603,7 +604,11 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 							printf(" -9999, -9999, \"::1\" ]\n");
 	
 							// flush stdout
-							fflush(stdout);
+							rc = fflush(stdout);
+							if (0 != rc)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: fflush failed rc = %d (%s)\n", rc, strerror(errno));
+							}
 
 							// free results
 							mysql_free_result(result);

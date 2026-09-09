@@ -141,9 +141,10 @@
 //        minimise time to deletion
 // 1.19 - add update_teststate_db to ensure running-state update is an atomic read-modify-write within the database
 // 1.20 - include automated deletion of results for tests that complete without a successful indication from the client
+// 1.21 - error handling added for fflush
 
 //
-#define IPSCAN_MAIN_VER "1.20"
+#define IPSCAN_MAIN_VER "1.21"
 //
 
 #include "ipscan.h"
@@ -2078,7 +2079,7 @@ int main(void)
                         {
                         	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: javascript read_db_result running state 2 loop exited after %u attempts with result: %d\n", (z+1), result);
                         }
-			if (0 > result && -1 != result)
+			if ((0 > result) && (-1 != result))
                         {
                         	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript read_db_result running state 2 loop exited after %u attempts with result: %d\n", (z+1), result);
 			}
@@ -2192,7 +2193,11 @@ int main(void)
 				printf("<p>Initiate scan.</p>\n");
 				// Finish the output
 				create_html_body_end();
-				fflush(stdout);
+				rc = fflush(stdout);
+				if (0 != rc)
+				{
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode new scan begin HTML fflush failed rc = %d (%s)\n", rc, strerror(errno));
+				}
 			}
 			else
 			{
@@ -2200,13 +2205,13 @@ int main(void)
 				// if we're restarting the scan then just send a json array - we are responding to an XML request
 				// Dump the current port results for this client, querystarttime and querysession
 				rc = -1;
-				for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0 && rc != 96 && rc != 97; z++)
+				for (z = 0 ; (( z < IPSCAN_DB_ACCESS_ATTEMPTS) && (rc != 0) && (rc != 96) && (rc != 97)); z++)
 				{	
 					// 0 - dump completed successfully, otherwise non-0
 					// 96 = running-state missing
 					// 97 = database scanf failure
 					rc = dump_db(remotehost_msb, remotehost_lsb, querystarttime, querysession);
-					if (0 != rc && rc != 96 && rc != 97)
+					if ((0 != rc) && (rc != 96) && (rc != 97))
 					{
 						uint32_t backoff = backoff_in_microseconds( &mainseedval, (z+1));
                                         	struct timespec req;
@@ -2229,7 +2234,11 @@ int main(void)
 					IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode dump_db loop exited with rc: %d\n", rc);
 				}
 				// Finish the output
-				fflush(stdout);
+				rc = fflush(stdout);
+				if (0 != rc)
+				{
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode restart scan XML fflush failed rc = %d (%s)\n", rc, strerror(errno));
+				}
 			}
 
 			//
@@ -2905,8 +2914,8 @@ int main(void)
 				}
 
 				#ifdef CLIENTDEBUG
-				flagsrc = state_to_string((uint64_t)result, &flags[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
 				#if (1 <= IPSCAN_LOGVERBOSITY)
+				flagsrc = state_to_string((uint64_t)result, &flags[0], (int)IPSCAN_FLAGSBUFFER_SIZE);
 				if (NULL != flagsrc)
 				{
 					// if non-NULL then flagsrc points to char array of flags, including the 'flags' moniker
