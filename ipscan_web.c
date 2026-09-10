@@ -432,6 +432,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report a HTTP transfer timed out
 	printf("function HTTPTimedOut()");
 	printf(" {");
+	printf(" if (scanState === \"navAway\")");
+	printf(" {");
+	printf(" return;");
+	printf(" }");
 	printf(" clearTimeout(myHTTPTimeout);");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", timeoutURL, true);");
@@ -504,6 +508,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report database error received
 	printf("function HTTPDBError()");
 	printf(" {");
+	printf(" if (scanState === \"navAway\")");
+	printf(" {");
+	printf(" return;");
+	printf(" }");
 	printf(" if (myXmlHttpErrObj.readyState < 4) { myXmlHttpErrObj.abort(); }");
 	printf(" myXmlHttpErrObj.open(\"GET\", dbErrorURL, true);");
 	printf(" myXmlHttpErrObj.send(null);");
