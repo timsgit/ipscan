@@ -108,8 +108,9 @@
 // 1.09 - improve Date.now() handling, catch BigInt parsing errors
 // 1.10 - further improvements to forceHardReload() to ensure new sessions use new timestamps/session parameters
 // 1.11 - further improvements to minimise change of duplicate session/timestamp parameters
+// 1.12 - ensure navigate-away event stops other XHR fetches
 
-#define IPSCAN_WEB_VER "1.11"
+#define IPSCAN_WEB_VER "1.12"
 
 #include "ipscan.h"
 
@@ -479,6 +480,11 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// function to report User chose to navigate away from the test, before completion
 	printf("function HTTPNavAway()");
 	printf(" {");
+	printf(" if (scanState === \"navAway\")");
+	printf(" {");
+	printf(" return;");
+	printf(" }");
+	printf(" scanState = \"navAway\";");
 	// clear various timeouts and interval timers
 	printf(" clearTimeout(myHTTPTimeout);");
         printf(" clearInterval(myInterval);");
@@ -555,6 +561,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	printf("function myStateChange(request, fetchnum)");
 	printf(" {");
+	printf(" if (scanState === \"navAway\")");
+	printf(" {");
+	printf(" return;");
+	printf(" }");
 	printf(" let i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
 	printf(" if (request.readyState == 4 && request.status == 200)");
 	printf(" {");
@@ -589,6 +599,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" clearInterval(myInterval);");
 	printf(" clearInterval(myBlink);");
 	printf(" HTTPFinished();");
+	printf(" scanState = \"done\";");
 	//
 	// Rewrite history to prevent re-use of old querystring parameters
 	//
@@ -782,6 +793,10 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	printf("function update()");
 	printf(" {");
+	printf(" if (scanState === \"navAway\")");
+	printf(" {");
+	printf(" return;");
+	printf(" }");
 	printf(" fetches += 1;"); // increment the fetch counter
 	printf(" var updateURL = commonURL + \"&%s&fetch=\" + fetches;", reconquery);
 	// exit based on number of attempted fetches
