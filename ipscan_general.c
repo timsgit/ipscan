@@ -45,9 +45,10 @@
 // 0.25 - raw socket functions
 // 0.26 - added random seed generator and backoff delay calculation
 // 0.27 - add clamp for backoff delay calculation
+// 0.28 - check returns for fclose()
 
 //
-#define IPSCAN_GENERAL_VER "0.27"
+#define IPSCAN_GENERAL_VER "0.28"
 //
 
 #include "ipscan.h"
@@ -112,7 +113,11 @@ uint64_t get_session(void)
 	else
 	{
 		size_t numitems = fread( &fetchedsession, sizeof(fetchedsession), 1, fp);
-		fclose(fp);
+		int rc = fclose(fp);
+		if (0 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: get_session() fclose returned %d (%s)\n", rc,strerror(errno));
+		}
 		if (1 == numitems)
 		{
 			// Clear the MSB of the random session ID so that we're sure it will fit
@@ -151,7 +156,11 @@ unsigned int fork_safe_seedval(void)
 	else
 	{
 		size_t numitems = fread( &seedval, sizeof(seedval), 1, fp);
-		fclose(fp);
+		int rc = fclose(fp);
+		if (0 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: fork_safe_seedval() fclose returned %d (%s)\n", rc,strerror(errno));
+		}
 		if (1 != numitems)
 		{
 			seedval = ( (unsigned int)time(NULL) ^ (unsigned int)getpid() ); // Fallback
@@ -754,7 +763,11 @@ uint32_t get_random32(void)
         else
         {
                 size_t numitems = fread( &fetchednum, sizeof(fetchednum), 1, fp);
-                fclose(fp);
+                int rc = fclose(fp);
+		if (0 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: get_random32() fclose returned %d (%s)\n", rc,strerror(errno));
+		}
                 if (1 == numitems)
                 {
                         random32 = fetchednum;
@@ -786,7 +799,11 @@ uint16_t get_ephemeral(void)
         else
         {  
                 size_t numitems = fread( &fetchedvalue, sizeof(fetchedvalue), 1, fp);
-                fclose(fp);
+                int rc = fclose(fp);
+		if (0 != rc)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: get_ephemeral() fclose returned %d (%s)\n", rc,strerror(errno));
+		}
                 if (1 == numitems)
                 {
                         random16 = fetchedvalue;
