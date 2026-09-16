@@ -46,9 +46,10 @@
 // 0.26 - added random seed generator and backoff delay calculation
 // 0.27 - add clamp for backoff delay calculation
 // 0.28 - check returns for fclose()
+// 0.29 - remove unnecessary line feed from flags summary
 
 //
-#define IPSCAN_GENERAL_VER "0.28"
+#define IPSCAN_GENERAL_VER "0.29"
 //
 
 #include "ipscan.h"
@@ -392,7 +393,7 @@ char * state_to_string(uint64_t statenum, char * retstringptr, int retstringstar
 		retstringptr += rc;
 		retstringfree -= rc;
 	}
-	rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "<EOL>\n\0");
+	rc = snprintf(retstringptr, (size_t)retstringfree, "%s", "<EOL>\0");
 	if (rc < 0 || rc >= retstringfree) return (char *)NULL;
 	retstringptr += rc;
 	retstringfree -= rc;
