@@ -142,9 +142,11 @@
 // 1.19 - add update_teststate_db to ensure running-state update is an atomic read-modify-write within the database
 // 1.20 - include automated deletion of results for tests that complete without a successful indication from the client
 // 1.21 - error handling added for fflush
+// 1.22 - only restart if we're a short way into a test (fetchnum is small)
+// 1.23 - further debug logging consistency improvements
 
 //
-#define IPSCAN_MAIN_VER "1.21"
+#define IPSCAN_MAIN_VER "1.23"
 //
 
 #include "ipscan.h"
@@ -1166,6 +1168,7 @@ int main(void)
 			// Only included if ping is compiled in ...
 			#if (1 == IPSCAN_INCLUDE_PING)
 			// Ping the remote host and store the result ...
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning ICMPv6 ping of remote address: %s\n", saferemoteaddrstring);
 			int pingresult = check_icmpv6_echoresponse(remoteaddrstring, ms_since_epoch, (uint64_t)session, &indirecthost[0] );
 
 			// Ensure the indirecthost returned is valid
@@ -1194,11 +1197,12 @@ int main(void)
 			}
 
 			int directresult = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
-
-			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of remote address: %s\n", saferemoteaddrstring);
-
 			portsstats[directresult]++ ;
 			if (pingresult >= IPSCAN_INDIRECT_RESPONSE) portsstats[PORTINDIRECT]++;
+			#if (0 < IPSCAN_LOGVERBOSITY)
+			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",saferemoteaddrstring,\
+					pingresult, resultsstruct[directresult].label, indirecthost);
+			#endif
 
 			uint64_t pingwrite = 0;
 			if (0 <= pingresult) pingwrite = (uint64_t)pingresult;
@@ -2005,9 +2009,16 @@ int main(void)
                         }
 			else if (num_rows == 0)
 			{
-				// Attempt to restart the port scan
-				restart_flag = 1;
-                                IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (query db) returned 0 rows, setting restart_flag = %d\n", restart_flag);
+				if (fetchnum <= 4)
+				{
+					// Attempt to restart the port scan, but only if we're a small number of fetches into the test
+					restart_flag = 1;
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (query db) returned 0 rows, setting restart_flag = %d\n", restart_flag);
+				}
+				else
+				{
+                                	IPSCAN_LOG( LOGPREFIX "ipscan: INFO: count_rows_db() javascript (query db) returned 0 rows, NOT setting restart_flag, fetchnum = %d\n", fetchnum);
+				}
 			}
                         else
                         {
@@ -2352,6 +2363,7 @@ int main(void)
 
 			// Only include this section if ping is compiled in ...
 			#if (IPSCAN_INCLUDE_PING == 1)
+			IPSCAN_LOG( LOGPREFIX "ipscan: Beginning ICMPv6 ping of remote address : %s\n", saferemoteaddrstring);
 			int pingresult = check_icmpv6_echoresponse(remoteaddrstring, querystarttime, querysession, &indirecthost[0] );
 
 			// Ensure the indirecthost returned is valid
@@ -2384,8 +2396,6 @@ int main(void)
 			#if (0 < IPSCAN_LOGVERBOSITY)
 			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of client %s returned %d (%s), from host %s\n",saferemoteaddrstring,\
 					pingresult, resultsstruct[directresult].label, indirecthost);
-			#else
-			IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 ping of remote address : %s\n", saferemoteaddrstring);
 			#endif
 			portsstats[directresult]++ ;
 
