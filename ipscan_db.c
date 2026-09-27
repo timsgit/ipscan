@@ -113,9 +113,10 @@
 // 1.16 - add more debug to delete_from_db()
 // 1.17 - add update_teststate_db to ensure running-state is updated as an atomic read-modify-write within the database
 // 1.18 - error handling added for dump_db fflush
+// 1.19 - ensure mysql_error() and mysql_errno() reported for all mysql error conditions
 
 //
-#define IPSCAN_DB_VER "1.18"
+#define IPSCAN_DB_VER "1.19"
 //
 
 #include "ipscan.h"
@@ -260,7 +261,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
 						if (0 != rc)
 						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to complete CREATE TABLE IF NOT EXISTS, returned %d (%s)\n", rc, mysql_error(connection));
+							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to complete CREATE TABLE IF NOT EXISTS, returned rc = %d, %u (%s)\n", rc, mysql_errno(connection), mysql_error(connection));
 							retval = 9999;
 						}
 					}
@@ -343,6 +344,11 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 						{
 							// retval set to 0 if INSERT completed successfully
 							retval = 0;
+						}
+						else
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to execute insert query, returned rc=%d, %u (%s)\n", rc, mysql_errno(connection), mysql_error(connection));
+							retval = 1313;
 						}
 					}
 					else
@@ -1765,8 +1771,8 @@ int update_teststate_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: update_teststate_db: ERROR: UPDATE failed, returned %d (%s)\n",\
-						rc, mysql_error(connection));
+						IPSCAN_LOG( LOGPREFIX "ipscan: update_teststate_db: ERROR: UPDATE failed, returned rc = %d, %u (%s)\n",\
+						rc, mysql_errno(connection), mysql_error(connection));
 						retval = 7;
 					}
 				}
