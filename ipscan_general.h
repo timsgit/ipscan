@@ -52,9 +52,11 @@ int querystring_is_number(char check);
 bool ipv6_address_to_string( uint64_t msb, uint64_t lsb, char * buffer, unsigned char bufflen, bool slash48 );
 uint32_t get_random32(void);
 uint16_t get_ephemeral(void);
+#if (1 == IPSCAN_PRIVILEGES)
 void print_ids(const char * place);
 int drop_privileges(void);
 int regain_privileges(void);
+#endif
 int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip);
 unsigned short checksum(unsigned short *ptr, int nbytes);
 //

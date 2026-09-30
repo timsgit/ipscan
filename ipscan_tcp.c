@@ -48,9 +48,10 @@
 // 1.05			Minor midpoint logging differences to aid debug
 // 1.06			Add random backoff to reduced chances of database table lock deadlock
 // 1.07			Add sleep to ensure minimum time per port tested
+// 1.08			Make add/drop privileges a compile-time option
 
 //
-#define IPSCAN_TCP_VER "1.07"
+#define IPSCAN_TCP_VER "1.08"
 //
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -409,12 +410,14 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	//
 	// END OF ROOT PRIVILEGES - Revert to previous privilege level
 	//
+	#if (1 == IPSCAN_PRIVILEGES)
 	rc = drop_privileges();
 	if (rc != EXIT_SUCCESS)
 	{
 		IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: ERROR: drop_privileges() unsuccessful, returned %d\n", rc);
 		retval = PORTINTERROR;
 	}
+	#endif
 
 	// If something bad has happened then return now ...
         if (PORTUNKNOWN != retval)
@@ -423,11 +426,13 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
                 if (-1 != icmp_sock) close(icmp_sock); // close socket if appropriate
 
 		// regain the privileges now we've finished processing the packets
+		#if (1 == IPSCAN_PRIVILEGES)
 		rc = regain_privileges();
 		if (rc != EXIT_SUCCESS)
 		{
 			IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: ERROR: regain_privileges() unsuccessful, returned %d\n", rc);
 		}
+		#endif
                 return (retval);
         }
 
@@ -940,12 +945,14 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	close(icmp_sock);
 
 	// regain the privileges now we've finished processing the packets
+	#if (1 == IPSCAN_PRIVILEGES)
 	rc = regain_privileges();
 	if (rc != EXIT_SUCCESS)
 	{
 		IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: ERROR: regain_privileges() unsuccessful, returned %d\n", rc);
 		retval = PORTINTERROR;
 	}
+	#endif
 
 	// return - determine the return value text equivalent in retstring
 	#ifdef MIDPOINTDEBUG

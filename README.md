@@ -23,30 +23,31 @@ along with IPscan. If not, see <http://www.gnu.org/licenses/>.
 IPscan requires access to a MySQL, or MariaDB, database and the associated client development libraries 
 (libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. The database
 is used to *temporarily* hold scan results until shortly after the test completes. 
-IPscan is known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 7, Fedora 16, 
+
+Versions 2.04 and earlier were known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 7, Fedora 16, 
 Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and Raspbian and run alongside 
-Apache versions 2.2 and 2.4. Please let me know of any other build successes/failures on 
-unlisted platforms.
+Apache versions 2.2 and 2.4.
+
+Versions 2.05 and later are known to build on "Raspbian Debian GNU/Linux 11 (bullseye)" and run alongside
+Apache version 2.4. Please let me know of build successes/failures on unlisted platforms.
 
 NOTE: For releases >= version 2.00, IPscan has been updated to exclusively use raw sockets. As a result, 
 IPscan can now provide feedback on mid-point devices and all ICMPv6 response types/codes.
 
-Installation Steps:
-===================
+***Installation Steps:***
 IMPORTANT: when UPGRADING from versions before 2.03: a database change has occurred and consequently 
 it is necessary that you remove your existing database prior to building and installing 
 versions 2.03 and later. See step 4 below for details.
 
     1.  edit the Makefile and adjust the following entries as required:
-         a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /srv/www/cgi-bin6)
-                    Ensure that the selected target directory exists, with appropriate permissions, before 
-                    attempting to install the final executables.
+         a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /var/www/cgi-bin6)
+		Ensure that the selected target directory exists, with appropriate permissions, before 
+		attempting to install the final executables.
          b. URIPATH - this is the request URI by which the cgi files will be accessed from your webserver
-                    e.g. https://www64.chappell-family.co.uk/cgi-bin6/ipscanjs.cgi then set URIPATH=/cgi-bin6
-         c. TXTTARGET and JSTARGET - these define the names of the two cgi objects that will be created
-         d. SETUID_AVAILABLE and UDP_AVAILABLE - if you're running the service on a machine where you, or
-                    the web server, don't have permissions to call setuid() or create UDP sockets then these features
-                    need to be disabled.
+		e.g. https://www66.chappell-family.co.uk/cgi-bin6/ipscanjs.cgi then set URIPATH=/cgi-bin6
+         c. TXTTARGET, FASTTXTTARGET, JSTARGET, FASTJSTARGET - these define the names of the cgi objects that will be created
+	 d. UDP_AVAILABLE and PING_AVAILABLE if these features are NOT required
+	 e. APACHE_USER and APACHE_GROUP, if the automatic Apache USER/GROUP-determination doesn't work
 
     2.  edit ipscan.h and adjust *at least* the following entries:
          a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will be world-accessible
@@ -59,7 +60,7 @@ versions 2.03 and later. See step 4 below for details.
                            MYSQL_TBLNAME - the name of the table in which IPscan results will reside.
 
     3.  edit ipscan_portlist.h and change the list of ports to be tested, if required. Note that if you add 
-        new UDP ports then you must also add a matching packet generator function to ipscan_udp.c
+        new UDP ports then you MUST also add a matching packet generator function to ipscan_udp.c
     
     4.  Create the database and user and allocate appropriate user privileges, using the following commands within the mysql shell:
 
@@ -90,22 +91,25 @@ versions 2.03 and later. See step 4 below for details.
         $ ./upgrade.bsh
         
        
-    5.  make && make install
+    5.  **make && make install** (default/recommended, equivalent to METHOD=caps)
+	OR:
+	**make METHOD=suid && make install METHOD=suid** (alternative, installs binaries as root, with suid bits set)
        
-        Given that the suid bit is set on the installed executables, in order to support raw sockets, 
-        it is necessary to perform the 'make install' stage as root user. 
+        Although the executables no longer rely on the suid bit being set in order to support raw sockets, 
+        it is likely still necessary to perform the 'make install' step as root, in order that the binaries
+	are able to be installed in the appropriate cgi directory. 
+
+	NOTES: 
+	a. METHOD=caps : use the Linux capability flags to enable raw sockets
+	b. METHOD=suid : use root user and suid to enable raw sockets (deprecated)
+	c. the same METHOD must be used for the build and installation steps
+	d. METHOD=caps is the default, if METHOD is not expressly defined
+	e. if you wish to change METHOD then 'make clean' before rebuilding and installing with the new METHOD
        
-        Note: when updating an existing installation to version 1.10 and beyond it is necessary to manually 
-        remove the ipscan_checks.c file, if it remains in your install directory, prior to building. 
-        The functionality within ipscan_checks.c has been redistributed to separate files which 
-        handle TCP, UDP and ICMPv6 testing.
-       
-        Note: please use gmake under FreeBSD.
-    
     6.  Make sure that the URI path directory (which may well be accessed via an Apache alias) is enabled to execute cgi:
         
-        ScriptAlias /cgi-bin6/ "/srv/www/cgi-bin6/"
-        <Directory "/srv/www/cgi-bin6">
+        ScriptAlias /cgi-bin6/ "/var/www/cgi-bin6/"
+        <Directory "/var/www/cgi-bin6">
            AllowOverride None
            Options +ExecCGI -Includes
            Order allow,deny
@@ -127,7 +131,7 @@ versions 2.03 and later. See step 4 below for details.
         a. Ensure that your Apache server is enabled to support cgi, as root type:
            # setsebool -P httpd_enable_cgi on
         b. Enable the correct execution permissions to the cgi scripts, as root type:
-           # cd /srv/www/cgi-bin6/ (use your selected installation path)
+           # cd /var/www/cgi-bin6/ (use your selected installation path)
            # chcon -t httpd_unconfined_script_exec_t *.cgi
           
         IMPORTANT NOTE: the steps listed in step 7 above are only indicative of what may be required, and 
@@ -138,13 +142,13 @@ versions 2.03 and later. See step 4 below for details.
         or: 
 	w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
 
-    9.  Check the web server access/error logs or syslog for messages. IPscan will place summary messages in the 
+    9.  Check the web server access/error logs or Syslog for messages. IPscan will place summary messages in the 
         web server error log or syslog if enabled to do so (this is NOT the default option - change 
-        IPSCAN_LOGVERBOSITY to 1 to enable this). It is possible to enable copious amounts of debug by 
+        IPSCAN_LOGVERBOSITY to 1 to enable this feature). It is possible to enable copious amounts of debug by 
         uncommenting the debug #define statements in ipscan.h.
     
     10. If you're providing public access to IPscan then please ensure that you disable verbose reporting,
-        the summary option and ALL debug facilities.
+        the summary option, and ALL debug facilities.
 
         Note: versions v1.42 and later of IPscan automatically delete the scan results, for both javascript
         and text-only clients, after reporting them to the user. Earlier versions relied on a cron job
@@ -172,8 +176,7 @@ versions 2.03 and later. See step 4 below for details.
         are known to implement such rate-limiting.
 
 
-Getting further help:
-=====================
+***Getting further help:***
 A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled clients at: <https://ipv6.chappell-family.com/ipv6tcptest/>. If you need further help then please email me at: <webmaster@chappell-family.com> or visit my IPscan wiki at: <https://wiki.chappell-family.com/wiki/index.php?title=IPv6>
 
 ---

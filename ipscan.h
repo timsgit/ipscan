@@ -210,9 +210,10 @@
 	// 2.02 expand TCP flags handling for HUT and INDIRECT mid-points
 	// 2.03	Multiple database handling improvements
 	// 2.04 Further database and gcc/build adjustments
+	// 2.05 Move to binaries that use Linux setcap Network RAW capabilities - non-Linux builds will need some work!
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "2.04"
+	#define IPSCAN_VERNUM "2.05"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -385,20 +386,28 @@
 	// debug option to only use tidy_up_only() - do NOT use in production
 	// #define IPSCAN_TIDY_UP_ONLY 1
 
-	// Decide whether to include ping support (requires setuid which some servers don't allow)
-	// Do not modify this statement - adjust SETUID_AVAILABLE in the Makefile instead
-	#ifndef SETUID_AVAILABLE
-	#define IPSCAN_INCLUDE_PING 0
+	// Decide whether to include ping support
+	// Do not modify this statement - adjust NET_RAW_CAPABILITY in the Makefile instead
+	#ifndef PING_AVAILABLE
+	#define IPSCAN_INCLUDE_PING (0)
 	#else
-	#define IPSCAN_INCLUDE_PING SETUID_AVAILABLE
+	#define IPSCAN_INCLUDE_PING (1)
 	#endif
 
 	// Decide whether to include UDP support (access can be restricted on some servers)
 	// Do not modify this statement - adjust UDP_AVAILABLE in the Makefile instead
 	#ifndef UDP_AVAILABLE
-	#define IPSCAN_INCLUDE_UDP 0
+	#define IPSCAN_INCLUDE_UDP (0)
 	#else
-	#define IPSCAN_INCLUDE_UDP UDP_AVAILABLE
+	#define IPSCAN_INCLUDE_UDP (1)
+	#endif
+
+	// Decide whether to use Linux capabiltiy flags (e.g. CAP_NET_RAW) include UDP support (access can be restricted on some servers)
+	// Do not modify this statement - adjust make METHOD=caps or METHOD=suid in the make command instead
+	#ifndef CAPNETRAW0_ROOTSUID1
+	#define IPSCAN_PRIVILEGES (1)
+	#else
+	#define IPSCAN_PRIVILEGES (CAPNETRAW0_ROOTSUID1)
 	#endif
 
 	// Logging verbosity:

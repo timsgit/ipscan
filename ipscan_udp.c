@@ -531,12 +531,14 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	}
 
 	// Socket is created/configured so drop privileges
+	#if (1 == IPSCAN_PRIVILEGES)
 	rc = drop_privileges();
 	if (rc != EXIT_SUCCESS)
 	{
 		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: drop_privileges() returned %d\n", rc);
                 retval = PORTINTERROR;
 	}
+	#endif
 
         // If something bad has happened then return now ...
         // mustn't return to caller with root privileges, hence done here ...
@@ -544,11 +546,13 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
         {
                 if (-1 != udp_sock) close(udp_sock); // close socket if appropriate
                 if (-1 != icmp_sock) close(icmp_sock); // close socket if appropriate
+		#if (1 == IPSCAN_PRIVILEGES)
 		rc = regain_privileges();
 		if (rc != EXIT_SUCCESS)
 		{
 			IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: regain_privileges() returned %d\n", rc);
 		}
+		#endif
                 return (retval);
         }
 
@@ -2807,12 +2811,14 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	close(icmp_sock);
 
 	// Packet tx/rx is complete, so attempt to regain privileges
+	#if (1 == IPSCAN_PRIVILEGES)
 	rc = regain_privileges();
 	if (rc != EXIT_SUCCESS)
 	{
 		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: regain_privileges() returned %d\n", rc);
 		retval = PORTINTERROR;
 	}
+	#endif
 
 	// return
 	#ifdef MIDPOINTDEBUG

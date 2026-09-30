@@ -840,6 +840,7 @@ void print_ids(const char * place)
 //
 // -----------------------------------------------------------------------------
 //
+#if (1 == IPSCAN_PRIVILEGES)
 int drop_privileges(void)
 {
 	// Set effective UID to the real UID (non-root)
@@ -853,10 +854,12 @@ int drop_privileges(void)
 	#endif
 	return(EXIT_SUCCESS);
 }
+#endif
 
 //
 // -----------------------------------------------------------------------------
 //
+#if (1 == IPSCAN_PRIVILEGES)
 int regain_privileges(void)
 {
 	// Set effective UID back to root (0)
@@ -870,6 +873,7 @@ int regain_privileges(void)
 	#endif
 	return(EXIT_SUCCESS);
 }
+#endif
 //
 // -----------------------------------------------------------------------------
 //
