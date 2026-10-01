@@ -47,8 +47,8 @@ versions 2.03 and later. See step 4 below for details.
          b. URIPATH - this is the request URI by which the cgi files will be accessed from your webserver
 		e.g. https://www66.chappell-family.co.uk/cgi-bin6/ipscanjs.cgi then set URIPATH=/cgi-bin6
          c. TXTTARGET, FASTTXTTARGET, JSTARGET, FASTJSTARGET - these define the names of the cgi objects that will be created
-	 d. UDP_AVAILABLE and PING_AVAILABLE if these features are NOT required
-	 e. APACHE_USER and APACHE_GROUP, if the automatic Apache USER/GROUP-determination doesn't work
+         d. UDP_AVAILABLE and PING_AVAILABLE if these features are NOT required
+         e. APACHE_USER and APACHE_GROUP, if the automatic Apache USER/GROUP-determination doesn't work
 
     2.  edit ipscan.h and adjust *at least* the following entries:
          a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will be world-accessible
@@ -102,12 +102,13 @@ versions 2.03 and later. See step 4 below for details.
         it is likely still necessary to perform the 'make install' step as root, in order that the binaries
         are able to be installed in the appropriate cgi directory. 
 
-	NOTES: 
-	a. METHOD=caps : use the Linux capability flags to enable raw sockets
-	b. METHOD=suid : use root user and suid to enable raw sockets (deprecated)
-	c. the same METHOD must be used for the build and installation steps
-	d. METHOD=caps is the default, if METHOD is not expressly defined
-	e. if you wish to change METHOD then 'make clean' before rebuilding and installing with the new METHOD
+        BUILD-RELATED NOTES: 
+
+        a. METHOD=caps : use the Linux capability flags to enable raw sockets
+       	b. METHOD=suid : use root user and suid to enable raw sockets (deprecated)
+        c. the same METHOD must be used for the build and installation steps
+        d. METHOD=caps is the default, if METHOD is not expressly defined
+        e. if you wish to change METHOD then 'make clean' before rebuilding and installing with the new METHOD
        
     6.  Make sure that the URI path directory (which may well be accessed via an Apache alias) is enabled to execute cgi:
         
