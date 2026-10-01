@@ -81,8 +81,8 @@ versions 2.03 and later. See step 4 below for details.
         mysql> exit
         Bye
        
-	IMPORTANT NOTE: If performing an upgrade from an earlier version of IPscan then either 
-	manually drop the table within a mysql shell, e.g. :
+        IMPORTANT NOTE: If performing an upgrade from an earlier version of IPscan then either 
+        manually drop the table within a mysql shell, e.g. :
         
         mysql> use ipscan;
         mysql> drop table if exists results;
@@ -94,13 +94,13 @@ versions 2.03 and later. See step 4 below for details.
        
     5.  make && make install (default/recommended, equivalent to METHOD=caps)
 
-	OR:
+        OR:
 
-	make METHOD=suid && make install METHOD=suid (alternative, installs binaries as root, with suid bits set)
+        make METHOD=suid && make install METHOD=suid (alternative, installs binaries as root, with suid bits set)
        
         Although the executables may not rely on the suid bit being set in order to support raw sockets, 
         it is likely still necessary to perform the 'make install' step as root, in order that the binaries
-	are able to be installed in the appropriate cgi directory. 
+        are able to be installed in the appropriate cgi directory. 
 
 	NOTES: 
 	a. METHOD=caps : use the Linux capability flags to enable raw sockets
@@ -139,13 +139,16 @@ versions 2.03 and later. See step 4 below for details.
           
         ***IMPORTANT NOTE:***
 
-	the steps listed in step 7 above are only indicative of what may be required, and 
+        The steps listed in step 7 above are only indicative of what may be required, and 
         depend upon your existing installation. Please consult the SELinux documentation for further details. 
           
     8.  Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
-	w3m https://www66.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
+
+        w3m https://www66.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
+
         or: 
-	w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
+
+        w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
 
     9.  Check the web server access/error logs or Syslog for messages. IPscan will place summary messages in the 
         web server error log or Syslog if enabled to do so (this is NOT the default option - change 
