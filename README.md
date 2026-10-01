@@ -81,9 +81,7 @@ versions 2.03 and later. See step 4 below for details.
         mysql> exit
         Bye
        
-	**IMPORTANT NOTE:**
-
-	If performing an upgrade from an earlier version of IPscan then either 
+	IMPORTANT NOTE: If performing an upgrade from an earlier version of IPscan then either 
 	manually drop the table within a mysql shell, e.g. :
         
         mysql> use ipscan;
@@ -94,13 +92,13 @@ versions 2.03 and later. See step 4 below for details.
         $ ./upgrade.bsh
         
        
-    5.  <B>make && make install</B> (default/recommended, equivalent to METHOD=caps)
+    5.  make && make install (default/recommended, equivalent to METHOD=caps)
 
 	OR:
 
-	<B>make METHOD=suid && make install METHOD=suid</B> (alternative, installs binaries as root, with suid bits set)
+	make METHOD=suid && make install METHOD=suid (alternative, installs binaries as root, with suid bits set)
        
-        Although the executables no longer rely on the suid bit being set in order to support raw sockets, 
+        Although the executables may not rely on the suid bit being set in order to support raw sockets, 
         it is likely still necessary to perform the 'make install' step as root, in order that the binaries
 	are able to be installed in the appropriate cgi directory. 
 
