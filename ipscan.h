@@ -692,7 +692,7 @@
 
 	// Timeout before results are deleted ...
 	// Should significantly exceed maximum test duration
-	#define IPSCAN_DELETE_TIMEOUT (150)
+	#define IPSCAN_DELETE_TIMEOUT (160)
 
 	// Sleep time between polls when waiting to delete results
 	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (JSONFETCHEVERY+1)
