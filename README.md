@@ -35,6 +35,7 @@ NOTE: For releases >= version 2.00, IPscan has been updated to exclusively use r
 IPscan can now provide feedback on mid-point devices and all ICMPv6 response types/codes.
 
 ***Installation Steps:***
+
 IMPORTANT: when UPGRADING from versions before 2.03: a database change has occurred and consequently 
 it is necessary that you remove your existing database prior to building and installing 
 versions 2.03 and later. See step 4 below for details.
@@ -80,7 +81,9 @@ versions 2.03 and later. See step 4 below for details.
         mysql> exit
         Bye
        
-	**IMPORTANT NOTE:** If performing an upgrade from an earlier version of IPscan then either 
+	**IMPORTANT NOTE:**
+
+	If performing an upgrade from an earlier version of IPscan then either 
 	manually drop the table within a mysql shell, e.g. :
         
         mysql> use ipscan;
@@ -91,9 +94,11 @@ versions 2.03 and later. See step 4 below for details.
         $ ./upgrade.bsh
         
        
-    5.  **make && make install** (default/recommended, equivalent to METHOD=caps)
+    5.  <B>make && make install</B> (default/recommended, equivalent to METHOD=caps)
+
 	OR:
-	**make METHOD=suid && make install METHOD=suid** (alternative, installs binaries as root, with suid bits set)
+
+	<B>make METHOD=suid && make install METHOD=suid</B> (alternative, installs binaries as root, with suid bits set)
        
         Although the executables no longer rely on the suid bit being set in order to support raw sockets, 
         it is likely still necessary to perform the 'make install' step as root, in order that the binaries
@@ -134,16 +139,18 @@ versions 2.03 and later. See step 4 below for details.
            # cd /var/www/cgi-bin6/ (use your selected installation path)
            # chcon -t httpd_unconfined_script_exec_t *.cgi
           
-        IMPORTANT NOTE: the steps listed in step 7 above are only indicative of what may be required, and 
+        ***IMPORTANT NOTE:***
+
+	the steps listed in step 7 above are only indicative of what may be required, and 
         depend upon your existing installation. Please consult the SELinux documentation for further details. 
           
     8.  Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
-        w3m https://www66.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
+	w3m https://www66.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
         or: 
 	w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
 
     9.  Check the web server access/error logs or Syslog for messages. IPscan will place summary messages in the 
-        web server error log or syslog if enabled to do so (this is NOT the default option - change 
+        web server error log or Syslog if enabled to do so (this is NOT the default option - change 
         IPSCAN_LOGVERBOSITY to 1 to enable this feature). It is possible to enable copious amounts of debug by 
         uncommenting the debug #define statements in ipscan.h.
     
@@ -177,6 +184,7 @@ versions 2.03 and later. See step 4 below for details.
 
 
 ***Getting further help:***
+
 A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled clients at: <https://ipv6.chappell-family.com/ipv6tcptest/>. If you need further help then please email me at: <webmaster@chappell-family.com> or visit my IPscan wiki at: <https://wiki.chappell-family.com/wiki/index.php?title=IPv6>
 
 ---
