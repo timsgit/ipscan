@@ -64,9 +64,10 @@
 // 1.06			Add random backoff to reduced chances of database table lock deadlock
 // 1.07			Add sleep to ensure minimum time per port tested
 // 1.08			Updates to fix compilation warnings/errors in Ubuntu 24.04
+// 1.09			Ensure _exit() returns failure code, if appropriate
 
 //
-#define IPSCAN_UDP_VER "1.08"
+#define IPSCAN_UDP_VER "1.09"
 //
 
 #include "ipscan.h"
@@ -2862,6 +2863,7 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 		// determine a seed value unique for this child, so backoff is unsynchronised 
                 unsigned int seedval = fork_safe_seedval();
 		// child - actually do the work here - and then exit successfully
+		int exitval = EXIT_SUCCESS;
 		for (unsigned int i = 0 ; i <todo ; i++)
 		{
 			uint16_t port = udpportlist[(unsigned int)(portindex+i)].port_num;
@@ -2897,10 +2899,11 @@ int check_udp_ports_parll(char * hostname, unsigned int portindex, unsigned int 
 			if (0 != rc)
 			{
 				IPSCAN_LOG( LOGPREFIX "check_udp_port_parll(): ERROR: write_db loop exited after %d attempts with non-zero rc: %d\n", IPSCAN_DB_ACCESS_ATTEMPTS, rc);
+				exitval = EXIT_FAILURE;
 			}
 		}
 		// Usual practice to have children _exit() whilst the parent calls exit()
-		_exit(EXIT_SUCCESS);
+		_exit(exitval);
 	}
 	else
 	{
