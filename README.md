@@ -96,11 +96,11 @@ versions 2.03 and later. See step 4 below for details.
 
         OR:
 
-        make METHOD=suid && make install METHOD=suid (alternative, installs binaries as root, with suid bits set)
+        make METHOD=suid && make install METHOD=suid (alternative, using suid bits)
        
-        Although the executables may not rely on the suid bit being set in order to support raw sockets, 
-        it is likely still necessary to perform the 'make install' step as root, in order that the binaries
-        are able to be installed in the appropriate cgi directory. 
+        It is necessary to perform the 'make install' step as root, in order that the binaries
+        are able to be installed in the appropriately chowned cgi directory. Setting the ownership to root
+        ensures the Apache user cannot overwrite the binaries and gain CAP_NET_RAW capabilities.
 
         BUILD-RELATED NOTES: 
 
