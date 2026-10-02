@@ -1286,7 +1286,10 @@ int main(void)
 						if (WIFEXITED(childstatus))
 						{
 							int code = WEXITSTATUS(childstatus);
-							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP ongoing phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+							if (0 != code)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP ongoing phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+							}
 						}
 						if (WIFSIGNALED(childstatus))
 						{
@@ -1307,7 +1310,10 @@ int main(void)
 					if (WIFEXITED(childstatus))
 					{
 						int code = WEXITSTATUS(childstatus);
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP shutdown phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+						if (0 != code)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP shutdown phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+						}
 					}
 					if (WIFSIGNALED(childstatus))
 					{
@@ -1507,7 +1513,10 @@ int main(void)
 						if (WIFEXITED(childstatus))
 						{
 							int code = WEXITSTATUS(childstatus);
-							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, code, numchildren );
+							if (0 != code)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP ongoing phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+							}
 						}
 						if (WIFSIGNALED(childstatus))
 						{
@@ -1528,7 +1537,10 @@ int main(void)
 					if (WIFEXITED(childstatus))
 					{
 						int code = WEXITSTATUS(childstatus);
-						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, code, numchildren );
+						if (0 != code)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP shutdown phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+						}
 					}
 					if (WIFSIGNALED(childstatus))
 					{
@@ -2547,14 +2559,48 @@ int main(void)
 					{
 						int pid = wait(&childstatus);
 						numchildren--;
-						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+						if (WIFEXITED(childstatus))
+						{
+							int code = WEXITSTATUS(childstatus);	
+							if (0 != code)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP ongoing phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+							}
+						}
+						if (WIFSIGNALED(childstatus))
+						{
+							int signal = WTERMSIG(childstatus);
+							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP ongoing phase : PID=%d terminated by signal %d, numchildren is now %d\n", pid, signal, numchildren );
+						}
+						if (WIFSTOPPED(childstatus))
+						{
+							int signal = WSTOPSIG(childstatus);
+							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP ongoing phase : PID=%d stopped by signal %d, numchildren is now %d\n", pid, signal, numchildren );
+						}
 					}
 				}
 				while (numchildren > 0)
 				{
 					int pid = wait(&childstatus);
 					numchildren--;
-					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					if (WIFEXITED(childstatus))
+					{
+						int code = WEXITSTATUS(childstatus);
+						if (0 != code)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP shutdown phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+						}
+					}
+					if (WIFSIGNALED(childstatus))
+					{
+						int signal = WTERMSIG(childstatus);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP shutdown phase : PID=%d terminated by signal %d, numchildren is now %d\n", pid, signal, numchildren );
+					}
+					if (WIFSTOPPED(childstatus))
+					{
+						int signal = WSTOPSIG(childstatus);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: UDP shutdown phase : PID=%d stopped by signal %d, numchildren is now %d\n", pid, signal, numchildren );
+					}
 				}
 			}
 			#endif
@@ -2614,14 +2660,48 @@ int main(void)
 					{
 						int pid = wait(&childstatus);
 						numchildren--;
-						if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: INFO: ongoing phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+						if (WIFEXITED(childstatus))
+						{
+							int code = WEXITSTATUS(childstatus);
+							if (0 != code)
+							{
+								IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP ongoing phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+							}
+						}
+						if (WIFSIGNALED(childstatus))
+						{
+							int signal = WTERMSIG(childstatus);
+							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP ongoing phase : PID=%d terminated by signal %d, numchildren is now %d\n", pid, signal, numchildren );
+						}
+						if (WIFSTOPPED(childstatus))
+						{
+							int signal = WSTOPSIG(childstatus);
+							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP ongoing phase : PID=%d stopped by signal %d, numchildren is now %d\n", pid, signal, numchildren );
+						}
 					}
 				}
 				while (numchildren > 0)
 				{
 					int pid = wait(&childstatus);
 					numchildren--;
-					if (childstatus != 0) IPSCAN_LOG( LOGPREFIX "ipscan: INFO: shutdown phase : PID=%d retired with status=%d, numchildren is now %d\n", pid, childstatus, numchildren );
+					if (WIFEXITED(childstatus))
+					{
+						int code = WEXITSTATUS(childstatus);
+						if (0 != code)
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP shutdown phase : PID=%d exited with status=%d, numchildren is now %d\n", pid, code, numchildren );
+						}
+					}
+					if (WIFSIGNALED(childstatus))
+					{
+						int signal = WTERMSIG(childstatus);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP shutdown phase : PID=%d terminated by signal %d, numchildren is now %d\n", pid, signal, numchildren );
+					}
+					if (WIFSTOPPED(childstatus))
+					{
+						int signal = WSTOPSIG(childstatus);
+						IPSCAN_LOG( LOGPREFIX "ipscan: INFO: TCP shutdown phase : PID=%d stopped by signal %d, numchildren is now %d\n", pid, signal, numchildren );
+					}
 				}
 			}
 			#if (CLIENTDEBUG > 1)

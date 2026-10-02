@@ -44,6 +44,7 @@
 # 0.25 - update copyright year to 2026
 # 0.26 - add the new header files
 # 0.27 - move to support Linux capabilities as well as root/suid approach
+# 0.28 - various fixes, typos and other improvements
 
 # -------------------------------------------------------------------------
 # Support builds without UDP port scans
@@ -122,37 +123,6 @@ URIPATH=/cgi-bin6
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Extract the OS ID from /etc/os-release - only handle common options for now
-OS_ID := $(shell grep -E '^ID=' /etc/os-release | sed 's/ID=//' | tr -d '"')
-ifeq ($(OS_ID),$(filter $(OS_ID),debian ubuntu mint raspbian))
-$(info Detected OS: Debian-type Linux. Using apache2ctl to determine Apache user/group)
-APACHE_CONFIG_BIN ?= apache2ctl
-else ifeq ($(OS_ID),$(filter $(OD_ID)fedora rhel almalinux rocky amzn centos))
-$(info Detected OS: RHEL-type Linux. Using httpd to determine Apache user/group)
-APACHE_CONFIG_BIN ?= httpd
-else ifeq ($(OS_ID),$(filter $(OD_ID)sles opensuse-tumbleweed))
-$(info Detected OS: SLES-type Linux. Using httpd to determine Apache user/group)
-APACHE_CONFIG_BIN ?= httpd
-else
-$(info Warning: Unhandled OS ($(OS_ID)). Defaulting to apache2ctl to determine Apache user/group)
-APACHE_CONFIG_BIN ?= apache2ctl
-endif
-# -------------------------------------------------------------------------
-
-# -------------------------------------------------------------------------
-# Determine Apache user/group - if this doesn't work for your installation then set APACHE_USER/APACHE_GROUP manually
-# or adjust the OS_ID detection above to select the appropriate binary that dumps the apache config
-# The two APACHE_ variables are used below to chown the installed binaries
-ifeq ($(CAPNETRAW0_ROOTSUID1),0)
-APACHE_USER := $(shell  $(APACHE_CONFIG_BIN) -t -D DUMP_RUN_CFG 2>/dev/null | sed -n 's/^ *User: name="\([^"]*\)".*/\1/p')
-APACHE_GROUP := $(shell $(APACHE_CONFIG_BIN) -t -D DUMP_RUN_CFG 2>/dev/null | sed -n 's/^ *Group: name="\([^"]*\)".*/\1/p')
-else
-APACHE_USER := root
-APACHE_GROUP:= root
-endif
-# -------------------------------------------------------------------------
-
-# -------------------------------------------------------------------------
 # General build variables
 SHELL=/bin/sh
 LIBPATHS=-L/usr/lib
@@ -161,8 +131,12 @@ LIBS=
 CC=gcc
 CFLAGS=-Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wwrite-strings -Wformat=2 -Wformat-security -O2 -D_FORTIFY_SOURCE=2
 CFLAGS+= -fstack-protector-all -fstack-clash-protection -Wstack-protector --param ssp-buffer-size=4
-CFLAGS+= -Wconversion -Wimplicit-fallthrough -fstack-protector-strong -Wl,-z,noexecstack -Wsign-compare -Wformat-signedness
-CFLAGS+= -ftrapv -fexceptions -fPIE -fpie -Wl,-pie -Wl,-z,relro -Wl,-z,now -Werror=implicit-function-declaration 
+CFLAGS+= -Wconversion -Wsign-conversion -Wimplicit-fallthrough -Wl,-z,noexecstack -Wsign-compare -Wformat-signedness
+CFLAGS+= -ftrapv -fPIE -Wl,-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,separate-code -Werror=implicit-function-declaration 
+# control flow protection only works on x86
+ifeq ($(shell $(CC) -dumpmachine | grep -Eq 'x86_64|i.86' && echo yes),yes)
+CFLAGS+= -fcf-protection=full
+endif
 CFLAGS+= -D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64
 # -------------------------------------------------------------------------
 
@@ -182,6 +156,11 @@ FASTJSTARGET=ipscanfastjs.cgi
 # 
 # Hopefully nothing below this point will need changing ....
 # 
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# Default target
+.DEFAULT_GOAL := all
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
@@ -302,17 +281,13 @@ strip: $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 .PHONY: install
 install : check-method $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET) strip
 	@echo "Installing IPscan CGI executables"
-	$(INSTALL_DIR) $(DESTDIR)$(TARGETDIR)
-	$(INSTALL_PROGRAM) $(TXTTARGET) $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
-	$(INSTALL_PROGRAM) $(FASTTXTTARGET) $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
-	$(INSTALL_PROGRAM) $(JSTARGET) $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
-	$(INSTALL_PROGRAM) $(FASTJSTARGET) $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
-	@echo "Changing IPscan CGI executable owner:group to "$(APACHE_USER):$(APACHE_GROUP)
-	chown $(APACHE_USER):$(APACHE_GROUP) $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
-	chown $(APACHE_USER):$(APACHE_GROUP) $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
-	chown $(APACHE_USER):$(APACHE_GROUP) $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
-	chown $(APACHE_USER):$(APACHE_GROUP) $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
+	$(INSTALL_DIR) -o root -g root -m 0755 $(DESTDIR)$(TARGETDIR)
+	$(INSTALL_PROGRAM) -o root -g root $(TXTTARGET) $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
+	$(INSTALL_PROGRAM) -o root -g root $(FASTTXTTARGET) $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
+	$(INSTALL_PROGRAM) -o root -g root $(JSTARGET) $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
+	$(INSTALL_PROGRAM) -o root -g root $(FASTJSTARGET) $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
 ifeq ($(CAPNETRAW0_ROOTSUID1),0)
+	@command -v $(SETCAP) >/dev/null || { echo "\n\nERROR: setcap is required for METHOD=caps, but not found.\n"; exit 1; }
 	@echo "Setting the installation binaries capability bits"
 	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
 	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
