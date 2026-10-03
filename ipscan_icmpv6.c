@@ -42,9 +42,10 @@
 // 0.22			update copyright year
 // 1.00			drop/regain privileges
 // 1.01			Make drop/regain privileges a compile-time option
+// 1.02			Move to new ICMPv6 mappings
 
 //
-#define IPSCAN_ICMPV6_VER "1.01"
+#define IPSCAN_ICMPV6_VER "1.02"
 //
 
 #include "ipscan.h"
@@ -779,27 +780,33 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ICMP6_TYPE was ICMP6_ECHO_REPLY, with code %d\n", rxicmp6_code);
 				#endif
 			}
-			else if ( rxicmp6_type == ICMP6_DST_UNREACH )
+			else if ( rxicmp6_type == ICMP6_DST_UNREACH ) // type 1
 			{
 				switch ( rxicmp6_code )
 				{
-				case ICMP6_DST_UNREACH_NOROUTE:
-					retval = PORTUNREACHABLE;
+				case ICMP6_DST_UNREACH_NOROUTE: // code 0
+					retval = PORTNOROUTE_T1C0;
 					break;
-				case ICMP6_DST_UNREACH_ADMIN:
-					retval = PORTPROHIBITED;
+				case ICMP6_DST_UNREACH_ADMIN: // code 1
+					retval = PORTADMPRHBTD_T1C1;
 					break;
-				case ICMP6_DST_UNREACH_ADDR:
-					retval = PORTNOROUTE;
+				case ICMP6_DST_UNREACH_ADDR: // code 3
+					retval = PORTADDRUNREACHABLE_T1C3;
 					break;
-				case ICMP6_DST_UNREACH_NOPORT:
-					retval = PORTREFUSED;
+				case ICMP6_DST_UNREACH_NOPORT: // code 4
+					retval = PORTUNREACHABLE_T1C4;
 					break;
-				case ICMP6_DST_UNREACH_BEYONDSCOPE:
-					retval = PORTBEYONDSCOPE; 
+				case ICMP6_DST_UNREACH_BEYONDSCOPE: // code 2
+					retval = PORTBEYONDSCOPE_T1C2; 
 					break;
-				default:
-					retval = PORTUNREACHABLE;
+				case 5: // code 5
+					retval = PORTFAILEDPOLICY_T1C5;
+					break;
+				case 6: // code 6
+					retval = PORTREJECTROUTE_T1C6;
+					break;
+				default:// other codes
+					retval = PORTICMPV6_T1;
 					break;
 				}
 
@@ -820,13 +827,13 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				#endif
 				return (retval+indirect);
 			}
-			else if (rxicmp6_type == ICMP6_PARAM_PROB)
+			else if (rxicmp6_type == ICMP6_PARAM_PROB) // type 4
 			{
 				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ICMP6_TYPE was PARAM_PROB, with code %d\n", rxicmp6_code);
 				#endif
 
-				retval = PORTPARAMPROB;
+				retval = PORTPARAMPROB_T4;
 				if (-1 != sock) close(sock); // close socket if appropriate
 				//
                                 // More sensitive packet processing is over, so now safe(r) to regain_privileges();
@@ -840,13 +847,13 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				#endif
 				return (retval+indirect);
 			}
-			else if (rxicmp6_type == ICMP6_TIME_EXCEEDED)
+			else if (rxicmp6_type == ICMP6_TIME_EXCEEDED) // type 3
 			{
 				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ICMP6_TYPE was TIME_EXCEEDED, with code %d\n", rxicmp6_code);
 				#endif
 
-				retval = PORTTIMEEXCEEDED;
+				retval = PORTTIMEEXCEEDED_T3;
 				if (-1 != sock) close(sock); // close socket if appropriate
 				//
                                 // More sensitive packet processing is over, so now safe(r) to regain_privileges();
@@ -860,13 +867,13 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 				#endif
 				return (retval+indirect);
 			}
-			else if (rxicmp6_type == ICMP6_PACKET_TOO_BIG)
+			else if (rxicmp6_type == ICMP6_PACKET_TOO_BIG) // type 2
 			{
 				#ifdef PINGDEBUG
 				IPSCAN_LOG( LOGPREFIX "check_icmpv6_echoresponse: ICMP6_TYPE was PACKET_TOO_BIG, with code %d\n", rxicmp6_code);
 				#endif
 
-				retval = PORTPKTTOOBIG;
+				retval = PORTPKTTOOBIG_T2;
 				if (-1 != sock) close(sock); // close socket if appropriate
 				//
                                 // More sensitive packet processing is over, so now safe(r) to regain_privileges();
@@ -971,7 +978,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 
 	} // end of while
 
-	if (foundit == 1) retval = ECHOREPLY; else retval = ECHONOREPLY;
+	if (foundit == 1) retval = PORTECHOREPLY; else retval = PORTECHONOREPLY;
 
 	//
 	// More sensitive packet processing is over, so now safe(r) to regain_privileges();

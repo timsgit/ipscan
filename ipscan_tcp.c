@@ -50,9 +50,10 @@
 // 1.07			Add sleep to ensure minimum time per port tested
 // 1.08			Make add/drop privileges a compile-time option
 // 1.09			Ensure _exit() returns failure code, if appropriate
+// 1.10			Move to new TCP/ICMPv6 mappings
 
 //
-#define IPSCAN_TCP_VER "1.09"
+#define IPSCAN_TCP_VER "1.10"
 //
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -520,7 +521,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			#ifdef TCPDEBUG
        		 	IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: OUTERLOOP poll timeout for HUT %s dstport %u special %u\n", hostname, my_tx_dst_port, special);
 			#endif
-			retval = PORTINPROGRESS;
+			retval = PORTTCPSTEALTH;
 			continue;
 		}
 		else
@@ -610,7 +611,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection refused by HUT (RST) in response to SYN to host %s port %u special %u\n",\
 											 hostname, my_tx_dst_port, special);
 										#endif
-										retval = PORTREFUSED; // checked - matches description
+										retval = PORTTCPRST; // checked - matches description
 									}
 									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (1 == tcphdr_ptr->syn) && (0 == tcphdr_ptr->fin))
 									{
@@ -618,7 +619,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection accepted by HUT (SYN+ACK) in response to SYN to host %s port %u special %u\n",\
 											 hostname, my_tx_dst_port, special);
 										#endif
-										retval = PORTOPEN;
+										retval = PORTTCPOPEN;
 									}
 									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (0 == tcphdr_ptr->syn) && (0 == tcphdr_ptr->fin))
 									{
@@ -626,7 +627,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection already open from HUT (ACK) in response to SYN to host %s port %u special %u\n",\
 											 hostname, my_tx_dst_port, special);
 										#endif
-										retval = PORTALREADYOPN;
+										retval = PORTTCPACK;
 									}
 									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (0 == tcphdr_ptr->syn) && (1 == tcphdr_ptr->fin))
 									{
@@ -634,7 +635,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection soft close from HUT (FIN+ACK) in response to SYN to host %s port %u special %u\n",\
 											 hostname, my_tx_dst_port, special);
 										#endif
-										retval = PORTSOFTCLOSE;
+										retval = PORTTCPFINACK;
 									}
 									// SYN only - do nothing - expect a later SYN+ACK packet
 									continue; // retval setting should complete the loop
@@ -670,7 +671,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: INFO: Connection refused by someone else (%s) (RST) in response to SYN to host %s port %u special %u\n",\
 											rx_ip6addr_str, hostname, my_tx_dst_port, special);
 										#endif
-                                                                                retval = PORTREFUSED; // checked - matches description
+                                                                                retval = PORTTCPRST; // checked - matches description
 										indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)
 										// copy string address
 										memset(indhost_ptr, 0, INET6_ADDRSTRLEN); //Blank it first
@@ -682,7 +683,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: INFO: Connection soft close by someone else (%s) (FIN+ACK) in response to SYN to host %s port %u special %u\n",\
 											 rx_ip6addr_str, hostname, my_tx_dst_port, special);
 										#endif
-										retval = PORTSOFTCLOSE;
+										retval = PORTTCPFINACK;
 										indirect = IPSCAN_INDIRECT_RESPONSE; // not expected source address (HUT) but also NOT (localhost or our source address)
 										// copy string address
 										memset(indhost_ptr, 0, INET6_ADDRSTRLEN); //Blank it first
@@ -851,49 +852,49 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 									#endif
 									if (rx_icmphdr_ptr->icmp6_code == 0)
 									{
-										retval = PORTUNREACHABLE; // checked - No route to destination
+										retval = PORTNOROUTE_T1C0; // checked - No route to destination
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 1)
 									{	
-										retval = PORTPROHIBITED; // checked - Administratively prohibited
+										retval = PORTADMPRHBTD_T1C1; // checked - Administratively prohibited
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 2)
 									{	
-										retval = PORTBEYONDSCOPE; // checked - Beyond scope of source address
+										retval = PORTBEYONDSCOPE_T1C2; // checked - Beyond scope of source address
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 3)
 									{	
-										retval = PORTNOROUTE; // check - address unreachable from wireshark
+										retval = PORTADDRUNREACHABLE_T1C3; // check - address unreachable from wireshark
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 4)
 									{
-										retval = PORTUNREACHABLE; // checked
+										retval = PORTUNREACHABLE_T1C4; // checked
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 5)
 									{
-										retval = PORTFAILEDPOLICY; // checked - good
+										retval = PORTFAILEDPOLICY_T1C5; // checked - good
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 6)
 									{
-										retval = PORTREJECTROUTE; // checked - good
+										retval = PORTREJECTROUTE_T1C6; // checked - good
 									}
 									else // catchall - for other unhandled values
 									{
 										IPSCAN_LOG( LOGPREFIX " check_tcp_port_raw: ERROR: Unhandled ICMPv6 type 1, code = %d for host %s port %u\n", rx_icmphdr_ptr->icmp6_code, hostname, port);
-										retval = PORTINTERROR;
+										retval = PORTICMPV6_T1;
 									}
 								}
 								else if (rx_icmphdr_ptr->icmp6_type == 2)
 								{
-									retval = PORTPKTTOOBIG; // checked
+									retval = PORTPKTTOOBIG_T2; // checked
 								}
 								else if (rx_icmphdr_ptr->icmp6_type == 3)
 								{
-									retval = PORTTIMEEXCEEDED; // checked
+									retval = PORTTIMEEXCEEDED_T3; // checked
 								}
 								else if (rx_icmphdr_ptr->icmp6_type == 4)
 								{
-									retval = PORTPARAMPROB; // checked
+									retval = PORTPARAMPROB_T4; // checked
 								}
 								else
 								{
@@ -931,11 +932,11 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 		} // END of OUTERLOOP main IF
 	} // END of OUTERLOOP
 
-	// No other response has been received so set return value as if in-progress
-	if (retval == PORTUNKNOWN) retval = PORTINPROGRESS;
+	// No other response has been received so set return value as if STEALTH
+	if (retval == PORTUNKNOWN) retval = PORTTCPSTEALTH;
 	// Log that No TCPv6 or ICMPv6 response was received
 	#ifdef TCPDEBUG
-	if (PORTINPROGRESS == retval)
+	if (PORTTCPSTEALTH == retval)
 	{
 		IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: No TCP or ICMPv6 response received for %s port %u\n", hostname, port);
 	}
@@ -972,7 +973,7 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	}
 	#endif
 	// If we received any non-stealth feedback then make sure we wait at least IPSCAN_MINTIME_PER_PORT secs
-	if (PORTINPROGRESS != retval) sleep(IPSCAN_MINTIME_PER_PORT);
+	if (PORTTCPSTEALTH != retval) sleep(IPSCAN_MINTIME_PER_PORT);
 	return (retval+indirect);
 }
 //

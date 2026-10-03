@@ -419,69 +419,85 @@ void result_to_string(uint32_t result, char * retstring)
 		strncpy(hosttype, "", 15);
 	}
 
-	if (PORTOPEN == result)
+	if (PORTTCPOPEN == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "OPEN");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "TCPOPEN");
 	}
-	else if (PORTREFUSED == result)
+	else if (PORTTCPSTEALTH == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "REFUSED");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "TCPSTEALTH");
 	}
-	else if (PORTINPROGRESS == result)
+	else if (PORTTCPRST == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "IN-PROGRESS");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "TCPRESET");
 	}
-	else if (PORTPROHIBITED == result)
+	else if (PORTTCPFINACK == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PROHIBITED");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "TCPFINACK");
 	}
-	else if (PORTUNREACHABLE == result)
+	else if (PORTTCPACK == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UNREACHABLE");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "TCPACK");
 	}
-	else if (PORTNOROUTE == result)
+	else if (PORTECHOREPLY == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "NO ROUTE");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ECHOREPLY");
 	}
-	else if (PORTPKTTOOBIG == result)
+	else if (PORTECHONOREPLY == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PKT TOO BIG");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ECHONOREPLY");
 	}
-	else if (PORTTIMEEXCEEDED == result)
+	else if (PORTUDPOPEN == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PKT TIME EXCD");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UDPOPEN");
 	}
-	else if (PORTPARAMPROB == result)
+	else if (PORTUDPSTEALTH == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PARAM PROBLEM");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UDPSTEALTH");
 	}
-	else if (PORTREJECTROUTE == result)
+	else if (PORTNOROUTE_T1C0 == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "REJECT ROUTE");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "NOROUTE");
 	}
-	else if (PORTFAILEDPOLICY == result)
+	else if (PORTADMPRHBTD_T1C1 == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "FAILED POLICY");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ADMPRHBTD");
 	}
-	else if (PORTBEYONDSCOPE == result)
+	else if (PORTBEYONDSCOPE_T1C2 == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "BEYOND SCOPE");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "BEYONDSCOPE");
 	}
-	else if (ECHONOREPLY == result)
+	else if (PORTADDRUNREACHABLE_T1C3 == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ECHO NO-REPLY");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ADDRUNREACHABLE");
 	}
-	else if (ECHOREPLY == result)
+	else if (PORTUNREACHABLE_T1C4 == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ECHO REPLY");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PORTUNREACHABLE");
 	}
-	else if (UDPOPEN == result)
+	else if (PORTFAILEDPOLICY_T1C5 == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UDP OPEN");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "FAILEDPOLICY");
 	}
-	else if (UDPSTEALTH == result)
+	else if (PORTREJECTROUTE_T1C6 == result)
 	{
-		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "UDP STEALTH");
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "REJECTROUTE");
+	}
+	else if (PORTICMPV6_T1 == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "ICMPV6T1");
+	}
+	else if (PORTPKTTOOBIG_T2 == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PKTTOOBIG");
+	}
+	else if (PORTTIMEEXCEEDED_T3 == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "TIMEEXCEEDED");
+	}
+	else if (PORTPARAMPROB_T4 == result)
+	{
+		rc = snprintf(retstring, IPSCAN_RESULT_STRING_MAX, "%s%s", hosttype, "PARAMPROB");
 	}
 	else if (PORTUNEXPECTED == result)
 	{

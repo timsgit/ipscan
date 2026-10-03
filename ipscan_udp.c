@@ -65,9 +65,10 @@
 // 1.07			Add sleep to ensure minimum time per port tested
 // 1.08			Updates to fix compilation warnings/errors in Ubuntu 24.04
 // 1.09			Ensure _exit() returns failure code, if appropriate
+// 1.10			Move to new UDP/ICMPv6 mappings
 
 //
-#define IPSCAN_UDP_VER "1.09"
+#define IPSCAN_UDP_VER "1.10"
 //
 
 #include "ipscan.h"
@@ -2474,7 +2475,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			#ifdef UDPDEBUG
        		 	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: OUTERLOOP poll timeout for HUT %s dstport %u special %u\n", hostname, my_tx_dst_port, special);
 			#endif
-			retval = UDPSTEALTH;
+			retval = PORTUDPSTEALTH;
 			continue;
 		}
 		else
@@ -2557,7 +2558,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 									IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: UDPv6 response packet for HUT %s dstport %u special %u UDP loopcount %u\n",\
 										hostname, my_tx_dst_port, special, udp_loopcount );
 									#endif
-									retval = UDPOPEN;
+									retval = PORTUDPOPEN;
 									continue; // retval setting should complete the loop
 								}
 								else
@@ -2714,51 +2715,49 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 									#endif
 									if (rx_icmphdr_ptr->icmp6_code == 0)
 									{
-										retval = PORTUNREACHABLE; // checked - No route to destination - add new response?
+										retval = PORTNOROUTE_T1C0; // checked - No route to destination - add new response?
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 1)
 									{	
-										retval = PORTPROHIBITED; // checked - Administratively prohibited
+										retval = PORTADMPRHBTD_T1C1; // checked - Administratively prohibited
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 2)
 									{	
-										retval = PORTBEYONDSCOPE; // checked - Beyond scope of source address
+										retval = PORTBEYONDSCOPE_T1C2; // checked - Beyond scope of source address
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 3)
 									{	
-										retval = PORTNOROUTE; // check - address unreachable from wireshark
+										retval = PORTADDRUNREACHABLE_T1C3; // check - address unreachable from wireshark
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 4)
 									{
-										retval = PORTUNREACHABLE; // checked
+										retval = PORTUNREACHABLE_T1C4; // checked
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 5)
 									{
-										retval = PORTFAILEDPOLICY; // checked - good
+										retval = PORTFAILEDPOLICY_T1C5; // checked - good
 									}
 									else if (rx_icmphdr_ptr->icmp6_code == 6)
 									{
-										retval = PORTREJECTROUTE; // checked - good
+										retval = PORTREJECTROUTE_T1C6; // checked - good
 									}
 									else // catchall - for other unhandled values
 									{
-										#ifdef UDPDEBUG
 										IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: Unhandled ICMPv6 type 1, code = %d for host %s port %u\n", rx_icmphdr_ptr->icmp6_code, hostname, port);
-										#endif
-										retval = PORTINTERROR;
+										retval = PORTICMPV6_T1;
 									}
 								}
 								else if (rx_icmphdr_ptr->icmp6_type == 2)
 								{
-									retval = PORTPKTTOOBIG; // checked
+									retval = PORTPKTTOOBIG_T2; // checked
 								}
 								else if (rx_icmphdr_ptr->icmp6_type == 3)
 								{
-									retval = PORTTIMEEXCEEDED; // checked
+									retval = PORTTIMEEXCEEDED_T3; // checked
 								}
 								else if (rx_icmphdr_ptr->icmp6_type == 4)
 								{
-									retval = PORTPARAMPROB; // checked
+									retval = PORTPARAMPROB_T4; // checked
 								}
 								else
 								{
@@ -2799,9 +2798,9 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	} // END of OUTERLOOP
 
 	// No other valid response has been received then set as if in-progress
-	if (retval == PORTUNKNOWN) retval = UDPSTEALTH;
+	if (retval == PORTUNKNOWN) retval = PORTUDPSTEALTH;
 
-	if (UDPSTEALTH == retval)
+	if (PORTUDPSTEALTH == retval)
 	{
 		#ifdef UDPDEBUG
 		IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: No UDP or ICMPv6 response received for %s port %u\n", hostname, port);
@@ -2838,7 +2837,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	}
 	#endif
 	// If we received any non-stealth feedback then make sure we wait at least IPSCAN_UDPMINTIME_PER_PORT secs
-	if (UDPSTEALTH != retval) sleep(IPSCAN_UDPMINTIME_PER_PORT);
+	if (PORTUDPSTEALTH != retval) sleep(IPSCAN_UDPMINTIME_PER_PORT);
 	return (retval+indirect);
 }
 // ----------------------

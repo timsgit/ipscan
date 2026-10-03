@@ -211,9 +211,10 @@
 	// 2.03	Multiple database handling improvements
 	// 2.04 Further database and gcc/build adjustments
 	// 2.05 Move to binaries that use Linux setcap Network RAW capabilities - non-Linux builds will need some work!
+	// 2.06 Rename the PORT status codes to ensure description accuracy. Simplification of the rslt_struc structure (remove return/errno codes that are no longer used)
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "2.05"
+	#define IPSCAN_VERNUM "2.06"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -787,30 +788,35 @@
 	// Both should be inserted before the unexpected/unknown, etc. entries
 	enum PORTSTATE
 	{
-		PORTOPEN = 0,
- 		PORTREFUSED,
-		PORTINPROGRESS,
-		PORTPROHIBITED,
-		PORTUNREACHABLE,
-		PORTNOROUTE,
-		PORTPKTTOOBIG,
-		PORTPARAMPROB,
-		PORTTIMEEXCEEDED,
-		PORTREJECTROUTE,
-		PORTFAILEDPOLICY,
-		PORTBEYONDSCOPE,
-		PORTALREADYOPN,
-		PORTSOFTCLOSE,
-		ECHONOREPLY,
-		ECHOREPLY,
-		/* Addition for UDP port respond/doesn't */
-		UDPOPEN,
-		UDPSTEALTH,
+		/* TCP specific codes */
+		PORTTCPOPEN = 0, /* SYN+ACK response */
+		PORTTCPSTEALTH,
+		PORTTCPRST,
+		PORTTCPFINACK,
+		PORTTCPACK,
+		/* Ping specific codes */
+		PORTECHOREPLY,
+		PORTECHONOREPLY,
+		/* UDP specific codes */
+		PORTUDPOPEN,
+		PORTUDPSTEALTH,
+		/* ICMPv6 codes */
+		PORTNOROUTE_T1C0,
+		PORTADMPRHBTD_T1C1,
+		PORTBEYONDSCOPE_T1C2,
+		PORTADDRUNREACHABLE_T1C3,
+		PORTUNREACHABLE_T1C4,
+		PORTFAILEDPOLICY_T1C5,
+		PORTREJECTROUTE_T1C6,
+		PORTICMPV6_T1, /* other ICMPv6 type 1 */
+		PORTPKTTOOBIG_T2,
+		PORTTIMEEXCEEDED_T3,
+		PORTPARAMPROB_T4,
 		/* Unexpected and Unknown error response cases, do NOT change */
 		PORTUNEXPECTED,
 		PORTUNKNOWN,
 		PORTINTERROR,
-		/* INDIRECT responses */
+		/* INDIRECT response */
 		PORTINDIRECT,
 		/* End of list marker, do NOT change */
 		PORTEOL
@@ -823,8 +829,6 @@
 	struct rslt_struc
 	{
 		int returnval;
-		int connrc;
-		int connerrno;
 		char label[32];
 		char colour[32];
 		char description[384];

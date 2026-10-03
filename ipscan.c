@@ -145,9 +145,10 @@
 // 1.22 - only restart if we're a short way into a test (fetchnum is small)
 // 1.23 - further debug logging consistency improvements
 // 1.24 - ensure wait() for fork()ed child processes reports exit status correctly
+// 1.25 - Move to new TCP/UDP/ICMPv6 mappings
 
 //
-#define IPSCAN_MAIN_VER "1.24"
+#define IPSCAN_MAIN_VER "1.25"
 //
 
 #include "ipscan.h"
@@ -206,31 +207,36 @@
 //
 const struct rslt_struc resultsstruct[] =
 {
-                /* returnval,           connrc, conn_errno      TEXT lbl                        TEXT col        Description/User feedback       */
-                { PORTOPEN,             0,      0,              "OPEN",                         "red",          "An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-                { PORTREFUSED,          -1,     ECONNREFUSED,   "RFSD",                         "yellow",       "A TCP RST flag response was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTINPROGRESS,       -1,     EINPROGRESS,    "STLTH",                        "green",        "No response was received in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
-                { PORTPROHIBITED,       -1,     EACCES,         "ADMPHBTD",                     "yellow",       "An administratively prohibited response (ICMPv6 type 1 code 1) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTUNREACHABLE,      -1,     ENETUNREACH,    "PUNRCH",                       "yellow",       "A port unreachable response (ICMPv6 type 1 code 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTNOROUTE,          -1,     EHOSTUNREACH,   "HUNRCH",                       "yellow",       "A No route to host response (ICMPv6 type 1 code 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTPKTTOOBIG,        -1,     EMSGSIZE,       "TOOBIG",                       "yellow",       "A Packet too big response (ICMPv6 type 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTPARAMPROB,        -1,     EPROTO,         "PRMPRB",                       "yellow",       "A Parameter problem response (ICMPv6 type 4) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTTIMEEXCEEDED,     -91,    -91,            "TIMEEXCEEDED",                 "yellow",       "A time exceeded (hop count reached 0) response (ICMPv6 type 3) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTREJECTROUTE,      -92,    -92,            "ROUTEREJECTED",                "yellow",       "A Reject route to destination response (ICMPv6 type 1 code 6) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTFAILEDPOLICY,     -93,    -93,            "FAILEDPOLICY",                 "yellow",       "A Source address failed ingress or egress policy response (ICMPv6 type 1 code 5) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTBEYONDSCOPE,      -94,    -94,            "BEYONDSCOPE",                  "yellow",       "A Beyond scope of source address response (ICMPv6 type 1 code 2) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTALREADYOPN,       -89,    -89,            "ALREADYOPN",                   "yellow",       "A TCP ACK flag response was received when attempting to open this port, suggesting the port is already open. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { PORTSOFTCLOSE,        -88,    -88,            "SOFTCLOSE",                    "yellow",       "A TCP FIN+ACK response was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address/port combination, but cannot establish a direct connection."},
-                { ECHONOREPLY,          -96,    -96,            "ECHO NO REPLY",                "green",        "No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
-                { ECHOREPLY,            -97,    -97,            "ECHO REPLY",                   "yellow",       "An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
-                { UDPOPEN,              -95,    -95,            "UDPOPEN",                      "red",          "A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address/port combination."},
-                { UDPSTEALTH,           -1,     EAGAIN,         "UDPSTEALTH",                   "green",        "No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address/port combination."},
-                /* Unexpected and unknown error response cases, do NOT change */
-                { PORTUNEXPECTED,       -98,    -98,            "UNXPCT",                       "white",        "An unexpected response was received to the connect attempt."},
-                { PORTUNKNOWN,          -99,    -99,            "UNKWN",                        "white",        "An unknown error response was received, or the port is yet to be tested."},
-                { PORTINTERROR,         -100,   -100,           "INTERR",                       "white",        "An internal error occurred."},
+                /* returnval,           TEXT lbl                        TEXT col        Description/User feedback       */
+                { PORTTCPOPEN,		"TCPOPEN",			"red",		"An IPv6 TCP connection was successfully established to this port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address and TCP port combination."},	
+                { PORTTCPSTEALTH,		"TCPSTEALTH",			"green",	"No response was received in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address and TCP port combination."},
+                { PORTTCPRST,		"TCPRST",			"yellow",	"A TCP RST reponse was received when attempting to open this port. This usually indicates that the port is closed, i.e. there is no service or process listening. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and TCP port combination, but cannot establish a direct connection."},
+                { PORTTCPFINACK,		"TCPFINACK",			"yellow",	"A TCP FIN+ACK response (soft-close) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and TCP port combination, but cannot establish a direct connection."},
+                { PORTTCPACK,		"TCPACK",			"yellow",	"A TCP ACK response (already open) was received when attempting to open this port. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and TCP port combination, but cannot establish a direct connection."},  
+                /* Ping specific codes */
+                { PORTECHOREPLY,		"ECHOREPLY",			"yellow",       "An ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. Someone can ascertain that your machine is present on this IPv6 address."},
+                { PORTECHONOREPLY,	"ECHONOREPLY",			"green",        "No ICMPv6 ECHO_REPLY packet was received in response to the ICMPv6 ECHO_REQUEST which was sent. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address."},
+                /* UDP specific codes */
+                { PORTUDPOPEN,		"UDPOPEN",			"red",		"A valid response was received from this UDP port. You should check that this is the expected outcome since an attacker may be able to compromise your machine by accessing this IPv6 address and UDP port combination."},
+                { PORTUDPSTEALTH,		"UDPSTEALTH",			"green",	"No UDP response was received from your machine in the allocated time period. This is the ideal response since no-one can ascertain your machines' presence at this IPv6 address and UDP port combination."},
+                /* ICMPv6 codes */
+                { PORTNOROUTE_T1C0,	"NOROUTE",			"yellow", 	"An ICMPv6 type 1 code 0 (no route to destination) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."},
+		{ PORTADMPRHBTD_T1C1,	"ADMPHBTD",			"yellow",	"An ICMPv6 type 1 code 1 (communication with destination administratively prohibited) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."},
+                { PORTBEYONDSCOPE_T1C2,	"BEYONDSCOPE",			"yellow",	"An ICMPv6 type 1 code 2 (beyond scope of source address) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination. A different response may be received for another source address."},
+                { PORTADDRUNREACHABLE_T1C3,	"ADDRUNREACH",		"yellow",	"An ICMPv6 type 1 code 3 (address unreachable) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."},
+                { PORTUNREACHABLE_T1C4,	"PORTUNREACH",			"yellow",	"An ICMPv6 type 1 code 4 (port unreachable) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."},
+                { PORTFAILEDPOLICY_T1C5,	"FAILEDPOLICY",			"yellow",	"An ICMPv6 type 1 code 5 (source address failed ingress/egress policy) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination. A different response may be received for another source address."},
+                { PORTREJECTROUTE_T1C6,	"REJECTROUTE",			"yellow",	"An ICMPv6 type 1 code 6 (reject route to destination) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."},
+		{ PORTICMPV6_T1,	"ICMPV6T1",			"yellow",	"An ICMPv6 type 1 (outside code 0-6) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."},
+                { PORTPKTTOOBIG_T2,	"PKTTOOBIG",			"yellow",	"An ICMPv6 type 2 (packet too big) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."}, 
+                { PORTTIMEEXCEEDED_T3,	"TIMEEXCEEDED",			"yellow",	"An ICMPv6 type 3 (time exceeded) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."},
+                { PORTPARAMPROB_T4, 	"PARAMPROB",			"yellow",	"An ICMPv6 type 4 (parameter problem) response was received. Someone can ascertain that your machine, or another device in the path, is responding on this IPv6 address and protocol combination."}, 
+                /* Unexpected and Unknown error response cases, do NOT change */
+                { PORTUNEXPECTED,		"UNXPCT",                       "white",        "An unexpected response was received to the connect attempt."},
+                { PORTUNKNOWN,		"UNKWN",                        "white",        "An unknown error response was received, or the port is yet to be tested."}, 
+                { PORTINTERROR,		"INTERR",                       "white",        "An internal error occurred."},
                 /* End of list marker, do NOT change */
-                { PORTEOL,              -101,   -101,           "EOL",                          "black",        "End of list marker."}
+                { PORTEOL,              "EOL",                          "black",        "End of list marker."}
 };
 
 //
