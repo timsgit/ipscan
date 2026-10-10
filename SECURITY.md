@@ -7,10 +7,10 @@ currently being supported with security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 2.05    | :white_check_mark: |
-| < 2.05  | :x:                |
+| 2.06    | :white_check_mark: |
+| < 2.06  | :x:                |
 
 ## Reporting a Vulnerability
 
-Please see: <https://ipv6.chappell-family.com/.well-known/security.txt>
+Please see: <https://github.com/timsgit/ipscan/wiki/IPscan-Security-Reporting-Policy>
 ---

@@ -250,13 +250,13 @@
 	// Determine whether to include terms of use link (0 = don't include; 1 = include)
 	#define INCLUDETERMSOFUSE 1
 	// Link for terms of use - please update to reference a page from your website
-	#define TERMSOFUSEURL "https://wiki.chappell-family.com/wiki/index.php?title=Timswiki:About"
+	#define TERMSOFUSEURL "https://github.com/timsgit/ipscan/wiki/IPscan-Demo-Server-Terms-&-Conditions-of-Usage"
 
 	// Determine whether to offer help for bad/incomplete/unrecognised URLs
 	// 0=offer no help, 1=offer help - need to define URL
 	#define IPSCAN_BAD_URL_HELP 1
 	// The link that might provide some help ...
-	#define IPSCAN_BAD_URL_LINK "https://wiki.chappell-family.com/wiki/index.php?title=ScanAutomation"
+	#define IPSCAN_BAD_URL_LINK "https://github.com/timsgit/ipscan/wiki/ScanAutomation"
 	
 	// Determine whether to offer link for restart page if terms and conditions not accepted
 	// 0=no offer, 1=offer - need to define URL too
@@ -264,7 +264,7 @@
 	#define IPSCAN_TC_MISSING_LINK_URL "https://ipv6.chappell-family.com/ipv6tcptest/"
 
 	// URL providing description special protocol tests
-	#define IPSCAN_SPECIALTESTS_URL "https://wiki.chappell-family.com/wiki/index.php?title=IPv6_SpecialTests"
+	#define IPSCAN_SPECIALTESTS_URL "https://github.com/timsgit/ipscan/wiki/IPscan-Special-Tests"
 
 	// MySQL database-related globals
 	#define MYSQL_HOST "localhost"
