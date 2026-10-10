@@ -114,9 +114,10 @@
 // 1.17 - add update_teststate_db to ensure running-state is updated as an atomic read-modify-write within the database
 // 1.18 - error handling added for dump_db fflush
 // 1.19 - ensure mysql_error() and mysql_errno() reported for all mysql error conditions
+// 1.20 - fix a couple of robustness issues in update_teststate_db()
 
 //
-#define IPSCAN_DB_VER "1.19"
+#define IPSCAN_DB_VER "1.20"
 //
 
 #include "ipscan.h"
@@ -627,11 +628,18 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 						}
 						else
 						{
-							retval = 678;
-							// store can return NULL if it failed or it returned 0 rows
-							if(mysql_errno(connection) != 0)
+							// mysql_store_result() can return NULL if it failed or it returned 0 rows
+							if (mysql_field_count(connection) != 0)
 							{
-								IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: mysql_store_result() returned NULL, error: %s\n", mysql_error(connection));
+								IPSCAN_LOG(LOGPREFIX "ipscan: dump_db: ERROR: mysql_store_result failed (error %u: %s)\n",\
+									mysql_errno(connection), mysql_error(connection));
+
+								retval = 678;
+							}
+							else
+							{
+								IPSCAN_LOG(LOGPREFIX "ipscan: dump_db: ERROR: SELECT did not return a result set\n");
+								retval = 677;
 							}
 						}
 					}
@@ -1664,6 +1672,7 @@ int update_teststate_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp
 //  !=0 - error
 //
 	int retval = -1;
+	MYSQL * connection = NULL;
 	int rc = mysql_library_init(0, NULL, NULL);
 	if (0 != rc)
 	{
@@ -1672,117 +1681,122 @@ int update_teststate_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp
 		retval = 98;
 	}
 
-	MYSQL * connection = mysql_init(NULL);
-	if (NULL == connection)
+	if (-1 == retval) // ensure mysql_library_init() was successful
 	{
-		IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: Failed to initialise MySQL\n");
-		mysql_library_end();
-		retval = 1;
+		connection = mysql_init(NULL);
+		if (NULL == connection)
+		{
+			IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: Failed to initialise MySQL\n");
+			mysql_library_end();
+			retval = 1;
+		}
 	}
 
-	rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
-
-	if (0 == rc)
+	if (-1 == retval) // ensure prior mysql calls were successful
 	{
-		MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
-		if (NULL == mysqlrc)
-		{
-			IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: Failed to connect to MySQL database (%s): %s\n",\
-				MYSQL_DBNAME, mysql_error(connection));
-			retval = 3;
-		}
-		else
-		{
-			char query[MAXDBQUERYSIZE];
-			memset(query, 0, strlen(query));
-			uint64_t write_result = 0;
+		rc = mysql_options(connection, MYSQL_READ_DEFAULT_GROUP, "ipscan");
 
-			// @autocommit=1
-			rc = mysql_autocommit(connection, 1);
-			if (0 != rc)
+		if (0 == rc)
+		{
+			MYSQL * mysqlrc = mysql_real_connect(connection, MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD, MYSQL_DBNAME, 0, NULL, 0);
+			if (NULL == mysqlrc)
 			{
-				IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
-				retval = 201;
-			}
-
-			if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
-			{
-				write_result = (uint64_t)IPSCAN_TESTSTATE_COMPLETE_BIT;
-			}
-			else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
-			{
-				write_result = (uint64_t)(IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT);
-			}
-			else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
-			{
-				write_result = (uint64_t)IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT;
-			}
-			else if ((IPSCAN_EVAL_ERROR == fetchnum) || (IPSCAN_BAD_JSON_ERROR == fetchnum))
-			{
-				write_result = (uint64_t)IPSCAN_TESTSTATE_EVALERROR_BIT;
-			}
-			else if (IPSCAN_OTHER_ERROR == fetchnum)
-			{
-				write_result = (uint64_t)IPSCAN_TESTSTATE_OTHERERROR_BIT;
-			}
-			else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
-			{
-				write_result = (uint64_t)IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
-			}
-			else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
-			{
-				write_result = (uint64_t)IPSCAN_TESTSTATE_UNEXPCHANGE_BIT;
+				IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: Failed to connect to MySQL database (%s): %s\n",\
+					MYSQL_DBNAME, mysql_error(connection));
+				retval = 3;
 			}
 			else
 			{
-				IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: unexpected fetchnum %d\n", fetchnum);
-				write_result = (uint64_t)IPSCAN_TESTSTATE_OTHERERROR_BIT;
-			}
-
-			if (retval < 0)
-			{
-				int qrylen;
-				if ((IPSCAN_SUCCESSFUL_COMPLETION == fetchnum) || (IPSCAN_NAVIGATE_AWAY == fetchnum))
+				char query[MAXDBQUERYSIZE];
+				uint64_t write_result = 0;
+	
+				// @autocommit=1
+				rc = mysql_autocommit(connection, 1);
+				if (0 != rc)
 				{
-					qrylen = snprintf( query, MAXDBQUERYSIZE,\
-					"UPDATE `%s` SET portresult = CASE WHEN (portresult & %"PRIu64") <> 0 THEN portresult ELSE %"PRIu64" END WHERE hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64,\
-					MYSQL_TBLNAME, (uint64_t)IPSCAN_TESTSTATE_COMPLETE_BIT, write_result, host_msb, host_lsb, timestamp, session,\
-					(uint64_t)IPSCAN_TESTSTATE_AS_PORTNUM);
+					IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: AUTOCOMMIT=1 failed, returned %d\n", rc);
+					retval = 201;
+				}
+	
+				if (IPSCAN_SUCCESSFUL_COMPLETION == fetchnum)
+				{
+					write_result = (uint64_t)IPSCAN_TESTSTATE_COMPLETE_BIT;
+				}
+				else if (IPSCAN_NAVIGATE_AWAY == fetchnum)
+				{
+					write_result = (uint64_t)(IPSCAN_TESTSTATE_COMPLETE_BIT | IPSCAN_TESTSTATE_NAVAWAY_BIT);
+				}
+				else if (IPSCAN_HTTPTIMEOUT_COMPLETION == fetchnum)
+				{
+					write_result = (uint64_t)IPSCAN_TESTSTATE_HTTPTIMEOUT_BIT;
+				}
+				else if ((IPSCAN_EVAL_ERROR == fetchnum) || (IPSCAN_BAD_JSON_ERROR == fetchnum))
+				{
+					write_result = (uint64_t)IPSCAN_TESTSTATE_EVALERROR_BIT;
+				}
+				else if (IPSCAN_OTHER_ERROR == fetchnum)
+				{
+					write_result = (uint64_t)IPSCAN_TESTSTATE_OTHERERROR_BIT;
+				}
+				else if (IPSCAN_UNSUCCESSFUL_COMPLETION == fetchnum)
+				{
+					write_result = (uint64_t)IPSCAN_TESTSTATE_BADCOMPLETE_BIT;
+				}
+				else if (IPSCAN_UNEXPECTED_CHANGE == fetchnum)
+				{
+					write_result = (uint64_t)IPSCAN_TESTSTATE_UNEXPCHANGE_BIT;
 				}
 				else
 				{
-					qrylen = snprintf( query, MAXDBQUERYSIZE,\
-					"UPDATE `%s` SET portresult = CASE WHEN (portresult & %"PRIu64") <> 0 THEN portresult ELSE (portresult | %"PRIu64") END WHERE hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64,\
-					 MYSQL_TBLNAME, (uint64_t)IPSCAN_TESTSTATE_COMPLETE_BIT, write_result, host_msb, host_lsb, timestamp, session,\
-					 (uint64_t)IPSCAN_TESTSTATE_AS_PORTNUM);
+					IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: unexpected fetchnum %d\n", fetchnum);
+					write_result = (uint64_t)IPSCAN_TESTSTATE_OTHERERROR_BIT;
 				}
-
-				if ((qrylen <= 0) || (qrylen >= MAXDBQUERYSIZE))
+	
+				if (retval < 0)
 				{
-					IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: Failed to create update query\n");
-					retval = 8;
-				}
-				else
-				{
-					rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-					if (0 == rc)
+					int qrylen;
+					if ((IPSCAN_SUCCESSFUL_COMPLETION == fetchnum) || (IPSCAN_NAVIGATE_AWAY == fetchnum))
 					{
-						retval = 0;
+						qrylen = snprintf( query, MAXDBQUERYSIZE,\
+						"UPDATE `%s` SET portresult = CASE WHEN (portresult & %"PRIu64") <> 0 THEN portresult ELSE %"PRIu64" END WHERE hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64,\
+							MYSQL_TBLNAME, (uint64_t)IPSCAN_TESTSTATE_COMPLETE_BIT, write_result, host_msb, host_lsb, timestamp, session,\
+							(uint64_t)IPSCAN_TESTSTATE_AS_PORTNUM);
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: update_teststate_db: ERROR: UPDATE failed, returned rc = %d, %u (%s)\n",\
-						rc, mysql_errno(connection), mysql_error(connection));
-						retval = 7;
+						qrylen = snprintf( query, MAXDBQUERYSIZE,\
+						"UPDATE `%s` SET portresult = CASE WHEN (portresult & %"PRIu64") <> 0 THEN portresult ELSE (portresult | %"PRIu64") END WHERE hostmsb = %"PRIu64" AND hostlsb = %"PRIu64" AND createdate = %"PRIu64" AND session = %"PRIu64" AND portnum = %"PRIu64,\
+						 	MYSQL_TBLNAME, (uint64_t)IPSCAN_TESTSTATE_COMPLETE_BIT, write_result, host_msb, host_lsb, timestamp, session,\
+						 	(uint64_t)IPSCAN_TESTSTATE_AS_PORTNUM);
+					}
+	
+					if ((qrylen <= 0) || (qrylen >= MAXDBQUERYSIZE))
+					{
+						IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: Failed to create update query\n");
+						retval = 8;
+					}
+					else
+					{
+						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
+						if (0 == rc)
+						{
+							retval = 0;
+						}
+						else
+						{
+							IPSCAN_LOG( LOGPREFIX "ipscan: update_teststate_db: ERROR: UPDATE failed, returned rc = %d, %u (%s)\n",\
+								rc, mysql_errno(connection), mysql_error(connection));
+							retval = 7;
+						}
 					}
 				}
 			}
 		}
-	}
-	else
-	{
-		IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: mysql_options() failed\n");
-		retval = 9;
+		else
+		{
+			IPSCAN_LOG(LOGPREFIX "ipscan: update_teststate_db: ERROR: mysql_options() failed\n");
+			retval = 9;
+		}
 	}
 
 	if (NULL != connection)
