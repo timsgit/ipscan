@@ -187,6 +187,6 @@ versions 2.03 and later. See step 4 below for details.
 
 ***Getting further help:***
 
-A demonstration Raspberry Pi IPv6 firewall checker is available to IPv6 enabled clients at: <https://ipv6.chappell-family.com/ipv6tcptest/>. If you need further help then please email me at: <webmaster@chappell-family.com> or visit my IPscan wiki at: <https://wiki.chappell-family.com/wiki/index.php?title=IPv6>
+An IPscan Demo Server, powered by Raspberry Pi, available to IPv6 enabled clients at: <https://ipv6.chappell-family.com/ipv6tcptest/>. If you need further help then please email me at: <webmaster@chappell-family.com> or visit the IPscan wiki at: <https://github.com/timsgit/ipscan/wiki>
 
 ---
