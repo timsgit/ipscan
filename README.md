@@ -20,25 +20,28 @@ along with IPscan. If not, see <http://www.gnu.org/licenses/>.
 
 ---
 
-IPscan requires access to a MySQL, or MariaDB, database and the associated client development libraries 
-(libmysqlclient-dev or similar) to be installed on the server which will act as your scanner. The database
-is used to *temporarily* hold scan results until shortly after the test completes. 
+IPscan requires access to a MySQL, or MariaDB, database and the associated client development
+libraries (libmysqlclient-dev or similar) to be installed on the server which will act as
+your scanner. The database is used to *temporarily* hold scan results until shortly after
+the test completes. 
 
-Versions 2.04 and earlier were known to build on: openSUSE versions 11.1/11.4/12.1/13.1, Centos 7, Fedora 16, 
-Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and Raspbian and run alongside 
-Apache versions 2.2 and 2.4.
+Versions 2.04 and earlier were known to build on: openSUSE versions 11.1/11.4/12.1/13.1,
+Centos 7, Fedora 16, Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and
+Raspbian and run alongside Apache versions 2.2 and 2.4.
 
-Versions 2.05 and later are known to build on "Raspbian Debian GNU/Linux 11 (bullseye)" and run alongside
-Apache version 2.4. Please let me know of build successes/failures on unlisted platforms.
+IPscan versions 2.05 and later are known to build on "Raspbian Debian GNU/Linux 11 (bullseye)"
+and run alongside Apache version 2.4. Please let me know of build successes/failures on
+unlisted platforms.
 
-NOTE: For releases >= version 2.00, IPscan has been updated to exclusively use raw sockets. As a result, 
-IPscan can now provide feedback on mid-point devices and all ICMPv6 response types/codes.
+NOTE: For releases >= version 2.00, IPscan has been updated to exclusively use raw sockets.
+As a result, IPscan can now provide feedback on mid-point devices and all ICMPv6 response
+types/codes.
 
 ***Installation Steps:***
 
-IMPORTANT: when UPGRADING from versions before 2.03: a database change has occurred and consequently 
-it is necessary that you remove your existing database prior to building and installing 
-versions 2.03 and later. See step 4 below for details.
+IMPORTANT: when UPGRADING from versions before 2.03: a database change has occurred and
+consequently it is necessary that you remove your existing database prior to building
+and installing versions 2.03 and later. See step 4 below for details.
 
     1.  edit the Makefile and adjust the following entries as required:
          a. TARGETDIR - this should be set to the desired location for the cgi files
@@ -60,11 +63,13 @@ versions 2.03 and later. See step 4 below for details.
 		page on your website
          c. MYSQL_XXXX   - Adjust the following constants to match the settings of your
 		MySQL database server: 
-                  MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
+                  MYSQL_HOST - the hostname or IP address of the machine hosting
+			the MySQL database
                   MYSQL_USER - the username used to access the IPscan database
                   MYSQL_PASSWD - the password used to identify the MySQL user
                   MYSQL_DBNAME - the name of the IPscan database
-                  MYSQL_TBLNAME - the name of the table in which IPscan results will reside
+                  MYSQL_TBLNAME - the name of the database table in which IPscan
+			results will be stored
 
     3.  edit ipscan_portlist.h and change the list of ports to be tested, if required.
 		Note that if you add new UDP ports then you MUST also add a matching
