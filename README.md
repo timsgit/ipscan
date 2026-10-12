@@ -84,7 +84,8 @@ versions 2.03 and later. See step 4 below for details.
         mysql> create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
         Query OK, 0 rows affected (0.01 sec)
 
-        mysql> grant all privileges on ipscan.* to 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
+        mysql> grant all privileges on ipscan.* to 'ipscan-user'@'localhost' \
+		identified by 'ipscan-passwd';
         Query OK, 0 rows affected (0.01 sec)
 
         mysql> exit
@@ -108,8 +109,9 @@ versions 2.03 and later. See step 4 below for details.
         make METHOD=suid && make install METHOD=suid (alternative, using suid bits)
        
         It is necessary to perform the 'make install' step as root, in order that the binaries
-        are able to be installed in the appropriately chowned cgi directory. Setting the ownership to root
-        ensures the Apache user cannot overwrite the binaries and gain CAP_NET_RAW capabilities.
+        are able to be installed in the appropriately chowned cgi directory. Setting the 
+	ownership to root ensures the Apache user cannot overwrite the binaries and gain
+	CAP_NET_RAW capabilities.
 
         BUILD-RELATED NOTES: 
 
@@ -117,7 +119,7 @@ versions 2.03 and later. See step 4 below for details.
        	b. METHOD=suid : use root user and suid to enable raw sockets (deprecated)
         c. the same METHOD must be used for the build and installation steps
         d. METHOD=caps is the default, if METHOD is not expressly defined
-        e. if you wish to change METHOD then 'make clean' before rebuilding and installing with the new METHOD
+        e. if you wish to change METHOD then 'make clean' before rebuilding and installing
        
     6.  Make sure that the URI path directory (which may well be accessed via an Apache alias)
 	is enabled to execute cgi:
@@ -140,8 +142,8 @@ versions 2.03 and later. See step 4 below for details.
        
         Don't forget to restart your web server after making the appropriate modifications.
     
-    7.  If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary to
-	perform additional steps similar to those outlined below:
+    7.  If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary
+	to perform additional steps similar to those outlined below:
         a. Ensure that your Apache server is enabled to support cgi, as root type:
            # setsebool -P httpd_enable_cgi on
         b. Enable the correct execution permissions to the cgi scripts, as root type:
