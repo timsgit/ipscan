@@ -46,9 +46,10 @@
 // 0.22 - add MongoDB ports
 // 0.23 - update copyright year
 // 0.24 - add UDP SIP
+// 0.25 - add LDAPS, MQTT (various)
 
 //
-#define IPSCAN_PORTLIST_VER "0.24"
+#define IPSCAN_PORTLIST_VER "0.25"
 //
 
 #include "ipscan.h"
@@ -98,6 +99,7 @@ const struct portlist_struc defportlist[] =
 		{  563, 0, "NNTPS" },\
 		{  587, 0, "ESMTP" },\
 		{  631, 0, "IPP" },\
+		{  636, 0, "LDAPS" },\
 		{  749, 0, "Kerberos Admin" },\
 		{  853, 0, "DNS over TLS" },\
 		{  873, 0, "Rsync" },\
@@ -114,6 +116,7 @@ const struct portlist_struc defportlist[] =
 		{ 1720, 0, "H323, Microsoft Netmeeting" },\
 		{ 1723, 0, "PPTP" },\
 		{ 1801, 0, "MSMQ" },\
+		{ 1883, 0, "MQTT plain" },\
 		{ 2103, 0, "MSMQ-RPC" },\
 		{ 2105, 0, "MSMQ-RPC" },\
 		{ 2107, 0, "MSMQ-Mgmt" },\
@@ -131,6 +134,9 @@ const struct portlist_struc defportlist[] =
 		{ 6379, 0, "Redis" },\
 		{ 6697, 0, "IRC via TLS/SSL" },\
 		{ 8080, 0, "HTTP alternate" },\
+		{ 8083, 0, "MQTT WebSocket" },\
+		{ 8084, 0, "MQTT Secure WebSocket" },\
+		{ 8883, 0, "MQTT over TLS" },\
 		{ 9090, 0, "WebSM" },\
 		{10243, 0, "Microsoft WMP HTTP"},\
 		{11211, 0, "Memory Cache server" },\

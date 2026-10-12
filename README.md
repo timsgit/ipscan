@@ -41,31 +41,40 @@ it is necessary that you remove your existing database prior to building and ins
 versions 2.03 and later. See step 4 below for details.
 
     1.  edit the Makefile and adjust the following entries as required:
-         a. TARGETDIR - this should be set to the desired location for the cgi files (e.g. /var/www/cgi-bin6)
-		Ensure that the selected target directory exists, with appropriate permissions, before 
-		attempting to install the final executables.
-         b. URIPATH - this is the request URI by which the cgi files will be accessed from your webserver
-		e.g. https://www66.chappell-family.co.uk/cgi-bin6/ipscanjs.cgi then set URIPATH=/cgi-bin6
-         c. TXTTARGET, FASTTXTTARGET, JSTARGET, FASTJSTARGET - these define the names of the cgi objects that will be created
+         a. TARGETDIR - this should be set to the desired location for the cgi files
+		(e.g. /var/www/cgi-bin6). Ensure that the selected target directory
+		exists, with appropriate permissions, before attempting to install
+		the final executables
+         b. URIPATH - this is the request URI by which the cgi files will be accessed
+		from your webserver. As an example if users would access the scanner from
+		https://www66.chappell-family.co.uk/cgi-bin6/ipscanjs.cgi then 
+		set URIPATH=/cgi-bin6
+         c. TXTTARGET, FASTTXTTARGET, JSTARGET, FASTJSTARGET - these define the names of
+		the cgi executable objects that will be created
          d. UDP_AVAILABLE and PING_AVAILABLE if these features are NOT required
-         e. APACHE_USER and APACHE_GROUP, if the automatic Apache USER/GROUP-determination doesn't work
 
     2.  edit ipscan.h and adjust *at least* the following entries:
-         a. EMAILADDRESS - suggest you use a non-personal email address if the webserver will be world-accessible
-         b. INCLUDETERMSOFUSE and TERMSOFUSEURL if you wish to reference a terms of use page on your website.
-         c. MYSQL_XXXX   - Adjust the following constants to match the settings of your database server: 
-                           MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
-                           MYSQL_USER - the username used to access the IPscan database.
-                           MYSQL_PASSWD - the password used to identify the MySQL user.
-                           MYSQL_DBNAME - the name of the IPscan database.
-                           MYSQL_TBLNAME - the name of the table in which IPscan results will reside.
+         a. EMAILADDRESS - suggest you use a non-personal email address if the
+		webserver will be world-accessible
+         b. INCLUDETERMSOFUSE and TERMSOFUSEURL if you wish to reference a terms of use
+		page on your website
+         c. MYSQL_XXXX   - Adjust the following constants to match the settings of your
+		MySQL database server: 
+                  MYSQL_HOST - the hostname or IP address of the machine hosting the MySQL database
+                  MYSQL_USER - the username used to access the IPscan database
+                  MYSQL_PASSWD - the password used to identify the MySQL user
+                  MYSQL_DBNAME - the name of the IPscan database
+                  MYSQL_TBLNAME - the name of the table in which IPscan results will reside
 
-    3.  edit ipscan_portlist.h and change the list of ports to be tested, if required. Note that if you add 
-        new UDP ports then you MUST also add a matching packet generator function to ipscan_udp.c
+    3.  edit ipscan_portlist.h and change the list of ports to be tested, if required.
+		Note that if you add new UDP ports then you MUST also add a matching
+		packet generator function to ipscan_udp.c
     
-    4.  Create the database and user and allocate appropriate user privileges, using the following commands within the mysql shell:
+    4.  Create the database and user and allocate appropriate user privileges, using
+		the following commands within the mysql shell:
 
-        NB: adjust the host, user name, password and database name to match the globals you've edited in step 2 above:
+        NB: adjust the host, user name, password and database name to match the globals 
+		you've edited in step 2 above:
         
         mysql> create database ipscan;
         Query OK, 1 row affected (0.00 sec)
@@ -110,7 +119,8 @@ versions 2.03 and later. See step 4 below for details.
         d. METHOD=caps is the default, if METHOD is not expressly defined
         e. if you wish to change METHOD then 'make clean' before rebuilding and installing with the new METHOD
        
-    6.  Make sure that the URI path directory (which may well be accessed via an Apache alias) is enabled to execute cgi:
+    6.  Make sure that the URI path directory (which may well be accessed via an Apache alias)
+	is enabled to execute cgi:
         
         ScriptAlias /cgi-bin6/ "/var/www/cgi-bin6/"
         <Directory "/var/www/cgi-bin6">
@@ -130,8 +140,8 @@ versions 2.03 and later. See step 4 below for details.
        
         Don't forget to restart your web server after making the appropriate modifications.
     
-    7.  If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary to perform additional 
-        steps similar to those outlined below:
+    7.  If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary to
+	perform additional steps similar to those outlined below:
         a. Ensure that your Apache server is enabled to support cgi, as root type:
            # setsebool -P httpd_enable_cgi on
         b. Enable the correct execution permissions to the cgi scripts, as root type:
@@ -141,7 +151,8 @@ versions 2.03 and later. See step 4 below for details.
         ***IMPORTANT NOTE:***
 
         The steps listed in step 7 above are only indicative of what may be required, and 
-        depend upon your existing installation. Please consult the SELinux documentation for further details. 
+        depend upon your existing installation. Please consult the SELinux documentation for
+	further details. 
           
     8.  Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
 
@@ -151,42 +162,47 @@ versions 2.03 and later. See step 4 below for details.
 
         w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
 
-    9.  Check the web server access/error logs or Syslog for messages. IPscan will place summary messages in the 
-        web server error log or Syslog if enabled to do so (this is NOT the default option - change 
-        IPSCAN_LOGVERBOSITY to 1 to enable this feature). It is possible to enable copious amounts of debug by 
-        uncommenting the debug #define statements in ipscan.h.
+    9.  Check the web server access/error logs or Syslog for messages. IPscan will place summary
+	messages in the web server error log or Syslog if enabled to do so (this is NOT the default
+	option - change IPSCAN_LOGVERBOSITY to 1 to enable this feature). It is possible to enable
+	copious amounts of debug by uncommenting the DEBUG #define statements in ipscan.h.
     
-    10. If you're providing public access to IPscan then please ensure that you disable verbose reporting,
-        the summary option, and ALL debug facilities.
+    10. If you're providing public access to IPscan then please ensure that you disable 
+	verbose reporting, the summary option, and ALL debug facilities.
 
-        Note: versions v1.42 and later of IPscan automatically delete the scan results, for both javascript
-        and text-only clients, after reporting them to the user. Earlier versions relied on a cron job
-        to achieve the same end, but this is no longer required for current versions.
+        Note: versions v1.42 and later of IPscan automatically delete the scan results, for 
+	both javascript and text-only clients, after reporting them to the user. Earlier versions
+	relied on a cron job to achieve the same end, but this is no longer required for current
+	versions.
 
-    11. For those considering providing IPscan access on the public internet then consider adding a 
-        landing page which will check for host IP address suitability prior to allowing access to the 
-        cgi script(s) - most (apart from google) search engine spiders/robots currently only use IPv4. 
-        It may be advisable to only offer direct links to the cgi scripts if the address checks 
-        were successful. See https://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
+    11. For those considering providing IPscan access on the public internet then consider adding
+	a landing page which will check for host IP address suitability prior to allowing access
+	to the cgi scripts. Note that most search engine spiders/robots (apart from Google)
+	currently only use IPv4, although this is improving.  It may be advisable to only offer
+	direct links to the cgi scripts if the address checks were successful.
+	See the IPscan Demo Server at https://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
 
     12. Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
-        javascript-enabled browsers and the other for text-based browsers. Additionally, the standard 
-        build provides fast and standard versions of both of these tests. The fast version tests 
-        multiple TCP or UDP ports in parallel, whereas the standard version tests only 1 port at a time,
-        at a default rate of 1 port per second. Please be aware that some OSes and firewalls apply 
-        rate-limiting to their generation, or passing, of ICMPv6 responses on the basis that this 
+        javascript-enabled browsers and the other for text-based browsers. Additionally, the
+	standard build provides fast and standard versions of both of these tests. The fast version
+	tests multiple TCP or UDP ports in parallel, whereas the standard version tests only 1 port
+	at a time, at a default rate of 1 port per second. Please be aware that some OSes and firewalls
+	apply rate-limiting to their generation, or transit, of ICMPv6 responses on the basis that this 
         behaviour is indicative of a port scan being performed. Consequently such rate-limiting might 
         cause a port which would normally generate an ICMPv6 response (e.g. PHBTD) to send no response 
-        at all, which IPscan would report as STEALTHed. If you are testing a host or firewall (whether 
-        on the client under test or elsewhere in the path between your client and test server) which 
-        implements such rate-limiting then you are advised to use the standard, slower versions of IPscan 
-        which should not trigger the rate-limiting behaviour. If you're unsure which version is appropriate 
-        for your device, then try both and compare the results. Some Linux distributions and some ISP firewalls
-        are known to implement such rate-limiting.
+        at all, which IPscan, or any other port scanner would report as STEALTHed. If you are testing
+	a host or firewall (whether on the client under test or elsewhere in the path between your 
+	client and the IPscan Demo server) which implements such rate-limiting then you are advised to
+	use the standard, slower versions of IPscan which should not trigger the rate-limiting
+	behaviour. If you're unsure which version is appropriate for your device, then try both speeds
+	and compare the results. Some Linux distributions and some ISP firewalls are known to implement
+	such rate-limiting.
 
 
 ***Getting further help:***
 
-An IPscan Demo Server, powered by Raspberry Pi, is available to IPv6 enabled clients at: <https://ipv6.chappell-family.com/ipv6tcptest/>. If you need further help then please email me at: <webmaster@chappell-family.com> or visit the IPscan wiki at: <https://github.com/timsgit/ipscan/wiki>
+An IPscan Demo Server, powered by Raspberry Pi, is available to IPv6 enabled clients at:
+<https://ipv6.chappell-family.com/ipv6tcptest/>. If you need further help then please email me
+at: <webmaster@chappell-family.com> or visit the IPscan wiki at: <https://github.com/timsgit/ipscan/wiki>
 
 ---
