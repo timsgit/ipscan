@@ -85,12 +85,18 @@ and installing versions 2.03 and later. See step 4 below for details.
         Query OK, 1 row affected (0.00 sec)
 
         Note: it is not necessary to re-create the user if upgrading from a previous version.
+	
+	Note2: MySQL statements are terminated by a semicolon character, NOT by pressing Enter.
+	In the examples below MySQL has inserted '->' symbols to indicate the continuation
+	of an unclosed (unterminated) buffer. When entering the statements you should enter
+	them as single complete lines and you should NOT include the '->' symbols.
        
-        mysql> create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
+        mysql> create user 'ipscan-user'@'localhost' identified 
+	    -> by 'ipscan-passwd';
         Query OK, 0 rows affected (0.01 sec)
 
-        mysql> grant all privileges on ipscan.* to 'ipscan-user'@'localhost' \
-		identified by 'ipscan-passwd';
+        mysql> grant all privileges on ipscan.* to 'ipscan-user'@'localhost'
+	    -> identified by 'ipscan-passwd';
         Query OK, 0 rows affected (0.01 sec)
 
         mysql> exit
