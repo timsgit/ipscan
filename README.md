@@ -186,19 +186,19 @@ versions 2.03 and later. See step 4 below for details.
 
     12. Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
         javascript-enabled browsers and the other for text-based browsers. Additionally, the
-	standard build provides fast and standard versions of both of these tests. The fast version
-	tests multiple TCP or UDP ports in parallel, whereas the standard version tests only 1 port
-	at a time, at a default rate of 1 port per second. Please be aware that some OSes and firewalls
-	apply rate-limiting to their generation, or transit, of ICMPv6 responses on the basis that this 
-        behaviour is indicative of a port scan being performed. Consequently such rate-limiting might 
-        cause a port which would normally generate an ICMPv6 response (e.g. PHBTD) to send no response 
-        at all, which IPscan, or any other port scanner would report as STEALTHed. If you are testing
-	a host or firewall (whether on the client under test or elsewhere in the path between your 
-	client and the IPscan Demo server) which implements such rate-limiting then you are advised to
-	use the standard, slower versions of IPscan which should not trigger the rate-limiting
-	behaviour. If you're unsure which version is appropriate for your device, then try both speeds
-	and compare the results. Some Linux distributions and some ISP firewalls are known to implement
-	such rate-limiting.
+	standard build provides fast and standard versions of both of these tests. The fast
+	version tests multiple TCP or UDP ports in parallel, whereas the standard version tests
+	only 1 port at a time, at a default rate of 1 port per second. Please be aware that some
+	OSes and firewalls apply rate-limiting to their generation, or transit, of ICMPv6 responses
+	on the basis that this behaviour is indicative of a port scan being performed. Consequently
+	such rate-limiting might cause a port which would normally generate an ICMPv6 response
+	(e.g. PHBTD) to send no response at all, which IPscan, or any other port scanner, would
+	report as STEALTHed. If you are testing a host or firewall (whether on the client under
+	test or elsewhere in the path between your client and the IPscan Demo server) which
+	implements such rate-limiting then you are advised to use the standard, slower versions
+	of IPscan which should not trigger the rate-limiting behaviour. If you're unsure which
+	version is appropriate for your device, then try both speeds and compare the results.
+	Some Linux distributions and some ISP firewalls are known to implement such rate-limiting.
 
 
 ***Getting further help:***
