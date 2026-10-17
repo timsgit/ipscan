@@ -115,9 +115,10 @@
 // 1.18 - error handling added for dump_db fflush
 // 1.19 - ensure mysql_error() and mysql_errno() reported for all mysql error conditions
 // 1.20 - fix a couple of robustness issues in update_teststate_db()
+// 1.21 - change logging in case of failure to connect to MySQL server, so that only user is recorded
 
 //
-#define IPSCAN_DB_VER "1.20"
+#define IPSCAN_DB_VER "1.21"
 //
 
 #include "ipscan.h"
@@ -240,7 +241,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
-				IPSCAN_LOG( LOGPREFIX "ipscan: write_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: write_db: HOST %s, USER %s\n", MYSQL_HOST, MYSQL_USER);
 				retval = 3;
 			}
 			else
@@ -423,7 +424,7 @@ int dump_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t s
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: dump_db: HOST %s, USER %s\n", MYSQL_HOST, MYSQL_USER);
 				retval = 3;
 			}
 			else
@@ -719,7 +720,7 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: HOST %s, USER %s\n", MYSQL_HOST, MYSQL_USER);
 				retval = 3;
 			}
 			else
@@ -844,7 +845,7 @@ int read_db_result(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: read_db_result: ERROR: HOST %s, USER %s\n", MYSQL_HOST, MYSQL_USER);
 				retres = -3;
 			}
 			else
@@ -1076,7 +1077,7 @@ int tidy_up_db(int8_t deleteall)
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: tidy_up_db: HOST %s, USER %s\n", MYSQL_HOST, MYSQL_USER);
 				retval = 3;
 			}
 			else
@@ -1208,7 +1209,7 @@ int update_result_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, u
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection));
-				IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: update_result_db: HOST %s, USER %s\n", MYSQL_HOST, MYSQL_USER);
 				retval = 3;
 			}
 			else
@@ -1381,7 +1382,7 @@ int count_rows_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: count_rows_db: HOST %s, USER %s\n", MYSQL_HOST, MYSQL_USER);
 				retval = -3;
 			}
 			else
@@ -1532,7 +1533,7 @@ int count_teststate_rows_db(uint64_t timestamp, uint64_t session)
 			if (NULL == mysqlrc)
 			{
 				IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: ERROR: Failed to connect to MySQL database (%s) : %s\n", MYSQL_DBNAME, mysql_error(connection) );
-				IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: HOST %s, USER %s, PASSWD %s\n", MYSQL_HOST, MYSQL_USER, MYSQL_PASSWD);
+				IPSCAN_LOG( LOGPREFIX "ipscan: count_teststate_rows_db: HOST %s, USER %s\n", MYSQL_HOST, MYSQL_USER);
 				retval = -3;
 			}
 			else
