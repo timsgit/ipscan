@@ -178,7 +178,7 @@ and installing versions 2.03 and later. See step 4 below for details.
        option - change IPSCAN_LOGVERBOSITY to 1 to enable this feature). It is possible to enable
        copious amounts of debug by uncommenting the DEBUG #define statements in ipscan.h.
     
-    10. If you're providing public access to IPscan then please ensure that you disable 
+    10.If you're providing public access to IPscan then please ensure that you disable 
        verbose reporting, the summary option, and ALL debug facilities.
 
        Note: version v1.42, and later, of IPscan automatically delete the scan results, for 
@@ -186,14 +186,14 @@ and installing versions 2.03 and later. See step 4 below for details.
        relied on a cron job to achieve the same end, but this is no longer required for current
        versions.
 
-    11. For those considering providing IPscan access on the public internet then consider adding
+    11.For those considering providing IPscan access on the public internet then consider adding
        a landing page which will check for host IP address suitability prior to allowing access
        to the cgi scripts. Note that most search engine spiders/robots (apart from Google)
        currently only use IPv4, although this is improving.  It may be advisable to only offer
        direct links to the cgi scripts if the address checks were successful.
        See the IPscan Demo Server at https://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
 
-    12. Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
+    12.Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
        javascript-enabled browsers and the other for text-based browsers. Additionally, the
        standard build provides fast and standard versions of both of these tests. The fast
        version tests multiple TCP or UDP ports in parallel, whereas the standard version tests
@@ -208,7 +208,6 @@ and installing versions 2.03 and later. See step 4 below for details.
        of IPscan which should not trigger the rate-limiting behaviour. If you're unsure which
        version is appropriate for your device, then try both speeds and compare the results.
        Some Linux distributions and some ISP firewalls are known to implement such rate-limiting.
-
 
 ***Getting further help:***
 
