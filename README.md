@@ -89,24 +89,22 @@ and installing versions 2.03 and later. See step 4 below for details.
         Note2: MySQL statements are terminated by a semicolon character, NOT by pressing Enter.
         In the examples below MySQL has inserted '->' symbols to indicate the continuation
         of an unclosed (unterminated) buffer. When entering the statements you should enter
-        them as complete lines and you should NOT include the continuation '->' symbols.
+        them as single complete lines and you should NOT include the continuation '->' symbols.
        
-        mysql> create user 'ipscan-user'@'localhost' identified 
-	    -> by 'ipscan-passwd';
+        > create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
         Query OK, 0 rows affected (0.01 sec)
 
-        mysql> grant all privileges on ipscan.* to 'ipscan-user'@'localhost'
-	    -> identified by 'ipscan-passwd';
+        > grant all privileges on ipscan.* to 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
         Query OK, 0 rows affected (0.01 sec)
 
-        mysql> exit
+        > exit
         Bye
        
         IMPORTANT NOTE: If performing an upgrade from an earlier version of IPscan then either 
         manually drop the table within a mysql shell, e.g. :
         
-        mysql> use ipscan;
-        mysql> drop table if exists results;
+        > use ipscan;
+        > drop table if exists results;
        
         or use the BASH upgrade script within the IPscan source directory:
        
