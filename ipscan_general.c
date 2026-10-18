@@ -47,9 +47,10 @@
 // 0.27 - add clamp for backoff delay calculation
 // 0.28 - check returns for fclose()
 // 0.29 - remove unnecessary line feed from flags summary
+// 0.30 - add validate_ipv6addr_string()
 
 //
-#define IPSCAN_GENERAL_VER "0.29"
+#define IPSCAN_GENERAL_VER "0.30"
 //
 
 #include "ipscan.h"
@@ -890,6 +891,23 @@ int regain_privileges(void)
 	return(EXIT_SUCCESS);
 }
 #endif
+//
+// -----------------------------------------------------------------------------
+//
+void validate_ipv6addr_string(char *address)
+{
+	for ( unsigned int i = 0 ; i < INET6_ADDRSTRLEN && address[i] > 0 ; i++ )
+	{
+		// Ensure only valid ASCII characters are included, but terminating '0' is retained
+		// 0..9 are 48-57, : is 58, A-F are 65-70, a-f are 97-102
+		// replace 'bad' characters with ' '
+		if ( (address[i] > 0 && address[i] < 48) || (address[i] > 58 && address[i] < 65) \
+			|| (address[i] > 70 && address[i] < 97) ||  address[i] > 102 )
+		{
+			address[i] = 32;
+		}
+	}
+}
 //
 // -----------------------------------------------------------------------------
 //

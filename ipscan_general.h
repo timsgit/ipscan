@@ -59,6 +59,7 @@ int regain_privileges(void);
 #endif
 int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip);
 unsigned short checksum(unsigned short *ptr, int nbytes);
+void validate_ipv6addr_string(char *address);
 //
 //
 //

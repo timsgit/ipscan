@@ -146,9 +146,10 @@
 // 1.23 - further debug logging consistency improvements
 // 1.24 - ensure wait() for fork()ed child processes reports exit status correctly
 // 1.25 - Move to new TCP/UDP/ICMPv6 mappings
+// 1.26 - add IPv6 address string validation for UDP and TCP indirect hosts
 
 //
-#define IPSCAN_MAIN_VER "1.25"
+#define IPSCAN_MAIN_VER "1.26"
 //
 
 #include "ipscan.h"
@@ -290,6 +291,7 @@ int main(void)
 	// Note that indirecthost value validation is performed twice below
 	// It may need changing if the declaration of this variable is adjusted
 	char indirecthost[INET6_ADDRSTRLEN+1];
+	memset(indirecthost, 0, INET6_ADDRSTRLEN+1);
 	#endif
 
 	char remoteaddrstring[INET6_ADDRSTRLEN+1];
@@ -1179,6 +1181,8 @@ int main(void)
 			int pingresult = check_icmpv6_echoresponse(remoteaddrstring, ms_since_epoch, (uint64_t)session, &indirecthost[0] );
 
 			// Ensure the indirecthost returned is valid
+			validate_ipv6addr_string(&indirecthost[0]);
+/*
 			// NOTE: this validation may require adjustment if the declaration of indirecthost changes
 			int ih_adjusted = 0;
 			indirecthost[INET6_ADDRSTRLEN] = 0;
@@ -1202,6 +1206,7 @@ int main(void)
 				IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[8:15] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[8], indirecthost2[9], indirecthost2[10], indirecthost2[11], indirecthost2[12], indirecthost2[13], indirecthost2[14], indirecthost2[15] );
 
 			}
+*/
 
 			int directresult = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			portsstats[directresult]++ ;
@@ -1389,6 +1394,7 @@ int main(void)
                                         IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result loop exited with result: %d\n", result);
                                 }
 
+				validate_ipv6addr_string(&udpindirecthost[0]);	
 				directresult = (result >= IPSCAN_INDIRECT_RESPONSE) ? (result - IPSCAN_INDIRECT_RESPONSE) : result ;
 				if (result >= IPSCAN_INDIRECT_RESPONSE) portsstats[PORTINDIRECT]++;
 				if (0 > directresult)
@@ -1637,6 +1643,7 @@ int main(void)
                                 {
                                         IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: text-mode read_db_result loop exited with result: %d\n", result);
                                 }
+				validate_ipv6addr_string(&tcpindirecthost[0]);
 				directresult = (result >= IPSCAN_INDIRECT_RESPONSE) ? (result - IPSCAN_INDIRECT_RESPONSE) : result ;
 				if (result >= IPSCAN_INDIRECT_RESPONSE) portsstats[PORTINDIRECT]++;
 				if (0 > directresult)

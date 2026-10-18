@@ -110,8 +110,9 @@
 // 1.11 - further improvements to minimise change of duplicate session/timestamp parameters
 // 1.12 - ensure navigate-away event stops other XHR fetches
 // 1.13 - only report status change using XHR fetches when running
+// 1.14 - change to use textContent instead of innerHTML when updating DOM
 
-#define IPSCAN_WEB_VER "1.13"
+#define IPSCAN_WEB_VER "1.14"
 
 #include "ipscan.h"
 
@@ -309,7 +310,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// Main initialisation 
 	// (1) set the scanstate text to RUNNING to give the user confidence that things are happening.
 	//
-	printf(" document.getElementById(\"scanstate\").innerHTML = \"RUNNING\";");
+	printf(" document.getElementById(\"scanstate\").textContent = \"RUNNING\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
 	printf(" document.getElementById(\"scanstate\").title = 0;");
 	printf(" myBlink = setInterval(function(){blink(); }, 1000);");
@@ -509,7 +510,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
         printf(" clearInterval(myInterval);");
         printf(" clearInterval(myBlink);");
 	// update scanstate - although its likely it won't be on screen
-	printf(" document.getElementById(\"scanstate\").innerHTML = \"NAVAWAY\";");
+	printf(" document.getElementById(\"scanstate\").textContent = \"NAVAWAY\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
 	// abort current XmlHttp fetches (if there are any in progress) since we're navigating away and don't care
 	printf(" if (myXmlHttpInitObj.readyState < 4) { myXmlHttpInitObj.abort(); }");
@@ -761,7 +762,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" }");
 	printf(" else"); // otherwise update standard port scan results
 	printf(" {");
-	printf(" document.getElementById(elemid).innerHTML = textupdate;");
+	printf(" document.getElementById(elemid).textContent = textupdate;");
 	printf(" document.getElementById(elemid).style.backgroundColor = colourupdate;");
 	printf(" }");
 
@@ -782,7 +783,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" if (latestState.length >= %d)",(3+3+((numudpports+numports)*3)) );
 	#endif
 	printf(" {");
-	printf(" document.getElementById(\"scanstate\").innerHTML = \"COMPLETE\";");
+	printf(" document.getElementById(\"scanstate\").textContent = \"COMPLETE\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"black\";");
 	// Disable the Page Exit handler
 	printf(" window.onbeforeunload = null;");
@@ -802,7 +803,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" {");
 	printf(" clearInterval(myBlink);");
 	printf(" clearInterval(myInterval);");
-	printf(" document.getElementById(\"scanstate\").innerHTML = \"FAILED.\";");
+	printf(" document.getElementById(\"scanstate\").textContent = \"FAILED.\";");
 	printf(" document.getElementById(\"scanstate\").style.color = \"red\";");
 	// Disable the Page Exit handler
 	printf(" window.onbeforeunload = null;");
