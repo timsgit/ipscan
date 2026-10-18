@@ -249,29 +249,8 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 			{
 				char query[MAXDBQUERYSIZE];
 				int qrylen;
-/*
-				// if we're attempting to write the running state then attempt to create the table if it doesn't already exist
-				if (IPSCAN_TESTSTATE_AS_PORTNUM == port)
-				{
-					// Use the default engine - sensitive data may persist until next tidy_up_db() call
-					// Unique key is used to trigger update of existing rows rather than allow duplicate entries
-					qrylen = snprintf(query, MAXDBQUERYSIZE, "CREATE TABLE IF NOT EXISTS `%s` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, hostmsb BIGINT UNSIGNED DEFAULT 0, hostlsb BIGINT UNSIGNED DEFAULT 0, createdate BIGINT UNSIGNED DEFAULT 0, session BIGINT UNSIGNED DEFAULT 0, portnum BIGINT UNSIGNED DEFAULT 0, portresult BIGINT UNSIGNED DEFAULT 0, indirecthost VARCHAR(%d) DEFAULT '', ts TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), INDEX idx_ts (ts), UNIQUE KEY `idx_scan_identity` (hostmsb, hostlsb, createdate, session, portnum) ) ENGINE = Innodb",MYSQL_TBLNAME, (INET6_ADDRSTRLEN+1) );
-
-					// retval defaults to -1, and is set to positive values if an error condition occurs
-					// retval guaranteed to be -1 at this point, so removed from if
-					if (qrylen > 0 && qrylen < MAXDBQUERYSIZE)
-					{
-						// EXECUTE CREATE TABLE IF NOT EXISTS
-						rc = mysql_real_query(connection, query, (unsigned long)qrylen);
-						if (0 != rc)
-						{
-							IPSCAN_LOG( LOGPREFIX "ipscan: write_db: ERROR: Failed to complete CREATE TABLE IF NOT EXISTS, returned rc = %d, %u (%s)\n", rc, mysql_errno(connection), mysql_error(connection));
-							retval = 9999;
-						}
-					}
-				}
-*/
-				// if the previous steps completed without error the continue ...
+				// retval defaults to -1, and is set to positive values if an error condition occurs
+				// if the previous steps completed without error then continue ...
 				if (retval < 0)
 				{
 					//
