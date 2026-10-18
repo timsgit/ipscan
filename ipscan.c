@@ -1182,31 +1182,6 @@ int main(void)
 
 			// Ensure the indirecthost returned is valid
 			validate_ipv6addr_string(&indirecthost[0]);
-/*
-			// NOTE: this validation may require adjustment if the declaration of indirecthost changes
-			int ih_adjusted = 0;
-			indirecthost[INET6_ADDRSTRLEN] = 0;
-			unsigned char indirecthost2[INET6_ADDRSTRLEN+1];
-			for ( i = 0 ; i < INET6_ADDRSTRLEN ; i++ ) indirecthost2[i] = (unsigned char)indirecthost[i] ;
-			for ( i = 0 ; i < INET6_ADDRSTRLEN && indirecthost[i] > 0 ; i++ )
-			{
-				// Ensure only valid ASCII characters are included, but terminating '0' is retained
-				// 0..9 are 48-57, : is 58, A-F are 65-70, a-f are 97-102
-				if ( (indirecthost[i] > 0 && indirecthost[i] < 48) || (indirecthost[i] > 58 && indirecthost[i] < 65) \
-					|| (indirecthost[i] > 70 && indirecthost[i] < 97) ||  indirecthost[i] > 102 )
-				{
-					indirecthost[i] = 32;
-					ih_adjusted = 1;
-				}
-			}
-			if (0 != ih_adjusted)
-			{
-				IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 indirecthost was updated, exiting with i = %u and \"%s\"\n", i, indirecthost);
-				IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[0:7] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[0], indirecthost2[1], indirecthost2[2], indirecthost2[3], indirecthost2[4], indirecthost2[5], indirecthost2[6], indirecthost2[7] );
-				IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[8:15] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[8], indirecthost2[9], indirecthost2[10], indirecthost2[11], indirecthost2[12], indirecthost2[13], indirecthost2[14], indirecthost2[15] );
-
-			}
-*/
 
 			int directresult = (pingresult >= IPSCAN_INDIRECT_RESPONSE) ? (pingresult - IPSCAN_INDIRECT_RESPONSE) : pingresult ;
 			portsstats[directresult]++ ;
