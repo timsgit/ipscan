@@ -78,32 +78,32 @@ and installing versions 2.03 and later. See step 4 below for details.
     4. Create the database and user and allocate appropriate user privileges, using
       the following commands within the mysql shell:
 
-      NB: adjust the host, user name, password and database name to match the globals 
-      you've edited in step 2 above:
+   NB: adjust the host, user name, password and database name to match the globals 
+   you've edited in step 2 above:
         
-      > create database ipscan;
-      Query OK, 1 row affected (0.00 sec)
+   > create database ipscan;
+   Query OK, 1 row affected (0.00 sec)
 
-      Note: it is _not_ necessary to re-create the user if upgrading from a previous version.
+   Note: it is _not_ necessary to re-create the user if upgrading from a previous version.
 
-      > create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
-      Query OK, 0 rows affected (0.01 sec)
+   > create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
+   Query OK, 0 rows affected (0.01 sec)
 
-      > grant all privileges on ipscan.* to 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
-      Query OK, 0 rows affected (0.01 sec)
+   > grant all privileges on ipscan.* to 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
+   Query OK, 0 rows affected (0.01 sec)
 
-      > exit
-      Bye
+   > exit
+   Bye
        
-      IMPORTANT NOTE: If performing an upgrade from an earlier version of IPscan then either 
-      manually drop the table within a mysql shell, e.g. :
+   IMPORTANT NOTE: If performing an upgrade from an earlier version of IPscan then either 
+   manually drop the table within a mysql shell, e.g. :
         
-      > use ipscan;
-      > drop table if exists results;
+   > use ipscan;
+   > drop table if exists results;
        
-      or use the BASH upgrade script within the IPscan source directory:
+   or use the BASH upgrade script within the IPscan source directory:
        
-      $ ./upgrade.bsh
+   $ ./upgrade.bsh
         
     5. make && make install (default/recommended, equivalent to METHOD=caps)
 
