@@ -92,7 +92,7 @@ types/codes.
       > exit
       Bye
        
-    5. **NOTE: this step has changed from previous releases!**
+    5. **NOTE:_this_step_has_changed_from_previous_releases!**
 
       If this is a NEW installation of IPscan then you need to create the results table
       by installing the schema:
@@ -162,7 +162,7 @@ types/codes.
            # cd /var/www/cgi-bin6/ (use your selected installation path)
            # chcon -t httpd_unconfined_script_exec_t *.cgi
           
-        __IMPORTANT NOTE:__
+        **IMPORTANT_NOTE:**
 
         The steps listed in step 7 above are only indicative of what may be required, and 
         depend upon your existing installation. Please consult the SELinux documentation for
