@@ -95,15 +95,16 @@ and installing versions 2.03 and later. See step 4 below for details.
       > exit
       Bye
        
-      IMPORTANT NOTE: If performing an upgrade from an earlier version of IPscan then either 
-      manually drop the table within a mysql shell, e.g. :
-        
-      > use ipscan;
-      > drop table if exists results;
-       
-      or use the BASH upgrade script within the IPscan source directory:
-       
-      $ ./upgrade.bsh
+   5. **NOTE: this step has changed from previous releases!**
+      If this is a new installation of IPscan then you need to create the results table
+      by installing the schema:
+
+      $ ./database.bsh --install-schema
+
+      OTHERWISE, if you're performing an UPGRADE from an earlier version of IPscan, then:
+
+      $ ./database.bsh --upgrade
+      $ ./database.bsh --install-schema
         
     5. make && make install (default/recommended, equivalent to METHOD=caps)
 

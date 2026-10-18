@@ -116,9 +116,10 @@
 // 1.19 - ensure mysql_error() and mysql_errno() reported for all mysql error conditions
 // 1.20 - fix a couple of robustness issues in update_teststate_db()
 // 1.21 - change logging in case of failure to connect to MySQL server, so that only user is recorded
+// 1.22 - removed CREATE TABLE - now created manually by 'database.bsh --install-schema'
 
 //
-#define IPSCAN_DB_VER "1.21"
+#define IPSCAN_DB_VER "1.22"
 //
 
 #include "ipscan.h"
@@ -248,6 +249,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 			{
 				char query[MAXDBQUERYSIZE];
 				int qrylen;
+/*
 				// if we're attempting to write the running state then attempt to create the table if it doesn't already exist
 				if (IPSCAN_TESTSTATE_AS_PORTNUM == port)
 				{
@@ -268,6 +270,7 @@ int write_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uint64_t 
 						}
 					}
 				}
+*/
 				// if the previous steps completed without error the continue ...
 				if (retval < 0)
 				{

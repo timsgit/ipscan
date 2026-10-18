@@ -1,0 +1,103 @@
+#!/bin/bash
+#
+#    IPscan - an HTTP-initiated IPv6 port scanner.
+#
+#    (C) Copyright 2011-2026 Tim Chappell.
+#
+#    This file is part of IPscan.
+#
+#    IPscan is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with IPscan.  If not, see <http://www.gnu.org/licenses/>.
+#
+# database.bsh
+# version	description
+# 0.01 		initial version
+
+set -euo pipefail
+umask 077
+SRC="./ipscan.h"
+SCHEMA="./schema.sql"
+
+usage()
+{
+	echo "Usage: $0 --install-schema | --upgrade" >&2
+	exit 2
+}
+
+[[ $# -eq 1 ]] || usage
+MODE="$1"
+
+case "$MODE" in
+	--install-schema|--upgrade) ;;
+	*) usage ;;
+esac
+
+if [[ ! -r "$SRC" ]]; then
+	echo "ERROR: Cannot read $SRC" >&2
+	exit 1
+fi
+
+read_define()
+{
+	local name="$1"
+	awk -v key="$name" 'BEGIN{found=0};$1 == "#define" && $2 == key {value=$3;gsub(/"/, "", value);found=1};END{if (found){print value} else {exit 1}}' "$SRC"
+}
+
+MYSQL_HOST=$(read_define MYSQL_HOST)
+MYSQL_USER=$(read_define MYSQL_USER)
+MYSQL_PASSWD=$(read_define MYSQL_PASSWD)
+MYSQL_DBNAME=$(read_define MYSQL_DBNAME)
+MYSQL_TBLNAME=$(read_define MYSQL_TBLNAME)
+
+# Check identifiers before passing them onto MySQL.
+[[ "$MYSQL_DBNAME" =~ ^[A-Za-z0-9_]+$ ]] || {
+    echo "ERROR: Invalid database name" >&2
+    exit 1
+}
+[[ "$MYSQL_TBLNAME" =~ ^[A-Za-z0-9_]+$ ]] || {
+    echo "ERROR: Invalid table name" >&2
+    exit 1
+}
+
+mysql_cmd=(mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PASSWD" --database="$MYSQL_DBNAME" --batch --show-warnings)
+
+case "$MODE" in
+    --install-schema)
+        [[ -r "$SCHEMA" ]] || {
+            echo "ERROR: Cannot read $SCHEMA" >&2
+            exit 1
+        }
+
+        echo "Installing IPscan schema into $MYSQL_DBNAME.$MYSQL_TBLNAME"
+        tmp=$(mktemp)
+        trap 'rm -f "$tmp"' EXIT
+        sed "s/\`results\`/\`$MYSQL_TBLNAME\`/g" "$SCHEMA" > "$tmp"
+        "${mysql_cmd[@]}" < "$tmp"
+        echo "Schema installation completed."
+        ;;
+
+    --upgrade)
+        echo "WARNING: This drops the configured results table."
+        read -r -p "Type DROP to continue: " answer
+
+        [[ "$answer" == "DROP" ]] || {
+            echo "Cancelled."
+            exit 1
+        }
+
+        "${mysql_cmd[@]}" --execute="DROP TABLE IF EXISTS \`$MYSQL_TBLNAME\`;"
+        echo "Upgrade table removal completed."
+        ;;
+esac
+
+echo Done.
