@@ -106,24 +106,26 @@ types/codes.
 
       $ ./database.bsh --install-schema
         
-    6. make && make install (default/recommended, equivalent to METHOD=caps)
+    6. Make and install the binaries, using:
 
-       OR:
+      $ make && make install (default/recommended, equivalent to METHOD=caps)
 
-       make METHOD=suid && make install METHOD=suid (alternative, using suid bits)
+      OR:
+
+      $ make METHOD=suid && make install METHOD=suid (alternative, using suid bits)
        
-        It is necessary to perform the 'make install' step as root, in order that the binaries
-        are able to be installed in the appropriately chowned cgi directory. Setting the 
-        ownership to root ensures the Apache user cannot overwrite the binaries and gain
-        CAP_NET_RAW capabilities.
+      It is necessary to perform the 'make install' step as root, in order that the binaries
+      are able to be installed in the appropriately chowned cgi directory. Setting the 
+      ownership to root ensures the Apache user cannot overwrite the binaries and gain
+      CAP_NET_RAW capabilities.
 
-        BUILD-RELATED NOTES: 
+      BUILD-RELATED NOTES: 
 
-        a. METHOD=caps : use the Linux capability flags to enable raw sockets
-       	b. METHOD=suid : use root user and suid to enable raw sockets (deprecated)
-        c. the same METHOD must be used for the build and installation steps
-        d. METHOD=caps is the default, if METHOD is not expressly defined
-        e. if you wish to change METHOD then 'make clean' before rebuilding and installing
+      a. METHOD=caps : use the Linux capability flags to enable raw sockets
+      b. METHOD=suid : use root user and suid to enable raw sockets (deprecated)
+      c. the same METHOD must be used for the build and installation steps
+      d. METHOD=caps is the default, if METHOD is not expressly defined
+      e. if you wish to change METHOD then 'make clean' before rebuilding and installing
        
     7. Make sure that the URI path directory (which may well be accessed via an Apache alias)
        is enabled to execute cgi:
@@ -160,7 +162,7 @@ types/codes.
            # cd /var/www/cgi-bin6/ (use your selected installation path)
            # chcon -t httpd_unconfined_script_exec_t *.cgi
           
-        ***IMPORTANT NOTE:***
+        __IMPORTANT NOTE:__
 
         The steps listed in step 7 above are only indicative of what may be required, and 
         depend upon your existing installation. Please consult the SELinux documentation for
@@ -168,11 +170,11 @@ types/codes.
           
     9. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
 
-       w3m https://www66.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
+       $ w3m https://www66.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
 
        or: 
 
-       w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
+       $ w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
 
     10.Check the web server access/error logs or Syslog for messages. IPscan will place summary
        messages in the web server error log or Syslog if enabled to do so (this is NOT the default
