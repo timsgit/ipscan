@@ -45,41 +45,41 @@ and installing versions 2.03 and later. See step 4 below for details.
 
     1.  edit the Makefile and adjust the following entries as required:
          a. TARGETDIR - this should be set to the desired location for the cgi files
-		(e.g. /var/www/cgi-bin6). Ensure that the selected target directory
-		exists, with appropriate permissions, before attempting to install
-		the final executables
+            (e.g. /var/www/cgi-bin6). Ensure that the selected target directory
+            exists, with appropriate permissions, before attempting to install
+            the final executables
          b. URIPATH - this is the request URI by which the cgi files will be accessed
-		from your webserver. As an example if users would access the scanner from
-		https://www66.chappell-family.co.uk/cgi-bin6/ipscanjs.cgi then 
-		set URIPATH=/cgi-bin6
+            from your webserver. As an example if users would access the scanner from
+            https://www66.chappell-family.co.uk/cgi-bin6/ipscanjs.cgi then 
+            set URIPATH=/cgi-bin6
          c. TXTTARGET, FASTTXTTARGET, JSTARGET, FASTJSTARGET - these define the names of
-		the cgi executable objects that will be created
+            the cgi executable objects that will be created
          d. UDP_AVAILABLE and PING_AVAILABLE if these features are NOT required
 
     2.  edit ipscan.h and adjust *at least* the following entries:
          a. EMAILADDRESS - suggest you use a non-personal email address if the
-		webserver will be world-accessible
+            webserver will be world-accessible
          b. INCLUDETERMSOFUSE and TERMSOFUSEURL if you wish to reference a terms of use
-		page on your website
-         c. MYSQL_XXXX   - Adjust the following constants to match the settings of your
-		MySQL database server: 
-                  MYSQL_HOST - the hostname or IP address of the machine hosting
-			the MySQL database
-                  MYSQL_USER - the username used to access the IPscan database
-                  MYSQL_PASSWD - the password used to identify the MySQL user
-                  MYSQL_DBNAME - the name of the IPscan database
-                  MYSQL_TBLNAME - the name of the database table in which IPscan
-			results will be stored
+            page on your website
+         c. MYSQL_XXXX - Adjust the following constants to match the settings of your
+            MySQL database server: 
+               MYSQL_HOST - the hostname or IP address of the machine hosting
+                     the MySQL database
+               MYSQL_USER - the username used to access the IPscan database
+               MYSQL_PASSWD - the password used to identify the MySQL user
+               MYSQL_DBNAME - the name of the IPscan database
+               MYSQL_TBLNAME - the name of the database table in which IPscan
+                     results will be stored
 
     3.  edit ipscan_portlist.h and change the list of ports to be tested, if required.
-		Note that if you add new UDP ports then you MUST also add a matching
-		packet generator function to ipscan_udp.c
+        Note that if you add new UDP ports then you MUST also add a matching
+        packet generator function to ipscan_udp.c
     
     4.  Create the database and user and allocate appropriate user privileges, using
-		the following commands within the mysql shell:
+        the following commands within the mysql shell:
 
         NB: adjust the host, user name, password and database name to match the globals 
-		you've edited in step 2 above:
+        you've edited in step 2 above:
         
         mysql> create database ipscan;
         Query OK, 1 row affected (0.00 sec)
