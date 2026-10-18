@@ -92,7 +92,7 @@ types/codes.
       > exit
       Bye
        
-   5. **NOTE: this step has changed from previous releases!**
+    5. **NOTE: this step has changed from previous releases!**
 
       If this is a NEW installation of IPscan then you need to create the results table
       by installing the schema:
@@ -106,7 +106,7 @@ types/codes.
 
       $ ./database.bsh --install-schema
         
-    5. make && make install (default/recommended, equivalent to METHOD=caps)
+    6. make && make install (default/recommended, equivalent to METHOD=caps)
 
        OR:
 
@@ -125,7 +125,7 @@ types/codes.
         d. METHOD=caps is the default, if METHOD is not expressly defined
         e. if you wish to change METHOD then 'make clean' before rebuilding and installing
        
-    6. Make sure that the URI path directory (which may well be accessed via an Apache alias)
+    7. Make sure that the URI path directory (which may well be accessed via an Apache alias)
        is enabled to execute cgi:
         
         ScriptAlias /cgi-bin6/ "/var/www/cgi-bin6/"
@@ -152,7 +152,7 @@ types/codes.
        
         Don't forget to restart your web server after making the appropriate modifications.
     
-    7. If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary
+    8. If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary
        to perform additional steps similar to those outlined below:
         a. Ensure that your Apache server is enabled to support cgi, as root type:
            # setsebool -P httpd_enable_cgi on
@@ -166,7 +166,7 @@ types/codes.
         depend upon your existing installation. Please consult the SELinux documentation for
         further details. 
           
-    8. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
+    9. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
 
        w3m https://www66.chappell-family.co.uk/cgi-bin6/ipscanfasttxt.cgi 
 
@@ -174,12 +174,12 @@ types/codes.
 
        w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
 
-    9. Check the web server access/error logs or Syslog for messages. IPscan will place summary
+    10.Check the web server access/error logs or Syslog for messages. IPscan will place summary
        messages in the web server error log or Syslog if enabled to do so (this is NOT the default
        option - change IPSCAN_LOGVERBOSITY to 1 to enable this feature). It is possible to enable
        copious amounts of debug by uncommenting the DEBUG #define statements in ipscan.h.
     
-    10.If you're providing public access to IPscan then please ensure that you disable 
+    11.If you're providing public access to IPscan then please ensure that you disable 
        verbose reporting, the summary option, and ALL debug facilities.
 
        Note: version v1.42, and later, of IPscan automatically delete the scan results, for 
@@ -187,14 +187,14 @@ types/codes.
        relied on a cron job to achieve the same end, but this is no longer required for current
        versions.
 
-    11.For those considering providing IPscan access on the public internet then consider adding
+    12.For those considering providing IPscan access on the public internet then consider adding
        a landing page which will check for host IP address suitability prior to allowing access
        to the cgi scripts. Note that most search engine spiders/robots (apart from Google)
        currently only use IPv4, although this is improving.  It may be advisable to only offer
        direct links to the cgi scripts if the address checks were successful.
        See the IPscan Demo Server at https://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
 
-    12.Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
+    13.Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
        javascript-enabled browsers and the other for text-based browsers. Additionally, the
        standard build provides fast and standard versions of both of these tests. The fast
        version tests multiple TCP or UDP ports in parallel, whereas the standard version tests
