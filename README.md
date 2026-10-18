@@ -39,9 +39,6 @@ types/codes.
 
 ***Installation Steps:***
 
-IMPORTANT: when UPGRADING from versions before 2.03: a database change has occurred and
-consequently it is necessary that you remove your existing database prior to building
-and installing versions 2.03 and later. See step 4 below for details.
 
     1. edit the Makefile and adjust the following entries as required:
          a. TARGETDIR - this should be set to the desired location for the cgi files
@@ -96,14 +93,17 @@ and installing versions 2.03 and later. See step 4 below for details.
       Bye
        
    5. **NOTE: this step has changed from previous releases!**
-      If this is a new installation of IPscan then you need to create the results table
+
+      If this is a NEW installation of IPscan then you need to create the results table
       by installing the schema:
 
       $ ./database.bsh --install-schema
 
-      OTHERWISE, if you're performing an UPGRADE from an earlier version of IPscan, then:
+      OTHERWISE, if you're performing an UPGRADE from an earlier version of IPscan, then
+      execute the two following steps:
 
       $ ./database.bsh --upgrade
+
       $ ./database.bsh --install-schema
         
     5. make && make install (default/recommended, equivalent to METHOD=caps)
