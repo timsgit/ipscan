@@ -121,8 +121,8 @@ and installing versions 2.03 and later. See step 4 below for details.
        
         It is necessary to perform the 'make install' step as root, in order that the binaries
         are able to be installed in the appropriately chowned cgi directory. Setting the 
-	ownership to root ensures the Apache user cannot overwrite the binaries and gain
-	CAP_NET_RAW capabilities.
+        ownership to root ensures the Apache user cannot overwrite the binaries and gain
+        CAP_NET_RAW capabilities.
 
         BUILD-RELATED NOTES: 
 
@@ -133,7 +133,7 @@ and installing versions 2.03 and later. See step 4 below for details.
         e. if you wish to change METHOD then 'make clean' before rebuilding and installing
        
     6.  Make sure that the URI path directory (which may well be accessed via an Apache alias)
-	is enabled to execute cgi:
+        is enabled to execute cgi:
         
         ScriptAlias /cgi-bin6/ "/var/www/cgi-bin6/"
         <Directory "/var/www/cgi-bin6">
@@ -146,15 +146,21 @@ and installing versions 2.03 and later. See step 4 below for details.
         Also disable client caching, having enabled the loading of mod_headers:
        
         <IfModule mod_headers.c>
+           # various cache-related headers to restrict storage
            Header set Cache-Control "private, no-cache, no-store, must-revalidate"
            Header set Pragma "no-cache"
            Header set Expires "0"
+           # various headers to secure deployment generally
+           Header always set X-Content-Type-Options nosniff
+           Header always set Content-Security-Policy "frame-ancestors 'none'"
+           Header always set X-Frame-Options DENY
+           Header always set Referrer-Policy strict-origin-when-cross-origin
         </IfModule>
        
         Don't forget to restart your web server after making the appropriate modifications.
     
     7.  If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary
-	to perform additional steps similar to those outlined below:
+        to perform additional steps similar to those outlined below:
         a. Ensure that your Apache server is enabled to support cgi, as root type:
            # setsebool -P httpd_enable_cgi on
         b. Enable the correct execution permissions to the cgi scripts, as root type:
@@ -165,7 +171,7 @@ and installing versions 2.03 and later. See step 4 below for details.
 
         The steps listed in step 7 above are only indicative of what may be required, and 
         depend upon your existing installation. Please consult the SELinux documentation for
-	further details. 
+        further details. 
           
     8.  Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
 
@@ -176,40 +182,40 @@ and installing versions 2.03 and later. See step 4 below for details.
         w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
 
     9.  Check the web server access/error logs or Syslog for messages. IPscan will place summary
-	messages in the web server error log or Syslog if enabled to do so (this is NOT the default
-	option - change IPSCAN_LOGVERBOSITY to 1 to enable this feature). It is possible to enable
-	copious amounts of debug by uncommenting the DEBUG #define statements in ipscan.h.
+        messages in the web server error log or Syslog if enabled to do so (this is NOT the default
+        option - change IPSCAN_LOGVERBOSITY to 1 to enable this feature). It is possible to enable
+        copious amounts of debug by uncommenting the DEBUG #define statements in ipscan.h.
     
     10. If you're providing public access to IPscan then please ensure that you disable 
-	verbose reporting, the summary option, and ALL debug facilities.
+        verbose reporting, the summary option, and ALL debug facilities.
 
-        Note: versions v1.42 and later of IPscan automatically delete the scan results, for 
-	both javascript and text-only clients, after reporting them to the user. Earlier versions
-	relied on a cron job to achieve the same end, but this is no longer required for current
-	versions.
+        Note: version v1.42, and later, of IPscan automatically delete the scan results, for 
+        both javascript and text-only clients, after reporting them to the user. Earlier versions
+        relied on a cron job to achieve the same end, but this is no longer required for current
+        versions.
 
     11. For those considering providing IPscan access on the public internet then consider adding
-	a landing page which will check for host IP address suitability prior to allowing access
-	to the cgi scripts. Note that most search engine spiders/robots (apart from Google)
-	currently only use IPv4, although this is improving.  It may be advisable to only offer
-	direct links to the cgi scripts if the address checks were successful.
-	See the IPscan Demo Server at https://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
+        a landing page which will check for host IP address suitability prior to allowing access
+        to the cgi scripts. Note that most search engine spiders/robots (apart from Google)
+        currently only use IPv4, although this is improving.  It may be advisable to only offer
+        direct links to the cgi scripts if the address checks were successful.
+        See the IPscan Demo Server at https://ipv6.chappell-family.com/ipv6tcptest/ as an example. 
 
     12. Notes on IPscan binaries: IPscan is provided in two basic versions, one supporting 
         javascript-enabled browsers and the other for text-based browsers. Additionally, the
-	standard build provides fast and standard versions of both of these tests. The fast
-	version tests multiple TCP or UDP ports in parallel, whereas the standard version tests
-	only 1 port at a time, at a default rate of 1 port per second. Please be aware that some
-	OSes and firewalls apply rate-limiting to their generation, or transit, of ICMPv6 responses
-	on the basis that this behaviour is indicative of a port scan being performed. Consequently
-	such rate-limiting might cause a port which would normally generate an ICMPv6 response
-	(e.g. PHBTD) to send no response at all, which IPscan, or any other port scanner, would
-	report as STEALTHed. If you are testing a host or firewall (whether on the client under
-	test or elsewhere in the path between your client and the IPscan Demo server) which
-	implements such rate-limiting then you are advised to use the standard, slower versions
-	of IPscan which should not trigger the rate-limiting behaviour. If you're unsure which
-	version is appropriate for your device, then try both speeds and compare the results.
-	Some Linux distributions and some ISP firewalls are known to implement such rate-limiting.
+        standard build provides fast and standard versions of both of these tests. The fast
+        version tests multiple TCP or UDP ports in parallel, whereas the standard version tests
+        only 1 port at a time, at a default rate of 1 port per second. Please be aware that some
+        OSes and firewalls apply rate-limiting to their generation, or transit, of ICMPv6 responses
+        on the basis that this behaviour is indicative of a port scan being performed. Consequently
+        such rate-limiting might cause a port which would normally generate an ICMPv6 response
+        (e.g. PHBTD) to send no response at all, which IPscan, or any other port scanner, would
+        report as STEALTHed. If you are testing a host or firewall (whether on the client under
+        test or elsewhere in the path between your client and the IPscan Demo server) which
+        implements such rate-limiting then you are advised to use the standard, slower versions
+        of IPscan which should not trigger the rate-limiting behaviour. If you're unsure which
+        version is appropriate for your device, then try both speeds and compare the results.
+        Some Linux distributions and some ISP firewalls are known to implement such rate-limiting.
 
 
 ***Getting further help:***
