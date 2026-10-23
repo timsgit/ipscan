@@ -83,9 +83,9 @@ types/codes.
 
        $ ./database.bsh --install-schema
 
-      If you wish to purge an existing database, for uninstall or complete-restart purposes:
+       If you wish to purge an existing database, for uninstall or complete-restart purposes:
 
-      $ ./database.bsh --purge-database
+       $ ./database.bsh --purge-database
 
     5. For UPGRADES of existing installations execute the following steps:
 
