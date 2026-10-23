@@ -72,42 +72,32 @@ types/codes.
        Note that if you add new UDP ports then you MUST also add a matching
        packet generator function to ipscan_udp.c
     
-    4. Create the database and user and allocate appropriate user privileges, using
-      the following commands within the mysql shell:
+    4. IMPORTANT NOTE: Steps 4 and 5 have changed from previous releases. 
 
-      NB: adjust the host, user name, password and database name to match the globals 
-      you've edited in step 2 above:
-        
-      > create database ipscan;
-      Query OK, 1 row affected (0.00 sec)
+       For NEW INSTALLATIONS it is necessary to create the database and schema, using
+       the following commands. The schema installation step will create the schema
+       and grant the minimum privileges to the database user. Where necessary the script
+       will prompt for database server credentials:
 
-      Note: it is _not_ necessary to re-create the user if upgrading from a previous version.
+       $ ./database.bsh --create-database
 
-      > create user 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
-      Query OK, 0 rows affected (0.01 sec)
+       $ ./database.bsh --install-schema
 
-      > grant all privileges on ipscan.* to 'ipscan-user'@'localhost' identified by 'ipscan-passwd';
-      Query OK, 0 rows affected (0.01 sec)
+      If you wish to purge an existing database, for uninstall or complete-restart purposes:
 
-      > exit
-      Bye
-       
-    5. IMPORTANT NOTE:
+      $ ./database.bsh --purge-database
 
-      This step has changed from previous releases!
-
-      If this is a NEW installation of IPscan then you need to create the results table
-      by installing the schema:
-
-      $ ./database.bsh --install-schema
-
-      OTHERWISE, if you're performing an UPGRADE from an earlier version of IPscan, then
-      execute the two following steps:
+    5. For UPGRADES of existing installations execute the following steps:
 
       $ ./database.bsh --upgrade
 
+      Note: Answer 'y' when  prompted to delete the results table and runtime account.
+
       $ ./database.bsh --install-schema
-        
+
+      Note: The message 'Schema installed; runtime privileges restricted to the 
+            results table.' is indicative of a succesful installation.
+
     6. Make and install the binaries, using:
 
       $ make && make install (default/recommended, equivalent to METHOD=caps)

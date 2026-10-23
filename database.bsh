@@ -30,16 +30,23 @@ SCHEMA="./schema.sql"
 
 usage()
 {
-	echo "Usage: $0 --install-schema | --upgrade" >&2
-	exit 2
+    echo "Usage: $0 --create-database | --install-schema | --upgrade | --purge-database" >&2
+    exit 2
+}
+
+sql_quote()
+{
+    local value=$1
+    value=${value//\'/\'\'}
+    printf "'%s'" "$value"
 }
 
 [[ $# -eq 1 ]] || usage
 MODE="$1"
 
 case "$MODE" in
-	--install-schema|--upgrade) ;;
-	*) usage ;;
+    --create-database|--install-schema|--upgrade|--purge-database) ;;
+    *) usage ;;
 esac
 
 if [[ ! -r "$SRC" ]]; then
@@ -53,11 +60,206 @@ read_define()
 	awk -v key="$name" 'BEGIN{found=0};$1 == "#define" && $2 == key {value=$3;gsub(/"/, "", value);found=1};END{if (found){print value} else {exit 1}}' "$SRC"
 }
 
+prompt_admin()
+{
+    local admin_password
+
+    read -r -p "MySQL administrator username: " ADMIN_USER
+
+    [[ -n "$ADMIN_USER" ]] || {
+        echo "ERROR: Administrator username is required" >&2
+        return 1
+    }
+
+    read -r -s -p "MySQL administrator password: " admin_password
+    printf '\n' >&2
+
+    ADMIN_CNF=$(mktemp) || return 1
+    chmod 600 "$ADMIN_CNF"
+
+    # Escape characters that have special meaning in MySQL option files.
+    local escaped_password=${admin_password//\\/\\\\}
+    escaped_password=${escaped_password//\"/\\\"}
+
+    if ! {
+        printf '[client]\n'
+        printf 'host="%s"\n' "$MYSQL_HOST"
+        printf 'user="%s"\n' "$ADMIN_USER"
+        printf 'password="%s"\n' "$escaped_password"
+    } > "$ADMIN_CNF"; then
+        rm -f "$ADMIN_CNF"
+        unset admin_password escaped_password
+        return 1
+    fi
+
+    unset admin_password escaped_password
+
+    ADMIN_MYSQL_CMD=(
+        mysql
+        --defaults-extra-file="$ADMIN_CNF"
+        --batch
+        --show-warnings
+    )
+}
+
+cleanup_admin()
+{
+    if [[ -n "${ADMIN_CNF:-}" ]]; then
+        rm -f -- "$ADMIN_CNF"
+    fi
+}
+
+# register handler to remove stored credentials
+trap cleanup_admin EXIT
+create_database()
+{
+    echo "Creating database $MYSQL_DBNAME."
+
+    prompt_admin || return 1
+
+    "${ADMIN_MYSQL_CMD[@]}" --execute="
+SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');
+CREATE DATABASE IF NOT EXISTS \`$MYSQL_DBNAME\`;
+    " || {
+        echo "ERROR: Create Database failed." >&2
+        return 1
+    }
+
+    echo "Database provisioning completed."
+}
+
+purge_database()
+{
+    prompt_admin || return 1
+
+    printf '\n'
+    printf 'WARNING: DESTRUCTIVE DATABASE PURGE\n\n'
+    printf 'Database:       %s\n' "$MYSQL_DBNAME"
+    printf 'Results table:  %s\n' "$MYSQL_TBLNAME"
+    printf 'Runtime account: %s@%s\n\n' \
+        "$MYSQL_USER" "$MYSQL_USER_HOST"
+
+    echo "This operation will:"
+    echo "  - Permanently delete the entire database and all its tables."
+    echo "  - Delete the dedicated runtime MySQL account."
+    echo "  - Permanently remove all stored scan results and other data."
+    printf '\n'
+
+    read -r -p "Type PURGE to confirm: " answer
+
+    [[ "$answer" == "PURGE" ]] || {
+        echo "Database purge cancelled."
+        return 1
+    }
+
+    echo "Purging database and runtime account..."
+
+    "${ADMIN_MYSQL_CMD[@]}" --execute="
+        DROP DATABASE IF EXISTS \`${MYSQL_DBNAME}\`;
+        DROP USER IF EXISTS $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
+    " || {
+        echo "ERROR: Database purge failed." >&2
+        return 1
+    }
+
+    echo "Database and runtime account purged."
+}
+
+install_schema()
+{
+    [[ -r "$SCHEMA" ]] || {
+        echo "ERROR: Cannot read schema file: $SCHEMA" >&2
+        exit 1
+    }
+
+    echo "Installing Schema and GRANTing minimal privileges to the "$MYSQL_TBLNAME" table."
+    prompt_admin || exit 1
+
+    tmp=$(mktemp) || exit 1
+    trap 'rm -f "$tmp"' EXIT
+
+    echo "SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');" > "$tmp"
+
+    # Substitute the validated configured table name.
+    sed "s/\`results\`/\`$MYSQL_TBLNAME\`/g" "$SCHEMA" >> "$tmp" ||
+        exit 1
+
+    # Run schema creation first.
+    "${ADMIN_MYSQL_CMD[@]}" \
+        --database="$MYSQL_DBNAME" < "$tmp" || {
+        echo "ERROR: Schema creation failed." >&2
+        exit 1
+    }
+
+    # Check whether the runtime account exists before dropping it.
+    if "${ADMIN_MYSQL_CMD[@]}" --skip-column-names --execute="
+        SELECT COUNT(*)
+        FROM mysql.user
+        WHERE User = $(sql_quote "$MYSQL_USER")
+          AND Host = $(sql_quote "$MYSQL_USER_HOST");
+    " | grep -qx '1'; then
+        "${ADMIN_MYSQL_CMD[@]}" --execute="
+            DROP USER $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
+        " || {
+            echo "ERROR: Could not drop existing runtime account." >&2
+            exit 1
+        }
+    fi
+
+    # Create the runtime account and grant table-only privileges.
+    "${ADMIN_MYSQL_CMD[@]}" --execute="
+        CREATE USER $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST")
+            IDENTIFIED BY $(sql_quote "$MYSQL_PASSWD");
+        GRANT SELECT, INSERT, UPDATE, DELETE
+            ON \`${MYSQL_DBNAME}\`.\`${MYSQL_TBLNAME}\`
+            TO $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
+    " || {
+        echo "ERROR: Runtime account creation or privilege grant failed." >&2
+        exit 1
+    }
+
+    echo "Schema installed; runtime privileges restricted to the results table."
+}
+
+upgrade()
+{
+    echo "Attempting upgrade - DROP TABLE ${MYSQL_TBLNAME} and USER ${MYSQL_USER}@${MYSQL_USER_HOST}, if they exist."
+    prompt_admin || exit 1
+
+    printf 'Database: %s\nTable: %s\nRuntime account: %s@%s\n' \
+        "$MYSQL_DBNAME" "$MYSQL_TBLNAME" \
+        "$MYSQL_USER" "$MYSQL_USER_HOST"
+
+    read -r -p "This deletes the results table and runtime account. Continue? [y/N] " answer
+    [[ "$answer" == [yY] ]] || {
+        echo "Upgrade cancelled."
+        exit 1
+    }
+
+    "${ADMIN_MYSQL_CMD[@]}" --execute="
+        DROP TABLE IF EXISTS \`${MYSQL_DBNAME}\`.\`${MYSQL_TBLNAME}\`;
+        DROP USER IF EXISTS $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
+    " || {  
+        echo "ERROR: Upgrade failed." >&2
+        exit 1
+    }
+
+    echo "Upgrade cleanup completed."
+}
+
+# this is the host the database server runs on
 MYSQL_HOST=$(read_define MYSQL_HOST)
 MYSQL_USER=$(read_define MYSQL_USER)
+# this is the user's host, used for account creation and grants,
+MYSQL_USER_HOST=$(read_define MYSQL_USER_HOST)
 MYSQL_PASSWD=$(read_define MYSQL_PASSWD)
 MYSQL_DBNAME=$(read_define MYSQL_DBNAME)
 MYSQL_TBLNAME=$(read_define MYSQL_TBLNAME)
+
+# quote the account credentials
+# SQL_USER=$(sql_quote "$MYSQL_USER")
+# SQL_USER_HOST=$(sql_quote "$MYSQL_USER_HOST")
+# SQL_PASSWORD=$(sql_quote "$MYSQL_PASSWD")
 
 # Check identifiers before passing them onto MySQL.
 [[ "$MYSQL_DBNAME" =~ ^[A-Za-z0-9_]+$ ]] || {
@@ -69,35 +271,25 @@ MYSQL_TBLNAME=$(read_define MYSQL_TBLNAME)
     exit 1
 }
 
-mysql_cmd=(mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PASSWD" --database="$MYSQL_DBNAME" --batch --show-warnings)
+# mysql_cmd=(mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PASSWD" --database="$MYSQL_DBNAME" --batch --show-warnings)
 
 case "$MODE" in
-    --install-schema)
-        [[ -r "$SCHEMA" ]] || {
-            echo "ERROR: Cannot read $SCHEMA" >&2
-            exit 1
-        }
+    --create-database)
+        create_database
+	;;
 
-        echo "Installing IPscan schema into $MYSQL_DBNAME.$MYSQL_TBLNAME"
-        tmp=$(mktemp)
-        trap 'rm -f "$tmp"' EXIT
-        sed "s/\`results\`/\`$MYSQL_TBLNAME\`/g" "$SCHEMA" > "$tmp"
-        "${mysql_cmd[@]}" < "$tmp"
-        echo "Schema installation completed."
+    --install-schema)
+        install_schema
         ;;
 
     --upgrade)
-        echo "WARNING: This drops the configured results table."
-        read -r -p "Type DROP to continue: " answer
-
-        [[ "$answer" == "DROP" ]] || {
-            echo "Cancelled."
-            exit 1
-        }
-
-        "${mysql_cmd[@]}" --execute="DROP TABLE IF EXISTS \`$MYSQL_TBLNAME\`;"
-        echo "Upgrade table removal completed."
+	upgrade
         ;;
+
+    --purge-database)
+        purge_database || exit 1
+        ;;
+
 esac
 
 echo Done.

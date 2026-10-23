@@ -212,9 +212,10 @@
 	// 2.04 Further database and gcc/build adjustments
 	// 2.05 Move to binaries that use Linux setcap Network RAW capabilities - non-Linux builds will need some work!
 	// 2.06 Rename the PORT status codes to ensure description accuracy. Simplification of the rslt_struc structure (remove return/errno codes that are no longer used)
+	// 2.07 Manual, offline creation of database/table means grants to the IPscan database user can be more restrictive
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "2.06"
+	#define IPSCAN_VERNUM "2.07"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -239,8 +240,11 @@
 	// 0.01	- initial version when separated from IPSCAN_VER
 	// 0.02	- introduce IPSCAN_TEST_CLIENT_ADDRCHANGE - for testing only
 	// 1.00 - first version supporting raw sockets
+        // 1.01 - Add MYSQL_USER_HOST to support local and remote hosts.
+        //        Manual, offline creation of database/table means grants
+        //        to the IPscan database user can be more restrictive
 	//
-	#define IPSCAN_H_VER "1.00"
+	#define IPSCAN_H_VER "1.01"
 	//
 	//
 
@@ -269,6 +273,7 @@
 	// MySQL database-related globals
 	#define MYSQL_HOST "localhost"
 	#define MYSQL_USER "ipscan-user"
+	#define MYSQL_USER_HOST "localhost"
 	#define MYSQL_PASSWD "ipscan-passwd"
 	#define MYSQL_DBNAME "ipscan"
 	#define MYSQL_TBLNAME "results"
