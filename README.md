@@ -89,35 +89,35 @@ types/codes.
 
     5. For UPGRADES of existing installations execute the following steps:
 
-      $ ./database.bsh --upgrade
+       $ ./database.bsh --upgrade
 
-      Note: Answer 'y' when  prompted to delete the results table and runtime account.
+       Note: Answer 'y' when  prompted to delete the results table and runtime account.
 
-      $ ./database.bsh --install-schema
+       $ ./database.bsh --install-schema
 
-      Note: The message 'Schema installed; runtime privileges restricted to the 
+       Note: The message 'Schema installed; runtime privileges restricted to the 
             results table.' is indicative of a succesful installation.
 
     6. Make and install the binaries, using:
 
-      $ make && make install (default/recommended, equivalent to METHOD=caps)
+       $ make && make install (default/recommended, equivalent to METHOD=caps)
 
-      OR:
+       OR:
 
-      $ make METHOD=suid && make install METHOD=suid (alternative, using suid bits)
+       $ make METHOD=suid && make install METHOD=suid (alternative, using suid bits)
        
-      It is necessary to perform the 'make install' step as root, in order that the binaries
-      are able to be installed in the appropriately chowned cgi directory. Setting the 
-      ownership to root ensures the Apache user cannot overwrite the binaries and gain
-      CAP_NET_RAW capabilities.
+       It is necessary to perform the 'make install' step as root, in order that the binaries
+       are able to be installed in the appropriately chowned cgi directory. Setting the 
+       ownership to root ensures the Apache user cannot overwrite the binaries and gain
+       CAP_NET_RAW capabilities.
 
-      BUILD-RELATED NOTES: 
+       BUILD-RELATED NOTES: 
 
-      a. METHOD=caps : use the Linux capability flags to enable raw sockets
-      b. METHOD=suid : use root user and suid to enable raw sockets (deprecated)
-      c. the same METHOD must be used for the build and installation steps
-      d. METHOD=caps is the default, if METHOD is not expressly defined
-      e. if you wish to change METHOD then 'make clean' before rebuilding and installing
+       a. METHOD=caps : use the Linux capability flags to enable raw sockets
+       b. METHOD=suid : use root user and suid to enable raw sockets (deprecated)
+       c. the same METHOD must be used for the build and installation steps
+       d. METHOD=caps is the default, if METHOD is not expressly defined
+       e. if you wish to change METHOD then 'make clean' before rebuilding and installing
        
     7. Make sure that the URI path directory (which may well be accessed via an Apache alias)
        is enabled to execute cgi:
@@ -130,7 +130,7 @@ types/codes.
            Allow from 2000::/3
         </Directory>
         
-        Also disable client caching, having enabled the loading of mod_headers:
+       Also disable client caching, having enabled the loading of mod_headers:
        
         <IfModule mod_headers.c>
            # various cache-related headers to restrict storage
@@ -144,7 +144,7 @@ types/codes.
            Header always set Referrer-Policy strict-origin-when-cross-origin
         </IfModule>
        
-        Don't forget to restart your web server after making the appropriate modifications.
+       Don't forget to restart your web server after making the appropriate modifications.
     
     8. If you are using an SELinux-enabled distribution (e.g. Fedora) then it may be necessary
        to perform additional steps similar to those outlined below:
@@ -154,11 +154,11 @@ types/codes.
            # cd /var/www/cgi-bin6/ (use your selected installation path)
            # chcon -t httpd_unconfined_script_exec_t *.cgi
           
-        IMPORTANT NOTE:
+       IMPORTANT NOTE:
 
-        The steps listed in step 7 above are only indicative of what may be required, and 
-        depend upon your existing installation. Please consult the SELinux documentation for
-        further details. 
+       The steps listed in step 7 above are only indicative of what may be required, and 
+       depend upon your existing installation. Please consult the SELinux documentation for
+       further details. 
           
     9. Browse from a machine that you want testing towards your servers' IPv6 address, e.g. 
 
