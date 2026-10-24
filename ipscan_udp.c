@@ -66,9 +66,12 @@
 // 1.08			Updates to fix compilation warnings/errors in Ubuntu 24.04
 // 1.09			Ensure _exit() returns failure code, if appropriate
 // 1.10			Move to new UDP/ICMPv6 mappings
+// 1.11                 Add STUN support
+// 1.12			Add QUIC probe
+// 1.13			Add OpenVPN probe
 
 //
-#define IPSCAN_UDP_VER "1.10"
+#define IPSCAN_UDP_VER "1.13"
 //
 
 #include "ipscan.h"
@@ -1146,6 +1149,44 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			break;
 		}
 
+		case 443:
+		{
+			// QUIC
+			// Construct a QUIC Initial packet with a reserved/unsupported version
+			// to trigger an RFC 9000 Version Negotiation response.
+			txmessage[len++] = 0xc0; // Long header, Fixed bit = 1, Type = Initial
+			txmessage[len++] = 0xf0;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x01; // Unsupported test version
+			txmessage[len++] = 0x08; // DCID length = 8
+			for ( unsigned int t = 0 ; t < 2; t++ )
+			{
+				// 52 bits of session are actually valid
+				uint64_t rand_val = get_session();
+				for ( unsigned int u = 0 ; t < 4; t++ )
+				{
+					txmessage[len++] = ((rand_val >> (u*8)) & 0xff);
+				}
+			}
+			txmessage[len++] = 0x08; // SCID length = 8
+			for ( unsigned int t = 0 ; t < 2; t++ )
+			{
+				// 52 bits of session are actually valid
+				uint64_t rand_val = get_session();
+				for ( unsigned int u = 0 ; t < 4; t++ )
+				{
+					txmessage[len++] = ((rand_val >> (u*8)) & 0xff);
+				}
+			}
+			txmessage[len++] = 0x00; // token length
+			txmessage[len++] = 0x04; // length
+			txmessage[len++] = 0x01; // packet number
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // payload
+			break;
+		}
 		// IKEv2
 		case 500:
 		case 4500:
@@ -1883,6 +1924,20 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			break;
 		}
 
+		case 1194:
+		{
+			// OpenVPN
+			txmessage[len++] = 0x38; // (P_CONTROL_HARD_RESET_CLIENT_V2: Opcode 7 shifted left by 3 bits + Key ID 0)
+			for (unsigned int t = 0 ; t < 8 ; t++)
+			{
+				txmessage[len++] = 0x00; // Session ID = 0x0000000000000000
+			}
+			for (unsigned int t = 0 ; t < 4 ; t++)
+			{
+				txmessage[len++] = 0x00; // Packet ID = 0x00000000
+			}
+			break;
+		}
 
 		case 1900:
 		{
@@ -1904,6 +1959,30 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 
 			break;
 		}
+
+                case 3478:
+                {
+			// STUN - RFC5389 & RFC8489
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x01; // Binding request
+			txmessage[len++] = 0x00;
+			txmessage[len++] = 0x00; // Length: 0 attributes
+			txmessage[len++] = 0x21; 
+			txmessage[len++] = 0x12; 
+			txmessage[len++] = 0xa4; 
+			txmessage[len++] = 0x42; // Magic cookie
+			// 96-bits of transaction ID
+			for (unsigned int t = 0; t < 2 ; t++)
+			{
+				// get_session only holds 52 bits of data
+				uint64_t randval = get_session();
+				for (unsigned int u = 0; u < 6 ; u++)
+				{
+					txmessage[len++] = ((randval >> (8*u)) & 0xff);
+				}
+			}
+			break;
+                }
 
 		// LSP Ping
 		case 3503:

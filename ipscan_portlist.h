@@ -47,9 +47,12 @@
 // 0.23 - update copyright year
 // 0.24 - add UDP SIP
 // 0.25 - add LDAPS, MQTT (various)
+// 0.26 - add STUN UDP/3478
+// 0.27 - add QUIC probe UDP/443
+// 0.28 - add OpenVPN UDP/1194
 
 //
-#define IPSCAN_PORTLIST_VER "0.25"
+#define IPSCAN_PORTLIST_VER "0.28"
 //
 
 #include "ipscan.h"
@@ -165,10 +168,13 @@ const struct portlist_struc udpportlist[] =
 		{  161, 0, "SNMPv1" },\
 		{  161, 1, "SNMPv2c" },\
 		{  161, 2, "SNMPv3" },\
+		{  443, 0, "QUIC" },\
 		{  500, 0, "IKEv2 SA_INIT" },\
 		{  521, 0, "RIPng" },\
 		{  547, 0, "DHCPv6" },\
+		{ 1194, 0, "OpenVPN" },\
 		{ 1900, 0, "UPnP SSDP" },\
+		{ 3478, 0, "STUN" },\
 		{ 3503, 0, "MPLS LSP Ping" },\
 		{ 4500, 0, "IKEv2 NAT-T SA_INIT" },\
 		{ 5060, 0, "SIP" },\
