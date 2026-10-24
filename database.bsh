@@ -23,6 +23,7 @@
 # version      	description
 # 0.01          initial version
 # 0.02          clean up exit traps, remove unused code
+# 0.03          ensure consistency with SQL quoting
 
 set -euo pipefail
 umask 077
@@ -161,6 +162,7 @@ purge_database()
     echo "Purging database and runtime account..."
 
     "${ADMIN_MYSQL_CMD[@]}" --execute="
+        SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');
         DROP DATABASE IF EXISTS \`${MYSQL_DBNAME}\`;
         DROP USER IF EXISTS $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
     " || {
@@ -198,9 +200,11 @@ install_schema()
 
     # Check whether the runtime account exists before dropping it.
     if "${ADMIN_MYSQL_CMD[@]}" --skip-column-names --execute="
+        SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');
         SELECT COUNT(*) FROM mysql.user WHERE User = $(sql_quote "$MYSQL_USER") AND Host = $(sql_quote "$MYSQL_USER_HOST");
     " | grep -qx '1'; then
         "${ADMIN_MYSQL_CMD[@]}" --execute="
+            SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');
             DROP USER $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
         " || {
             echo "ERROR: Could not drop existing runtime account." >&2
@@ -210,6 +214,7 @@ install_schema()
 
     # Create the runtime account and grant table-only privileges.
     "${ADMIN_MYSQL_CMD[@]}" --execute="
+        SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');
         CREATE USER $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST") IDENTIFIED BY $(sql_quote "$MYSQL_PASSWD");
         GRANT SELECT, INSERT, UPDATE, DELETE ON \`${MYSQL_DBNAME}\`.\`${MYSQL_TBLNAME}\` TO $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
     " || {
@@ -236,6 +241,7 @@ upgrade()
     }
 
     "${ADMIN_MYSQL_CMD[@]}" --execute="
+        SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');
         DROP TABLE IF EXISTS \`${MYSQL_DBNAME}\`.\`${MYSQL_TBLNAME}\`;
         DROP USER IF EXISTS $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
     " || {  
