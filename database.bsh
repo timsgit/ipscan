@@ -20,8 +20,9 @@
 #    along with IPscan.  If not, see <http://www.gnu.org/licenses/>.
 #
 # database.bsh
-# version	description
-# 0.01 		initial version
+# version      	description
+# 0.01          initial version
+# 0.02          clean up exit traps, remove unused code
 
 set -euo pipefail
 umask 077
@@ -107,10 +108,15 @@ cleanup_admin()
     if [[ -n "${ADMIN_CNF:-}" ]]; then
         rm -f -- "$ADMIN_CNF"
     fi
+    if [[ -n "${TMPFILE:-}" ]]; then
+        rm -f -- "$TMPFILE"
+    fi
 }
 
 # register handler to remove stored credentials
+# and temporary file
 trap cleanup_admin EXIT
+
 create_database()
 {
     echo "Creating database $MYSQL_DBNAME."
@@ -175,28 +181,24 @@ install_schema()
     echo "Installing Schema and GRANTing minimal privileges to the "$MYSQL_TBLNAME" table."
     prompt_admin || exit 1
 
-    tmp=$(mktemp) || exit 1
-    trap 'rm -f "$tmp"' EXIT
+    TMPFILE=$(mktemp) || exit 1
 
-    echo "SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');" > "$tmp"
+    echo "SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@SESSION.sql_mode, ''), 'NO_BACKSLASH_ESCAPES');" > "$TMPFILE"
 
     # Substitute the validated configured table name.
-    sed "s/\`results\`/\`$MYSQL_TBLNAME\`/g" "$SCHEMA" >> "$tmp" ||
+    sed "s/\`results\`/\`$MYSQL_TBLNAME\`/g" "$SCHEMA" >> "$TMPFILE" ||
         exit 1
 
     # Run schema creation first.
     "${ADMIN_MYSQL_CMD[@]}" \
-        --database="$MYSQL_DBNAME" < "$tmp" || {
+        --database="$MYSQL_DBNAME" < "$TMPFILE" || {
         echo "ERROR: Schema creation failed." >&2
         exit 1
     }
 
     # Check whether the runtime account exists before dropping it.
     if "${ADMIN_MYSQL_CMD[@]}" --skip-column-names --execute="
-        SELECT COUNT(*)
-        FROM mysql.user
-        WHERE User = $(sql_quote "$MYSQL_USER")
-          AND Host = $(sql_quote "$MYSQL_USER_HOST");
+        SELECT COUNT(*) FROM mysql.user WHERE User = $(sql_quote "$MYSQL_USER") AND Host = $(sql_quote "$MYSQL_USER_HOST");
     " | grep -qx '1'; then
         "${ADMIN_MYSQL_CMD[@]}" --execute="
             DROP USER $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
@@ -208,11 +210,8 @@ install_schema()
 
     # Create the runtime account and grant table-only privileges.
     "${ADMIN_MYSQL_CMD[@]}" --execute="
-        CREATE USER $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST")
-            IDENTIFIED BY $(sql_quote "$MYSQL_PASSWD");
-        GRANT SELECT, INSERT, UPDATE, DELETE
-            ON \`${MYSQL_DBNAME}\`.\`${MYSQL_TBLNAME}\`
-            TO $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
+        CREATE USER $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST") IDENTIFIED BY $(sql_quote "$MYSQL_PASSWD");
+        GRANT SELECT, INSERT, UPDATE, DELETE ON \`${MYSQL_DBNAME}\`.\`${MYSQL_TBLNAME}\` TO $(sql_quote "$MYSQL_USER")@$(sql_quote "$MYSQL_USER_HOST");
     " || {
         echo "ERROR: Runtime account creation or privilege grant failed." >&2
         exit 1
@@ -247,6 +246,7 @@ upgrade()
     echo "Upgrade cleanup completed."
 }
 
+# Parse the ipscan.h file where the MYSQL_ variables are defined
 # this is the host the database server runs on
 MYSQL_HOST=$(read_define MYSQL_HOST)
 MYSQL_USER=$(read_define MYSQL_USER)
@@ -255,11 +255,6 @@ MYSQL_USER_HOST=$(read_define MYSQL_USER_HOST)
 MYSQL_PASSWD=$(read_define MYSQL_PASSWD)
 MYSQL_DBNAME=$(read_define MYSQL_DBNAME)
 MYSQL_TBLNAME=$(read_define MYSQL_TBLNAME)
-
-# quote the account credentials
-# SQL_USER=$(sql_quote "$MYSQL_USER")
-# SQL_USER_HOST=$(sql_quote "$MYSQL_USER_HOST")
-# SQL_PASSWORD=$(sql_quote "$MYSQL_PASSWD")
 
 # Check identifiers before passing them onto MySQL.
 [[ "$MYSQL_DBNAME" =~ ^[A-Za-z0-9_]+$ ]] || {
@@ -270,8 +265,6 @@ MYSQL_TBLNAME=$(read_define MYSQL_TBLNAME)
     echo "ERROR: Invalid table name" >&2
     exit 1
 }
-
-# mysql_cmd=(mysql --host="$MYSQL_HOST" --user="$MYSQL_USER" --password="$MYSQL_PASSWD" --database="$MYSQL_DBNAME" --batch --show-warnings)
 
 case "$MODE" in
     --create-database)
