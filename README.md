@@ -104,7 +104,7 @@ types/codes.
 
        OR:
 
-       $ make METHOD=suid && make install METHOD=suid (alternative, using suid bits)
+       $ make METHOD=suid && make install METHOD=suid (deprecated alternative, using suid)
        
        It is necessary to perform the 'make install' step as root, in order that the binaries
        are able to be installed in the appropriately chowned cgi directory. Setting the 
