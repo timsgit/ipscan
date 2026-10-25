@@ -69,9 +69,10 @@
 // 1.11                 Add STUN support
 // 1.12			Add QUIC probe
 // 1.13			Add OpenVPN probe
+// 1.14			Pad QUIC probe to QUIC_MIN_DATAGRAM_SIZE and fix CID generation
 
 //
-#define IPSCAN_UDP_VER "1.13"
+#define IPSCAN_UDP_VER "1.14"
 //
 
 #include "ipscan.h"
@@ -567,6 +568,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	if (PORTUNKNOWN == retval)
 	{
 		size_t rc_st = 0;
+		//
 		// Fill the txmessage with the appropriate message (depends on service)
 		switch (port)
 		{
@@ -1152,19 +1154,26 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 		case 443:
 		{
 			// QUIC
+			//
+			// NOTE: the full extent of the txmessage buffer is prefilled with 0
+			//
 			// Construct a QUIC Initial packet with a reserved/unsupported version
 			// to trigger an RFC 9000 Version Negotiation response.
-			txmessage[len++] = 0xc0; // Long header, Fixed bit = 1, Type = Initial
-			txmessage[len++] = 0xf0;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x01; // Unsupported test version
-			txmessage[len++] = 0x08; // DCID length = 8
+			// First Byte: Header Form (1), Fixed Bit (1), Type: Initial (00), Reserved (00), Packet Number Length (00) -> 0xC0
+			txmessage[len++] = 0xc0;
+			// Version Field: Using 0x41414141 (unrecognized) forces a "Version Negotiation" response
+			txmessage[len++] = 0x41;
+			txmessage[len++] = 0x41;
+			txmessage[len++] = 0x41;
+			txmessage[len++] = 0x41;
+			// Destination Connection ID (DCID) Length
+			txmessage[len++] = 0x08;
+			// Arbitrary 8-byte DCID
 			for ( unsigned int t = 0 ; t < 2; t++ )
 			{
 				// 52 bits of session are actually valid
 				uint64_t rand_val = get_session();
-				for ( unsigned int u = 0 ; t < 4; t++ )
+				for ( unsigned int u = 0 ; u < 4; u++ )
 				{
 					txmessage[len++] = ((rand_val >> (u*8)) & 0xff);
 				}
@@ -1174,17 +1183,24 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 			{
 				// 52 bits of session are actually valid
 				uint64_t rand_val = get_session();
-				for ( unsigned int u = 0 ; t < 4; t++ )
+				for ( unsigned int u = 0 ; u < 4; u++ )
 				{
 					txmessage[len++] = ((rand_val >> (u*8)) & 0xff);
 				}
 			}
-			txmessage[len++] = 0x00; // token length
-			txmessage[len++] = 0x04; // length
-			txmessage[len++] = 0x01; // packet number
+			// Token Length: 0x00 (QUIC Variable-length integer 0 specifies no token)
+			txmessage[len++] = 0x00;
+			// Length Field: Specifies remaining length. 
+			// For simplicity when forcing version negotiation, we encode a minimal payload length.
+			// 0x4002 is a 2-byte QUIC variable-length integer indicating 2 bytes follow.
+			txmessage[len++] = 0x40; 
+			txmessage[len++] = 0x02;
+
+			// Payload: Minimal dummy bytes (e.g., a short packet number status or padding marker)
 			txmessage[len++] = 0x00;
 			txmessage[len++] = 0x00;
-			txmessage[len++] = 0x00; // payload
+			// Pad out to minimum QUIC datagram size
+			len = QUIC_MIN_DATAGRAM_SIZE;
 			break;
 		}
 		// IKEv2
