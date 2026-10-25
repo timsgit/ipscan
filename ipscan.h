@@ -338,7 +338,6 @@
 		// Common options for testing - do NOT use in production 
 		#define IPSCAN_LOGVERBOSITY 1
 		#define CLIENTDEBUG 1
-		#define UDPOPENDEBUG 1
 	#endif
 	//
 	// Dump random number and backoff delay calculations
@@ -388,7 +387,8 @@
 	// #define IPSCAN_JS_CONSOLE_LOGGING 1
 
 	// TEST purposes only - do NOT enable
-	// #define IPSCAN_TEST_CLIENT_ADDRCHANGE 1
+	// #define UDPOPENDEBUG 1
+	// #define TCPOPENDEBUG 1
 
 	// debug option to only use tidy_up_only() - do NOT use in production
 	// #define IPSCAN_TIDY_UP_ONLY 1
@@ -699,7 +699,7 @@
 
 	// Timeout before results are deleted ...
 	// Should significantly exceed maximum test duration
-	#define IPSCAN_DELETE_TIMEOUT (160)
+	#define IPSCAN_DELETE_TIMEOUT (170)
 
 	// Sleep time between polls when waiting to delete results
 	#define IPSCAN_TESTSTATE_COMPLETE_SLEEP (JSONFETCHEVERY+1)
@@ -713,9 +713,9 @@
 	// or the client navigated away, etc. are deleted in relatively short order.
 	// All results, apart from the running state, older than the following will be deleted
 	// NOTE: time must be in seconds and exceed the longest time that a test can take to execute (IPSCAN_CLIENT_MAX_TIME_SECS above)
-	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (180)
+	#define IPSCAN_DELETE_RESULTS_SHORT_OFFSET (250)
 	// Everything (results and running state) older than the following (in seconds) will be deleted
-	#define IPSCAN_DELETE_EVERYTHING_LONG_OFFSET (240)
+	#define IPSCAN_DELETE_EVERYTHING_LONG_OFFSET (300)
 	//
 	// Delete minimum time - only delete from database if > this value
 	//

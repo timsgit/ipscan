@@ -51,9 +51,10 @@
 // 1.08			Make add/drop privileges a compile-time option
 // 1.09			Ensure _exit() returns failure code, if appropriate
 // 1.10			Move to new TCP/ICMPv6 mappings
+// 1.11			Add debug reporting to aid testing
 
 //
-#define IPSCAN_TCP_VER "1.10"
+#define IPSCAN_TCP_VER "1.11"
 //
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -619,6 +620,10 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 										IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: Connection accepted by HUT (SYN+ACK) in response to SYN to host %s port %u special %u\n",\
 											 hostname, my_tx_dst_port, special);
 										#endif
+										#ifdef TCPOPENDEBUG
+                                                                        	IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: TCPv6 response packet for HUT %s dstport %u special %u TCP loopcount %u\n",\
+                                                                                hostname, my_tx_dst_port, special, tcp_loopcount );
+                                                                        	#endif
 										retval = PORTTCPOPEN;
 									}
 									else if ((0 == tcphdr_ptr->rst) && (1 == tcphdr_ptr->ack) && (0 == tcphdr_ptr->syn) && (0 == tcphdr_ptr->fin))
