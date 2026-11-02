@@ -532,7 +532,7 @@ void result_to_string(uint32_t result, char * retstring)
 //
 // -----------------------------------------------------------------------------
 //
-void report_agent_string(char * agentstringvar, const char *varname, unsigned int error1ignore0)
+void report_agent_string(char * agentstringvar, const char *varname, unsigned int info1ignore0)
 {
 	// Note that none of this content can be trusted - so agressively limit the character set
 	char agentstring[ (MAXUSERAGENTLEN + 1) ];
@@ -542,9 +542,9 @@ void report_agent_string(char * agentstringvar, const char *varname, unsigned in
 
  	if ( NULL == agentstringvar )
         {
-		if (1 == error1ignore0)
+		if (1 == info1ignore0)
 		{
-                	IPSCAN_LOG( LOGPREFIX "ipscan: ERROR : %s variable lookup returned NULL.\n", varname);
+                	IPSCAN_LOG( LOGPREFIX "ipscan: INFO : %s variable lookup returned NULL.\n", varname);
 		}
         }
         else if ( strnlen(agentstringvar, (MAXUSERAGENTLEN+1)) > MAXUSERAGENTLEN )

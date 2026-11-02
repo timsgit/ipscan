@@ -44,7 +44,7 @@ void proto_to_string(uint32_t proto, char * retstring);
 void fetch_to_string(uint32_t fetchnum, char * retstring);
 char * state_to_string(uint64_t statenum, char * retstringptr, int retstringstart);
 void result_to_string(uint32_t result, char * retstring);
-void report_agent_string(char * agentstringvar, const char *varname, unsigned int error1ignore0);
+void report_agent_string(char * agentstringvar, const char *varname, unsigned int info1ignore0);
 void report_useragent_strings(char *uavar, char *secchuavar, char *secchuaarchvar, char *secchuaarchplatvar);
 int querystring_is_alphanum(char check);
 int querystring_is_valid(char check);
