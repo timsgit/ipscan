@@ -30,7 +30,7 @@ Centos 7, Fedora 16, Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry
 Raspbian and run alongside Apache versions 2.2 and 2.4.
 
 IPscan versions 2.05 and later are known to build on "Raspbian Debian GNU/Linux 11 (bullseye)"
-and "Raspbain Debian GNU/Linux 13 (trixie) and run alongside Apache version 2.4. Please let
+and "Raspbian Debian GNU/Linux 13 (trixie) and run alongside Apache version 2.4. Please let
 me know of build successes/failures on unlisted platforms.
 
 NOTE: For releases >= version 2.00, IPscan has been updated to exclusively use raw sockets.
