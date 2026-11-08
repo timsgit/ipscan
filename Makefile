@@ -64,7 +64,7 @@ PING_AVAILABLE=1
 #
 # If you are using Linux with CAP_NET_RAW support then include
 # METHOD=caps in the make command, e.g. make METHOD=caps && make install METHOD=caps
-#	this will build a binary owned by the Apache user and including CAP_NET_RAW support
+#	this will build a binary owned by the root user and including CAP_NET_RAW support
 #
 # If you are NOT using Linux, or a version of Linux without CAP_NET_RAW support, then include
 # METHOD=suid in the make command, e.g. make METHOD=suid && make install METHOD=suid
