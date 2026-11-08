@@ -24,6 +24,7 @@
 // VERSION HISTORY
 //
 // 0.1  first version - to ensure web function APIs are consistent
+// 0.2  add send_503_busy() for server overload handling
 
 #include "ipscan.h"
 #include <stdint.h>
@@ -35,6 +36,7 @@
 //
 const char* ipscan_web_ver(void);
 void create_json_header(void);
+void send_503_busy(void);
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery);
 // starttime is of type time_t in create_html_body() calls:
 void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint16_t numudpports, const struct portlist_struc *portlist, const struct portlist_struc *udpportlist);

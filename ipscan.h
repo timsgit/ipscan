@@ -213,9 +213,10 @@
 	// 2.05 Move to binaries that use Linux setcap Network RAW capabilities - non-Linux builds will need some work!
 	// 2.06 Rename the PORT status codes to ensure description accuracy. Simplification of the rslt_struc structure (remove return/errno codes that are no longer used)
 	// 2.07 Manual, offline creation of database/table means grants to the IPscan database user can be more restrictive
+	// 2.08 Add server resource limit checks
 
 	// ipscan Version Number
-	#define IPSCAN_VERNUM "2.07"
+	#define IPSCAN_VERNUM "2.08"
 
 	// ipscan type
 	#if (TEXTMODE == 0)
@@ -243,8 +244,9 @@
         // 1.01 - Add MYSQL_USER_HOST to support local and remote hosts.
         //        Manual, offline creation of database/table means grants
         //        to the IPscan database user can be more restrictive
+	// 1.02 - Add resource limit checks (to prevent overload)
 	//
-	#define IPSCAN_H_VER "1.01"
+	#define IPSCAN_H_VER "1.02"
 	//
 	//
 
@@ -294,6 +296,31 @@
 	//
 	#define IPSCAN_BACKOFF_BASE_DELAY_US (5000)
 	#define IPSCAN_BACKOFF_MAX_DELAY_US  (1000000)
+
+	// Server resource checks/control - fallback definition only - see Makefile
+	//
+	// Maximum number of simultaneous scans (0 = unlimited).
+	//
+	#ifndef IPSCAN_MAX_SCANS
+	#define IPSCAN_MAX_SCANS (0)
+	#endif
+	//
+	// Directory for slot lock files - fallback definition only - see Makefile
+	// Must exist, and be owned by the Apache user/group, mode 0700
+	//
+	#ifndef IPSCAN_SLOT_DIR
+	#define IPSCAN_SLOT_DIR "/tmp/ipscan"
+	#endif
+	//
+	// Delay in seconds before retry after we hit the maximum number of scans
+	//
+	#define IPSCAN_RETRYAFTER_SECONDS (30)
+	//
+	// Define slot return codes
+	//
+	#define IPSCAN_SLOT_OK    0
+	#define IPSCAN_SLOT_BUSY  1
+	#define IPSCAN_SLOT_ERROR 2
 
 	//
 	// Wait between DB ACCESS ATTEMPTS - in seconds and nanoseconds

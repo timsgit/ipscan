@@ -30,8 +30,8 @@ Centos 7, Fedora 16, Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry
 Raspbian and run alongside Apache versions 2.2 and 2.4.
 
 IPscan versions 2.05 and later are known to build on "Raspbian Debian GNU/Linux 11 (bullseye)"
-and run alongside Apache version 2.4. Please let me know of build successes/failures on
-unlisted platforms.
+and "Raspbain Debian GNU/Linux 13 (trixie) and run alongside Apache version 2.4. Please let
+me know of build successes/failures on unlisted platforms.
 
 NOTE: For releases >= version 2.00, IPscan has been updated to exclusively use raw sockets.
 As a result, IPscan can now provide feedback on mid-point devices and all ICMPv6 response
@@ -58,13 +58,13 @@ types/codes.
             webserver will be world-accessible
          b. INCLUDETERMSOFUSE and TERMSOFUSEURL if you wish to reference a terms of use
             page on your website
-         c. MYSQL_XXXX - Adjust the following constants to match the settings of your
-            MySQL database server: 
-               MYSQL_HOST - the hostname or IP address of the machine hosting
+         c. MYSQL_XXXX - Adjust at least the following constants to match the 
+            deployment of your MySQL/MariaDB database server: 
+               MYSQL_HOST    - the hostname or IP address of the machine hosting
                      the MySQL database
-               MYSQL_USER - the username used to access the IPscan database
-               MYSQL_PASSWD - the password used to identify the MySQL user
-               MYSQL_DBNAME - the name of the IPscan database
+               MYSQL_USER    - the username used to access the IPscan database
+               MYSQL_PASSWD  - the password used to identify the MySQL user
+               MYSQL_DBNAME  - the name of the IPscan database
                MYSQL_TBLNAME - the name of the database table in which IPscan
                      results will be stored
 
@@ -110,6 +110,17 @@ types/codes.
        are able to be installed in the appropriately chowned cgi directory. Setting the 
        ownership to root ensures the Apache user cannot overwrite the binaries and gain
        CAP_NET_RAW capabilities.
+
+       If you are running the scanner on a low bandwidth or resource constrained server
+       then it is possible to limit the number of simultaneous scans performed by specifying
+       something similar to:
+
+       make IPSCAN_MAX_SCANS=3 && make install
+
+       Many other parameters can be specified using a similar approach at build-time.
+       Read the Makefile for details. In general, when changing any compile-time setting
+       it is recommended that a 'make clean' step is performed before building or 
+       installing the new executables.
 
        BUILD-RELATED NOTES: 
 
@@ -166,7 +177,7 @@ types/codes.
 
        or: 
 
-       $ w3m https://[2001:470:971f:99::6]/cgi-bin6/ipscantxt.cgi
+       $ lynx https://[2001:470:971f:99::66]/cgi-bin6/ipscantxt.cgi
 
     10.Check the web server access/error logs or Syslog for messages. IPscan will place summary
        messages in the web server error log or Syslog if enabled to do so (this is NOT the default

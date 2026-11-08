@@ -48,9 +48,10 @@
 // 0.28 - check returns for fclose()
 // 0.29 - remove unnecessary line feed from flags summary
 // 0.30 - add validate_ipv6addr_string()
+// 0.31 - add server scan slot reservation to manage resource usage
 
 //
-#define IPSCAN_GENERAL_VER "0.30"
+#define IPSCAN_GENERAL_VER "0.31"
 //
 
 #include "ipscan.h"
@@ -87,8 +88,11 @@
 #include <syslog.h>
 #endif
 
-// fcntl
+// open
 #include <fcntl.h>
+
+// provides flock
+#include <sys/file.h>
 
 //
 // report version
@@ -907,6 +911,57 @@ void validate_ipv6addr_string(char *address)
 			address[i] = 32;
 		}
 	}
+}
+//
+// -----------------------------------------------------------------------------
+//
+// Acquire  one of the IPSCAN_MAX_SCANS slots. The lock is tied to the open file descriptor,
+// so a forked child inherits it and it is freed only when every holder closes/exits, or dies.
+//
+int scan_slot_acquire(int *slotfd)
+{
+	*slotfd = -1;
+	#if (IPSCAN_MAX_SCANS > 0)
+	char path[256];
+	for (unsigned int i = 0; i < IPSCAN_MAX_SCANS; i++)
+	{
+		int n = snprintf(path, sizeof(path), "%s/slot%u", IPSCAN_SLOT_DIR, i);
+		if (n < 0 || (size_t)n >= sizeof(path))
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: slot path too long\n");
+			return IPSCAN_SLOT_ERROR;
+		}
+
+		int fd = open(path, O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+		if (fd < 0)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: open(%s) failed %d (%s)\n", path, errno, strerror(errno));
+			return IPSCAN_SLOT_ERROR;   // fail closed: a broken limiter must not silently disable itself
+		}
+		int rc;
+		do 
+		{
+			rc = flock(fd, LOCK_EX | LOCK_NB);
+		} while (0 != rc && EINTR == errno);
+
+		if (0 == rc)
+		{
+			*slotfd = fd;
+			return IPSCAN_SLOT_OK;
+		}
+
+		int e = errno;
+		close(fd);
+		if (EWOULDBLOCK != e && EAGAIN != e)
+		{
+			IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: flock(%s) failed %d (%s)\n", path, e, strerror(e));
+			return IPSCAN_SLOT_ERROR;
+		}
+	}
+	return IPSCAN_SLOT_BUSY;
+	#else
+	return IPSCAN_SLOT_OK;
+	#endif
 }
 //
 // -----------------------------------------------------------------------------

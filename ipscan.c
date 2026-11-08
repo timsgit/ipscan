@@ -147,9 +147,10 @@
 // 1.24 - ensure wait() for fork()ed child processes reports exit status correctly
 // 1.25 - Move to new TCP/UDP/ICMPv6 mappings
 // 1.26 - add IPv6 address string validation for UDP and TCP indirect hosts
+// 1.27 - add server resource limit handling - report 503
 
 //
-#define IPSCAN_MAIN_VER "1.26"
+#define IPSCAN_MAIN_VER "1.27"
 //
 
 #include "ipscan.h"
@@ -297,6 +298,10 @@ int main(void)
 	char remoteaddrstring[INET6_ADDRSTRLEN+1];
 	char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
 	char *remoteaddrvar;
+
+	// Clear both the address strings
+	memset(remoteaddrstring, 0, INET6_ADDRSTRLEN+1);
+	memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
 
 	// "general purpose" variables, used as required
 	int rc;
@@ -1096,6 +1101,17 @@ int main(void)
 
 		if ( numqueries >= (NUMUSERDEFPORTS + 2) && (numcustomports == NUMUSERDEFPORTS) && (0 != includeexisting) && (1 == termsaccepted) )
 		{
+
+			// Concurrent-scan limit reached. The slot is held by this process and inherited by any
+			// children, so it frees itself when the last of them exits
+			int slotfd = -1;
+			if (IPSCAN_SLOT_OK != scan_slot_acquire(&slotfd))
+			{
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: scan limit reached, rejecting text-mode scan for %s\n", saferemoteaddrstring);
+				send_503_busy();
+				return(EXIT_SUCCESS);
+			}
+
 			// tidyup only called for start of test
 			tidyup_required = 1;
 
@@ -2214,11 +2230,24 @@ int main(void)
 			(( beginscan == 1 && fetch == 0 && restart_flag == -1) || \
 			 ( beginscan == 0 && fetch == 1 && restart_flag == 1 && (int)IPSCAN_SUCCESSFUL_COMPLETION > fetchnum)))
 		{
-                        rc = -1;
+
+			// Concurrent-scan limit reached - covers both beginscan and the fetch-triggered restart case
+			// The slot is held by this process and inherited by the port-scan children, so it frees itself when the last of them exits
+			int slotfd = -1;
+			int slotrc = scan_slot_acquire(&slotfd);
+			if (IPSCAN_SLOT_OK != slotrc)
+			{
+				// Nothing has been written yet, so a clean 503 is possible
+				IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: scan limit reached (rc %d), rejecting %s for %s\n", slotrc, (1 == beginscan) ? "beginscan" : "restart", saferemoteaddrstring);
+				send_503_busy();
+				return(EXIT_SUCCESS);
+			}
+
+			rc = -1;
                         unsigned int z;
 			const char unusedfield[] = "unused";
                         // make up to IPSCAN_DB_ACCESS_ATTEMPTS attempts in case of deadlock
-                        for (z = 0 ; z < IPSCAN_DB_ACCESS_ATTEMPTS && rc != 0; z++)
+			for (z = 0 ;((z < IPSCAN_DB_ACCESS_ATTEMPTS) && (rc != 0)); z++)
                         {
                                 // Insert a database entry for test state - indicate test is NOW running
                                 rc = write_db(remotehost_msb, remotehost_lsb, querystarttime, querysession, IPSCAN_TESTSTATE_AS_PORTNUM, IPSCAN_TESTSTATE_RUNNING_BIT, unusedfield);
@@ -2246,7 +2275,6 @@ int main(void)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ERROR: javascript-mode write_db for IPSCAN_PROTO_TESTSTATE RUNNING loop exited with rc: %d\n", rc);
                         }
-
 
 			if (beginscan == 1 && fetch == 0 && restart_flag == -1)
 			{

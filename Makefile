@@ -45,6 +45,7 @@
 # 0.26 - add the new header files
 # 0.27 - move to support Linux capabilities as well as root/suid approach
 # 0.28 - various fixes, typos and other improvements
+# 0.29 - add support for server resource limit checks/report 
 
 # -------------------------------------------------------------------------
 # Support builds without UDP port scans
@@ -87,6 +88,25 @@ CAPNETRAW0_ROOTSUID1 := 0
 endif
 # -------------------------------------------------------------------------
 
+# -------------------------------------------------------------------------
+# Find the Apache control binary (name varies by distro)
+APACHECTL ?= $(shell for c in apache2ctl apachectl httpd; do command -v $$c && break; done)
+# Detect the WEBUSER unless the caller supplied one (make WEBUSER=foo)
+ifeq ($(origin WEBUSER),undefined)
+WEBUSER := $(shell $(APACHECTL) -S 2>/dev/null | sed -n 's/^User: name="\([^"]*\)".*/\1/p' | head -n1)
+endif
+# Detect the WEBGROUP unless the caller supplied one (make WEBGROUP=foo)
+ifeq ($(origin WEBGROUP),undefined)
+WEBGROUP := $(shell $(APACHECTL) -S 2>/dev/null | sed -n 's/^Group: name="\([^"]*\)".*/\1/p' | head -n1)
+endif
+#
+# Directory for IPscan lock files
+IPSCAN_SLOT_DIR ?= /var/lib/ipscan
+# Define the maximum number of simultaneous IPscans (default to 0==unlimited)
+ifeq ($(origin IPSCAN_MAX_SCANS),undefined)
+IPSCAN_MAX_SCANS := 0
+endif
+# -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # Use install for binary installation
@@ -142,14 +162,14 @@ CFLAGS+= -D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64
 
 # -------------------------------------------------------------------------
 # Text-version target executable name
-TXTTARGET=ipscantxt.cgi
-FASTTXTTARGET=ipscanfasttxt.cgi
+TXTTARGET=ipscantxtbeta.cgi
+FASTTXTTARGET=ipscanfasttxtbeta.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # Javascript-version target executable name
-JSTARGET=ipscanjs.cgi
-FASTJSTARGET=ipscanfastjs.cgi
+JSTARGET=ipscanjsbeta.cgi
+FASTJSTARGET=ipscanfastjsbeta.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
@@ -182,6 +202,7 @@ CMNPARAMS= $(DEBUG) -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEX
 CMNPARAMS+= -DEXEFASTTXTNAME=\"$(FASTTXTTARGET)\" -DEXEFASTJSNAME=\"$(FASTJSTARGET)\" 
 CMNPARAMS+= -DURIPATH=\"$(URIPATH)\" -DPING_AVAILABLE=$(PING_AVAILABLE) -DUDP_AVAILABLE=$(UDP_AVAILABLE) 
 CMNPARAMS+= -DCAPNETRAW0_ROOTSUID1=$(CAPNETRAW0_ROOTSUID1) 
+CMNPARAMS+= -DIPSCAN_SLOT_DIR=\"$(IPSCAN_SLOT_DIR)\" -DIPSCAN_MAX_SCANS=$(IPSCAN_MAX_SCANS)
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 -DFAST=0 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 -DFAST=0 $(CMNPARAMS)
 FASTTXTPARAMS=$(CFLAGS) -DTEXTMODE=1 -DFAST=1 $(CMNPARAMS)
@@ -282,6 +303,8 @@ strip: $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 install : check-method $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET) strip
 	@echo "Installing IPscan CGI executables"
 	$(INSTALL_DIR) -o root -g root -m 0755 $(DESTDIR)$(TARGETDIR)
+	@echo "Creating the IPscan SLOTS directory"
+	$(INSTALL_DIR) -o $(WEBUSER) -g $(WEBGROUP) -m 0700 $(IPSCAN_SLOT_DIR)
 	$(INSTALL_PROGRAM) -o root -g root $(TXTTARGET) $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
 	$(INSTALL_PROGRAM) -o root -g root $(FASTTXTTARGET) $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
 	$(INSTALL_PROGRAM) -o root -g root $(JSTARGET) $(DESTDIR)$(TARGETDIR)/$(JSTARGET)

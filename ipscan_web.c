@@ -111,8 +111,9 @@
 // 1.12 - ensure navigate-away event stops other XHR fetches
 // 1.13 - only report status change using XHR fetches when running
 // 1.14 - change to use textContent instead of innerHTML when updating DOM
+// 1.15 - add 503 response handling - server tooBusy
 
-#define IPSCAN_WEB_VER "1.14"
+#define IPSCAN_WEB_VER "1.15"
 
 #include "ipscan.h"
 
@@ -234,6 +235,16 @@ void create_json_header(void)
 	printf("%s%c%c\n","Content-type:application/json;charset=utf-8",13,10);
 }
 
+// Return a code 503 - service unavailable (too busy)
+void send_503_busy(void)
+{
+    printf("Status: 503 Service Unavailable\r\n");
+    printf("Retry-After: %d\r\n", IPSCAN_RETRYAFTER_SECONDS);
+    printf("Cache-Control: no-store\r\n");
+    printf("Content-Type: text/plain; charset=UTF-8\r\n\r\n");
+    printf("The scanner is at capacity. Please retry in %d seconds.\n", IPSCAN_RETRYAFTER_SECONDS);
+}
+
 void create_html_header(uint16_t numports, uint16_t numudpports, char * reconquery)
 {
 	uint16_t i;
@@ -247,15 +258,16 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// Globals
 	//
 	// scanState:
-        //      new :           set when starting (ie at point scanState is first defined below)
-        //      initialising :  set as main() begins running. main() will exit immediately if (scanState !== new) when entered
+        //      new:            set when starting (ie at point scanState is first defined below)
+        //      initialising:   set as main() begins running. main() will exit immediately if (scanState !== new) when entered
         //                      to ensure that only a single instance of main() ever runs
         //      starting:       set as XHR GET is called to begin scan
 	//	running:	set by regular update() function
-        //      navAway :       set within HTTPNavAway() which is called by window.onbeforeunload
+	//	tooBusy:	server has responded with 503 to indicate too busy
+        //      navAway:        set within HTTPNavAway() which is called by window.onbeforeunload
         //                      HTTPNavAway() checks scanState - if it is alread NavAway then it exits immediately
         //                      to prevent multiple Navigate-Away events being lodged at the server
-        //      done :          set once a json array of the expected result-set size has been received
+        //      done:           set once a json array of the expected result-set size has been received
         //                      and HTTPFinished() has been called.
 	//
 	printf(" let scanState = \"new\";");
@@ -339,6 +351,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" if (myXmlHttpInitObj.readyState < 4) { myXmlHttpInitObj.abort(); }");
 	printf(" scanState = \"starting\";");
 	printf(" myXmlHttpInitObj.open(\"GET\", startURL, true);");
+	printf(" myXmlHttpInitObj.onreadystatechange = function(){ if (myXmlHttpInitObj.readyState == 4 && myXmlHttpInitObj.status == 503) { handleScannerBusy(myXmlHttpInitObj); } };");
 	printf(" myXmlHttpInitObj.send(null);");
 	//
 	// create other URLs with the same session and starttime parameters
@@ -365,9 +378,11 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	// Wait 3s before enabling periodic update() so that myXmlHttpInitObj GET has occurred
 	// NOTE: non-blocking call so initialisation below this step will occur
 	//
-	printf(" setTimeout(() => {");
-	printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
-	printf(" }, 3000);");
+ 	printf(" setTimeout(() => {");
+	// add handling for navAway AND tooBusy case
+        printf(" if (scanState === \"tooBusy\" || scanState === \"navAway\") { return; }");
+        printf(" myInterval = setInterval(function(){update(); }, %d);", (JSONFETCHEVERY*1000) );
+        printf(" }, 3000);");
 
 	// create a prefilled array containing the potential states returned for each port
 	printf("const retVals = [");
@@ -533,6 +548,37 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" myXmlHttpErrObj.send(null);");
 	printf(" }\n");
 
+	// function to handle the server reporting it is at capacity (HTTP 503)
+        printf("function handleScannerBusy(request)");
+        printf(" {");
+        // only meaningful while a scan is being started or running (being polled)
+        printf(" if (scanState !== \"starting\" && scanState !== \"running\")");
+        printf(" {");
+        printf(" return;");
+        printf(" }");
+        // set the state first, so handlers fired by the aborts below return early
+        printf(" scanState = \"tooBusy\";");
+        printf(" clearTimeout(myHTTPTimeout);");
+        printf(" clearInterval(myInterval);");
+        printf(" clearInterval(myBlink);");
+        // nothing is running on the server, so don't prompt or report navigate-away
+        printf(" window.onbeforeunload = null;");
+        printf(" if (myXmlHttpInitObj.readyState < 4) { myXmlHttpInitObj.abort(); }");
+        printf(" if (myXmlHttpReqObj.readyState < 4) { myXmlHttpReqObj.abort(); }");
+        printf(" let retryAfter = parseInt(request.getResponseHeader(\"Retry-After\"), 10);");
+        printf(" if (isNaN(retryAfter) || retryAfter < 1) { retryAfter = %d; }", IPSCAN_RETRYAFTER_SECONDS);
+	// report to the user that the scanner is too busy
+        printf(" const stateCell = document.getElementById(\"scanstate\");");
+        printf(" stateCell.textContent = \"SERVER TOO BUSY\";");
+        printf(" stateCell.style.color = \"red\";");
+        printf(" stateCell.title = \"scanner at capacity\";");
+        printf(" const busyMsg = document.getElementById(\"busymsg\");");
+        printf(" if (busyMsg !== null)");
+        printf(" {");
+        printf(" busyMsg.textContent = \"The scanner is currently at capacity and no scan was started. Please reload this page and try again in about \" + retryAfter + \" seconds.\";");
+        printf(" }");
+        printf(" }\n");
+
 	// Page Exit Handler
 	printf("const pageExitHandler = function(peh)");
 	printf(" {");
@@ -580,15 +626,24 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
       	printf(" return ( (Math.floor(Math.random() * (Math.pow(2,31) - 1))).toString() );");
     	printf(" }");
   	printf(" }\n");
+
 	//
 	// Normal fetch handling
 	//
 	printf("function myStateChange(request, fetchnum)");
 	printf(" {");
-	printf(" if (scanState === \"navAway\")");
+	// early exit for both navAway and tooBusy
+	printf(" if (scanState === \"navAway\" || scanState === \"tooBusy\")");
 	printf(" {");
 	printf(" return;");
 	printf(" }");
+	// call function to report scanner tooBusy
+	printf(" if (request.readyState == 4 && request.status == 503)");
+        printf(" {");
+        printf(" handleScannerBusy(request);");
+        printf(" return;");
+        printf(" }");
+
 	printf(" let i, j, psp, proto, special, port, result, host, textupdate, colourupdate, elemid, latestState = [];");
 	printf(" if (request.readyState == 4 && request.status == 200)");
 	printf(" {");
@@ -817,7 +872,8 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	//
 	printf("function update()");
 	printf(" {");
-	printf(" if (scanState === \"navAway\")");
+	// return early for both navAway and tooBusy cases
+	printf(" if (scanState === \"navAway\" || scanState === \"tooBusy\")");
 	printf(" {");
 	printf(" return;");
 	printf(" }");
@@ -826,7 +882,7 @@ void create_html_header(uint16_t numports, uint16_t numudpports, char * reconque
 	printf(" fetches += 1;"); // increment the fetch counter
 	printf(" var updateURL = commonURL + \"&%s&fetch=\" + fetches;", reconquery);
 	// exit based on number of attempted fetches
-	printf(" const testMaxFetches = Math.max(%u,%u);", (unsigned int)(5+(24+(numudpports*UDPTIMEOUTSECS)+(numports*TIMEOUTSECS))/JSONFETCHEVERY), (unsigned int)(5+(IPSCAN_CLIENT_MAX_TIME_SECS / JSONFETCHEVERY)) );
+	printf(" const testMaxFetches = Math.max(%u,%u);",(unsigned int)(5+(24+(numudpports*UDPTIMEOUTSECS)+(numports*TIMEOUTSECS))/JSONFETCHEVERY),(unsigned int)(5+(IPSCAN_CLIENT_MAX_TIME_SECS/JSONFETCHEVERY)));
         #ifdef IPSCAN_JS_CONSOLE_LOGGING
 	printf(" console.log('testMaxFetches  : ',testMaxFetches.toString());");
 	printf(" console.log('       fetches  : ',fetches.toString());");
@@ -944,6 +1000,9 @@ void create_html_body(char * hostname, time_t timestamp, uint16_t numports, uint
 	printf("</tr>\n");
 	#endif
 	printf("</table>\n");
+
+	// Add id for reporting server tooBusy
+	printf("<p id=\"busymsg\" style=\"font-weight: bold; color: red\"></p>\n");
 
 	if (0 < numudpports)
 	{
