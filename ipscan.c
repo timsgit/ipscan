@@ -148,9 +148,10 @@
 // 1.25 - Move to new TCP/UDP/ICMPv6 mappings
 // 1.26 - add IPv6 address string validation for UDP and TCP indirect hosts
 // 1.27 - add server resource limit handling - report 503
+// 1.28 - fix some rocky linux build issues
 
 //
-#define IPSCAN_MAIN_VER "1.27"
+#define IPSCAN_MAIN_VER "1.28"
 //
 
 #include "ipscan.h"
@@ -2471,8 +2472,12 @@ int main(void)
                         if (0 != ih_adjusted)
                         {
                                 IPSCAN_LOG( LOGPREFIX "ipscan: ICMPv6 indirecthost was updated, exiting with i = %u and \"%s\"\n", i, indirecthost);
-                                IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[0:7] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[0], indirecthost2[1], indirecthost2[2], indirecthost2[3], indirecthost2[4], indirecthost2[5], indirecthost2[6], indirecthost2[7] );
-                                IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[8:15] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", indirecthost2[8], indirecthost2[9], indirecthost2[10], indirecthost2[11], indirecthost2[12], indirecthost2[13], indirecthost2[14], indirecthost2[15] );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[0:7] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", (unsigned int)indirecthost2[0], (unsigned int)indirecthost2[1], \
+					(unsigned int)indirecthost2[2], (unsigned int)indirecthost2[3], (unsigned int)indirecthost2[4], (unsigned int)indirecthost2[5], \
+					(unsigned int)indirecthost2[6], (unsigned int)indirecthost2[7] );
+                                IPSCAN_LOG( LOGPREFIX "ipscan: indirecthost[8:15] %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x\n", (unsigned int)indirecthost2[8], (unsigned int)indirecthost2[9], \
+					(unsigned int)indirecthost2[10], (unsigned int)indirecthost2[11], (unsigned int)indirecthost2[12], (unsigned int)indirecthost2[13], \
+					(unsigned int)indirecthost2[14], (unsigned int)indirecthost2[15] );
 
                         }
 

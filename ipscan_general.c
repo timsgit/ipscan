@@ -49,9 +49,10 @@
 // 0.29 - remove unnecessary line feed from flags summary
 // 0.30 - add validate_ipv6addr_string()
 // 0.31 - add server scan slot reservation to manage resource usage
+// 0.32 - fix some rocky linux build issues
 
 //
-#define IPSCAN_GENERAL_VER "0.31"
+#define IPSCAN_GENERAL_VER "0.32"
 //
 
 #include "ipscan.h"
@@ -807,9 +808,9 @@ uint32_t get_random32(void)
 //
 uint16_t get_ephemeral(void)
 {
-	uint16_t ephemeral = 61000;
-        uint16_t random16 = 0;
-        uint16_t fetchedvalue = 0;
+	uint16_t ephemeral = (uint16_t)61000;
+        uint16_t random16 = (uint16_t)0;
+        uint16_t fetchedvalue = (uint16_t)0;
         FILE *fp;
         fp = fopen("/dev/urandom", "r");
 
@@ -828,7 +829,7 @@ uint16_t get_ephemeral(void)
 		}
                 if (1 == numitems)
                 {
-                        random16 = fetchedvalue;
+                        random16 = (uint16_t)fetchedvalue;
                 }
                 else
                 {
@@ -837,7 +838,7 @@ uint16_t get_ephemeral(void)
                 }
         }
 	// Linux ephemeral ports usually finish at 60999, so start above there. 12 additional bits represents + 0 through 4095
-	ephemeral += (random16 & 0xfff);
+	ephemeral = (uint16_t)(ephemeral + (random16 & (uint16_t)0x0fff));
 	#ifdef PORTDEBUG
         IPSCAN_LOG( LOGPREFIX "ipscan: get_ephemeral() returning %u, from lowest 12-bits of random16 %u\n", ephemeral, random16);
 	#endif

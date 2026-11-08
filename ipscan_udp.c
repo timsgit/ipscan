@@ -70,9 +70,10 @@
 // 1.12			Add QUIC probe
 // 1.13			Add OpenVPN probe
 // 1.14			Pad QUIC probe to QUIC_MIN_DATAGRAM_SIZE and fix CID generation
+// 1.15			fix some rocky linux build issues
 
 //
-#define IPSCAN_UDP_VER "1.14"
+#define IPSCAN_UDP_VER "1.15"
 //
 
 #include "ipscan.h"
@@ -2477,7 +2478,7 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 
 	// calculate the udp checksum from check_buf data - total length is pseudo-header + UDP header + message body
 	// put the result into udp->check
-    	udp->check = checksum((unsigned short*)check_buf, sizeof(ph) + udp_len);
+    	udp->check = checksum((unsigned short*)check_buf, (int)(sizeof(ph) + udp_len));
 
 	// add the txmessage octets to the end of the send_buf (the buffer we'll actually transmit)
 	// it alread has the udp header (inc checksum) at the start, so offset appropriately
