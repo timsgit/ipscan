@@ -162,14 +162,14 @@ CFLAGS+= -D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64
 
 # -------------------------------------------------------------------------
 # Text-version target executable name
-TXTTARGET=ipscantxtbeta.cgi
-FASTTXTTARGET=ipscanfasttxtbeta.cgi
+TXTTARGET=ipscantxt.cgi
+FASTTXTTARGET=ipscanfasttxt.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # Javascript-version target executable name
-JSTARGET=ipscanjsbeta.cgi
-FASTJSTARGET=ipscanfastjsbeta.cgi
+JSTARGET=ipscanjs.cgi
+FASTJSTARGET=ipscanfastjs.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
