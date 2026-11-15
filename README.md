@@ -24,15 +24,15 @@ IPscan requires access to a MySQL, or MariaDB, database and the associated clien
 libraries (libmysqlclient-dev or similar) to be installed on the server which will act as
 your scanner. The database is used to *temporarily* hold scan results until shortly after
 the test completes. The latest versions also need the Linux capabilities development library
-(libcap-dev or similar) and binaries installed. 
+(libcap-dev or similar), and binaries installed. 
 
 Versions 2.04 and earlier were known to build on: openSUSE versions 11.1/11.4/12.1/13.1,
 Centos 7, Fedora 16, Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and
 Raspbian and run alongside Apache versions 2.2 and 2.4.
 
 IPscan versions 2.05 and later are known to build on "Raspbian Debian GNU/Linux 11 (bullseye)",
-"Raspbian Debian GNU/Linux 13 (trixie), Rocky Linux 8, Rocky Linux 9. and run alongside Apache
-version 2.4. Please let me know of build successes/failures on unlisted platforms.
+"Raspbian Debian GNU/Linux 13 (trixie)", Rocky Linux 8, Rocky Linux 9, and run alongside Apache
+version 2.4. Please let me know of build successes/failures on other platforms.
 
 NOTE: For releases >= version 2.00, IPscan has been updated to exclusively use raw sockets.
 As a result, IPscan can now provide feedback on mid-point devices and all ICMPv6 response
