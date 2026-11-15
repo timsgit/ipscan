@@ -50,9 +50,11 @@
 // 0.30 - add validate_ipv6addr_string()
 // 0.31 - add server scan slot reservation to manage resource usage
 // 0.32 - fix some rocky linux build issues
+// 0.33 - add ipscan_capabilities version reporting
+// 0.34 - add raw socket functions with minimum privilege scope (capabilities or suid)
 
 //
-#define IPSCAN_GENERAL_VER "0.32"
+#define IPSCAN_GENERAL_VER "0.34"
 //
 
 #include "ipscan.h"
@@ -94,6 +96,9 @@
 
 // provides flock
 #include <sys/file.h>
+
+// for new raw socket functions
+#include <sys/socket.h>
 
 //
 // report version
@@ -962,6 +967,134 @@ int scan_slot_acquire(int *slotfd)
 	return IPSCAN_SLOT_BUSY;
 	#else
 	return IPSCAN_SLOT_OK;
+	#endif
+}
+//
+// -----------------------------------------------------------------------------
+//
+// Replacement socket functions that gain privilege using Linux capabilities or traditional root/suid
+// depending on METHOD statement in build/install command-line
+//
+#if (0 == CAPNETRAW0_ROOTSUID1)
+#include <sys/capability.h>
+// Create a raw socket with the minimum possible effective privilege window.
+// The permitted capability is deliberately retained because IPscan creates sockets repeatedly during a scan.
+// The effective capability must be clear on entry. This also detects incorrectly installed binaries using cap_net_raw+ep.
+static int ipscan_raw_socket_caps(int domain, int type, int protocol)
+{
+	cap_t original_caps;
+	cap_value_t raw_cap = CAP_NET_RAW;
+	cap_flag_value_t effective;
+	int sock;
+	int saved_errno;
+
+	original_caps = cap_get_proc();
+	saved_errno = errno;
+	if (original_caps == NULL)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan_raw_socket_caps: pre-socket cap_get_proc failed, returned %d\n", saved_errno);
+		return -1;
+	}
+
+	if (cap_get_flag(original_caps, raw_cap, CAP_EFFECTIVE, &effective) != 0)
+	{
+		saved_errno = errno;
+		IPSCAN_LOG( LOGPREFIX "ipscan_raw_socket_caps: pre-socket cap_get_flag failed, returned %d\n", saved_errno);
+		(void)cap_free(original_caps);
+		errno = saved_errno;
+		return -1;
+	}
+
+	// Do not silently operate with an already-effective capability. This would be an installation/configuration error.
+	if (effective == CAP_SET)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan_raw_socket_caps: pre-socket (effective == CAP_SET) - check the installation!\n");
+		(void)cap_free(original_caps);
+		errno = EPERM;
+		return -1;
+	}
+
+	// Enable only the effective bit. Do not modify permitted, inheritable or bounding capability sets.
+	if (cap_set_flag(original_caps, CAP_EFFECTIVE, 1, &raw_cap, CAP_SET) != 0)
+	{
+		saved_errno = errno;
+		IPSCAN_LOG( LOGPREFIX "ipscan_raw_socket_caps: pre-socket cap_set_flag failed, returned %d\n",saved_errno);
+		(void)cap_free(original_caps);
+		errno = saved_errno;
+		return -1;
+	}
+
+	if (cap_set_proc(original_caps) != 0)
+	{
+		saved_errno = errno;
+		IPSCAN_LOG( LOGPREFIX "ipscan_raw_socket_caps: pre-socket cap_set_proc failed, returned %d\n",saved_errno);
+		(void)cap_free(original_caps);
+		errno = saved_errno;
+		return -1;
+	}
+
+	// actually attempt to create the required socket
+	sock = socket(domain, type, protocol);
+	saved_errno = errno;
+
+	// Restore the original effective capability state immediately after socket creation, regardless of whether socket() succeeded.
+	if (cap_set_flag(original_caps, CAP_EFFECTIVE, 1, &raw_cap, CAP_CLEAR) != 0)
+	{
+		int restore_errno = errno;
+		IPSCAN_LOG( LOGPREFIX "ipscan_raw_socket_caps: cap_set_flag post-socket failed, returned %d\n",restore_errno);
+		if (sock >= 0)
+		{
+			(void)close(sock);
+		}
+		(void)cap_free(original_caps);
+		errno = restore_errno;
+		return -1;
+	}
+
+	if (cap_set_proc(original_caps) != 0)
+	{
+		int restore_errno = errno;
+		IPSCAN_LOG( LOGPREFIX "ipscan_raw_socket_caps: cap_set_proc post-socket failed, returned %d\n",restore_errno);
+		if (sock >= 0)
+		{
+			(void)close(sock);
+		}
+
+		(void)cap_free(original_caps);
+		errno = restore_errno;
+		return -1;
+	}
+
+	(void)cap_free(original_caps);
+	if (sock < 0)
+	{
+		IPSCAN_LOG( LOGPREFIX "ipscan_raw_socket_caps: socket() failed, returned %d\n",saved_errno);
+		errno = saved_errno;
+		return -1;
+	}
+
+	// return the socket fd
+	return sock;
+}
+#endif
+
+//
+// -----------------------------------------------------------------------------
+//
+
+int ipscan_raw_socket(int domain, int type, int protocol)
+{
+	#if (0 == CAPNETRAW0_ROOTSUID1)
+
+	// METHOD=caps:
+	return ipscan_raw_socket_caps(domain, type, protocol);
+
+	#else
+
+	// METHOD=suid:
+	// setuid/root privilege transitions remain responsible for ensuring this call executes with sufficient privileges.
+	return socket(domain, type, protocol);
+
 	#endif
 }
 //

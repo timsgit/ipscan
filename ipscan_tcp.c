@@ -52,9 +52,10 @@
 // 1.09			Ensure _exit() returns failure code, if appropriate
 // 1.10			Move to new TCP/ICMPv6 mappings
 // 1.11			Add debug reporting to aid testing
+// 1.12			Improve the Linux capabilities support to minimise privileged NET_CAP_RAW time
 
 //
-#define IPSCAN_TCP_VER "1.11"
+#define IPSCAN_TCP_VER "1.12"
 //
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
@@ -231,14 +232,14 @@ int check_tcp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	#endif
 
 	// Open the two raw sockets
-	int tcp_sock = socket(AF_INET6, SOCK_RAW, IPPROTO_TCP);
+	int tcp_sock = ipscan_raw_socket(AF_INET6, SOCK_RAW, IPPROTO_TCP);
 	if (tcp_sock < 0)
 	{ 
 		IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: ERROR: TCPv6 socket. Need root privileges? Unexpected failure : %d (%s)\n", errno, strerror(errno));
 		retval = PORTINTERROR;
 	}
 
-	int icmp_sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+	int icmp_sock = ipscan_raw_socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
 	if (icmp_sock < 0)
 	{ 
 		IPSCAN_LOG( LOGPREFIX "check_tcp_port_raw: ERROR: ICMPv6 Need root privileges? Unexpected failure : %d (%s)\n", errno, strerror(errno));

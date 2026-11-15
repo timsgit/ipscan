@@ -46,6 +46,8 @@
 # 0.27 - move to support Linux capabilities as well as root/suid approach
 # 0.28 - various fixes, typos and other improvements
 # 0.29 - add support for server resource limit checks/report 
+# 0.30 - add improved Linux capabilities support
+# 0.31 - significant changes to separate various compiler and linker parameters
 
 # -------------------------------------------------------------------------
 # Support builds without UDP port scans
@@ -68,7 +70,7 @@ PING_AVAILABLE=1
 #
 # If you are NOT using Linux, or a version of Linux without CAP_NET_RAW support, then include
 # METHOD=suid in the make command, e.g. make METHOD=suid && make install METHOD=suid
-#	this will build a binary owned by root and the suid bit set
+#	this will build a binary owned by root and set the suid bit
 #
 # Note: the BUILD_METHOD_FILE ensures that the build and installation are performed with the same METHOD= statement
 # if you wish to change METHOD then run a 'make clean' between different METHOD= builds.
@@ -91,18 +93,18 @@ endif
 # -------------------------------------------------------------------------
 # Find the Apache control binary (name varies by distro)
 APACHECTL ?= $(shell for c in apache2ctl apachectl httpd; do command -v $$c && break; done)
-# Detect the WEBUSER unless the caller supplied one (make WEBUSER=foo)
+# Use APACHECTL to determine the WEBUSER unless the caller supplied one (make WEBUSER=foo)
 ifeq ($(origin WEBUSER),undefined)
 WEBUSER := $(shell $(APACHECTL) -S 2>/dev/null | sed -n 's/^User: name="\([^"]*\)".*/\1/p' | head -n1)
 endif
-# Detect the WEBGROUP unless the caller supplied one (make WEBGROUP=foo)
+# Use APACHECTL to determine the WEBGROUP unless the caller supplied one (make WEBGROUP=foo)
 ifeq ($(origin WEBGROUP),undefined)
 WEBGROUP := $(shell $(APACHECTL) -S 2>/dev/null | sed -n 's/^Group: name="\([^"]*\)".*/\1/p' | head -n1)
 endif
-#
-# Directory for IPscan lock files
+# Define the directory that will hold IPscan lock files
 IPSCAN_SLOT_DIR ?= /var/lib/ipscan
-# Define the maximum number of simultaneous IPscans (default to 0==unlimited)
+# Define the maximum number of simultaneous IPscans that can be executed by the server
+# Defaults to 0, which is equivalent to unlimited.
 ifeq ($(origin IPSCAN_MAX_SCANS),undefined)
 IPSCAN_MAX_SCANS := 0
 endif
@@ -124,7 +126,8 @@ STRIP ?= strip
 # set the binary capabilities to include cap_net_raw
 #
 SETCAP ?= setcap
-SETCAP_CAPS ?= cap_net_raw+ep
+# CAP_NET_RAW is permitted but NOT effective at process startup
+SETCAP_CAPS ?= cap_net_raw+p
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
@@ -145,29 +148,18 @@ URIPATH=/cgi-bin6
 # -------------------------------------------------------------------------
 # General build variables
 SHELL=/bin/sh
-LIBPATHS=-L/usr/lib
-INCLUDES=-I/usr/include
-LIBS=
-CC=gcc
-CFLAGS=-Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wwrite-strings -Wformat=2 -Wformat-security -O2 -D_FORTIFY_SOURCE=2
-CFLAGS+= -fstack-protector-all -fstack-clash-protection -Wstack-protector --param ssp-buffer-size=4
-CFLAGS+= -Wconversion -Wsign-conversion -Wimplicit-fallthrough -Wl,-z,noexecstack -Wsign-compare -Wformat-signedness
-CFLAGS+= -ftrapv -fPIE -Wl,-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,separate-code -Werror=implicit-function-declaration 
-# control flow protection only works on x86
-ifeq ($(shell $(CC) -dumpmachine | grep -Eq 'x86_64|i.86' && echo yes),yes)
-CFLAGS+= -fcf-protection=full
-endif
-CFLAGS+= -D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64
+CC ?= gcc
+MYSQL_CONFIG ?= mysql_config
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Text-version target executable name
+# Text-version target executable names
 TXTTARGET=ipscantxt.cgi
 FASTTXTTARGET=ipscanfasttxt.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Javascript-version target executable name
+# Javascript-version target executable names
 JSTARGET=ipscanjs.cgi
 FASTJSTARGET=ipscanfastjs.cgi
 # -------------------------------------------------------------------------
@@ -179,30 +171,89 @@ FASTJSTARGET=ipscanfastjs.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Default target
+# Default target - build all by default
 .DEFAULT_GOAL := all
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # Determine the appropriate database related include/library paths
 # as well as any necessary libraries
-LIBS+=$(shell mysql_config --libs)
-CFLAGS+=$(shell mysql_config --cflags)
-INCLUDES+=$(shell mysql_config --include)
+MYSQL_CPPFLAGS := $(shell $(MYSQL_CONFIG) --include 2>/dev/null)
+MYSQL_LDLIBS := $(shell $(MYSQL_CONFIG) --libs 2>/dev/null) 
+MYSQL_CFLAGS := $(shell $(MYSQL_CONFIG) --cflags 2>/dev/null)
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# IPscan-specific compiler flags
+IPSCAN_CPPFLAGS =-D_FORTIFY_SOURCE=2 -D_TIME_BITS=64 -D_FILE_OFFSET_BITS=64
+# add in the ones required by MySQL/MariaDB
+IPSCAN_CPPFLAGS += $(MYSQL_CPPFLAGS)
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# Define the parameters that are common to all types of target executables
+# -------------------------------------------------------------------------
+CMNPARAMS  = $(DEBUG)
+CMNPARAMS += -DEXEDIR=\"$(TARGETDIR)\"
+CMNPARAMS += -DEXETXTNAME=\"$(TXTTARGET)\"
+CMNPARAMS += -DEXEJSNAME=\"$(JSTARGET)\"
+CMNPARAMS += -DEXEFASTTXTNAME=\"$(FASTTXTTARGET)\"
+CMNPARAMS += -DEXEFASTJSNAME=\"$(FASTJSTARGET)\"
+CMNPARAMS += -DURIPATH=\"$(URIPATH)\"
+CMNPARAMS += -DPING_AVAILABLE=$(PING_AVAILABLE)
+CMNPARAMS += -DUDP_AVAILABLE=$(UDP_AVAILABLE)
+CMNPARAMS += -DCAPNETRAW0_ROOTSUID1=$(CAPNETRAW0_ROOTSUID1)
+CMNPARAMS += -DIPSCAN_SLOT_DIR=\"$(IPSCAN_SLOT_DIR)\"
+CMNPARAMS += -DIPSCAN_MAX_SCANS=$(IPSCAN_MAX_SCANS)
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# Try to include as many runtime security options as possible and make the
+# compiler as fussy as possible about the code it compiles
+# -------------------------------------------------------------------------
+IPSCAN_CFLAGS  = -Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wwrite-strings
+IPSCAN_CLFAGS += -Wformat=2 -Wformat-security -Wconversion -Wsign-conversion
+IPSCAN_CFLAGS += -Wimplicit-fallthrough -Wsign-compare -Wformat-signedness
+IPSCAN_CFLAGS += -Werror=implicit-function-declaration -O2 -fstack-protector-all
+IPSCAN_CFLAGS += -fstack-clash-protection -Wstack-protector --param ssp-buffer-size=4
+IPSCAN_CFLAGS += -ftrapv -fPIE
+IPSCAN_CFLAGS += $(MYSQL_CFLAGS)
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# Control flow protection only works on x86 CPU
+# -------------------------------------------------------------------------
+ifeq ($(shell $(CC) -dumpmachine | grep -Eq 'x86_64|i.86' && echo yes),yes)
+IPSCAN_CFLAGS += -fcf-protection=full
+endif
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# Linker options - again prioritise secure deployment
+# -------------------------------------------------------------------------
+IPSCAN_LDFLAGS  = -pie -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now
+IPSCAN_LDFLAGS += -Wl,-z,separate-code
+
+# -------------------------------------------------------------------------
+# Define the linker libraries
+# -------------------------------------------------------------------------
+IPSCAN_LDLIBS =
+IPSCAN_LDLIBS += $(MYSQL_LDLIBS)
+# Linux capability support is only required for METHOD=caps.
+ifeq ($(METHOD),caps)
+IPSCAN_LDLIBS += -lcap
+endif
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # No debug by default
+# -------------------------------------------------------------------------
 DEBUG=
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Concatenate the necessary parameters for each type of target
-CMNPARAMS= $(DEBUG) -DEXEDIR=\"$(TARGETDIR)\" -DEXETXTNAME=\"$(TXTTARGET)\" -DEXEJSNAME=\"$(JSTARGET)\"
-CMNPARAMS+= -DEXEFASTTXTNAME=\"$(FASTTXTTARGET)\" -DEXEFASTJSNAME=\"$(FASTJSTARGET)\" 
-CMNPARAMS+= -DURIPATH=\"$(URIPATH)\" -DPING_AVAILABLE=$(PING_AVAILABLE) -DUDP_AVAILABLE=$(UDP_AVAILABLE) 
-CMNPARAMS+= -DCAPNETRAW0_ROOTSUID1=$(CAPNETRAW0_ROOTSUID1) 
-CMNPARAMS+= -DIPSCAN_SLOT_DIR=\"$(IPSCAN_SLOT_DIR)\" -DIPSCAN_MAX_SCANS=$(IPSCAN_MAX_SCANS)
+# Determine the parameters necessary for each type of target
+# -------------------------------------------------------------------------
 TXTPARAMS=$(CFLAGS) -DTEXTMODE=1 -DFAST=0 $(CMNPARAMS)
 JSPARAMS =$(CFLAGS) -DTEXTMODE=0 -DFAST=0 $(CMNPARAMS)
 FASTTXTPARAMS=$(CFLAGS) -DTEXTMODE=1 -DFAST=1 $(CMNPARAMS)
@@ -210,14 +261,17 @@ FASTJSPARAMS =$(CFLAGS) -DTEXTMODE=0 -DFAST=1 $(CMNPARAMS)
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Common header files which are always a dependancy
-HEADERFILES=ipscan.h ipscan_db.h ipscan_portlist.h ipscan_general.h ipscan_web.h ipscan_tcp.h ipscan_udp.h ipscan_icmpv6.h
+# Define the common header files which are always a dependancy
+# -------------------------------------------------------------------------
+HEADERFILES=ipscan.h ipscan_db.h ipscan_portlist.h ipscan_general.h ipscan_web.h ipscan_tcp.h 
+HEADERFILES+= ipscan_udp.h ipscan_icmpv6.h
 # Any other files on which we depend
 DEPENDFILE=Makefile
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Generate the list of text-version and javascript-version objects from the source files
+# Generate the list of object files for each type of target
+# -------------------------------------------------------------------------
 TXTOBJS=$(patsubst %.c,%-txt.o,$(wildcard *.c))
 JSOBJS=$(patsubst %.c,%-js.o,$(wildcard *.c))
 FASTTXTOBJS=$(patsubst %.c,%-fast-txt.o,$(wildcard *.c))
@@ -225,31 +279,59 @@ FASTJSOBJS=$(patsubst %.c,%-fast-js.o,$(wildcard *.c))
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Record the METHOD used to build the binaries and then check it is installed with the same
+# Record the build METHOD for later checking
+# -------------------------------------------------------------------------
+.PHONY: record-method
+record-method:
+	@echo "$(METHOD)" > "$(BUILD_METHOD_FILE)"
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# Check the build and install METHOD are the same
+# -------------------------------------------------------------------------
 .PHONY: check-method
 check-method:
 	@if [ -f "$(BUILD_METHOD_FILE)" ]; then \
 		built_method=$$(cat "$(BUILD_METHOD_FILE)"); \
 		if [ "$$built_method" != "$(METHOD)" ]; then \
 			echo "ERROR: binaries were built with METHOD=$$built_method"; \
-			echo "       but METHOD=$(METHOD) was requested."; \
-			echo "       Run 'make clean' before changing METHOD."; \
+			echo "       installation requested with METHOD=$(METHOD)."; \
 			exit 1; \
 		fi; \
 	else \
-		echo "$(METHOD)" > "$(BUILD_METHOD_FILE)"; \
+		echo "ERROR: build method marker missing."; \
+		echo "       Run make METHOD=$(METHOD) first"; \
+		exit 1; \
 	fi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# default target builds everything
+# default target records build METHOD and builds everything
+# -------------------------------------------------------------------------
 .PHONY: all
-all : check-method $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
+all : record-method $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# debug target builds objects with debug, defined in ipscan.h, enabled
+# Debug display the build/install variable
+# -------------------------------------------------------------------------
+.PHONY: show-build-config
+show-build-config:
+	@echo "Build method: $(METHOD)"
+	@echo "Compiler: $(CC)"
+	@echo "CPPFLAGS: $(CPPFLAGS) $(IPSCAN_CPPFLAGS)"
+	@echo "CFLAGS: $(CFLAGS) $(IPSCAN_CFLAGS)"
+	@echo "LDFLAGS: $(LDFLAGS) $(IPSCAN_LDFLAGS)"
+	@echo "LDLIBS: $(LDLIBS) $(IPSCAN_LDLIBS)"
+	@echo "MYSQL_LDLIBS := $(MYSQL_LDLIBS)"
+	@echo "MYSQL_CFLAGS := $(MYSQL_CFLAGS)"
+	@echo "MYSQL_CPPFLAGS := $(MYSQL_CPPFLAGS)"
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+# The debug target builds objects with debug, as defined in ipscan.h
 # Not intended for production use
+# -------------------------------------------------------------------------
 .PHONY: debug
 debug : $(HEADERFILES) $(DEPENDFILE)
 	$(MAKE) clean
@@ -258,38 +340,43 @@ debug : $(HEADERFILES) $(DEPENDFILE)
 
 # -------------------------------------------------------------------------
 # Rules to build an individual text-version object and the overall text-version target
+# -------------------------------------------------------------------------
 %-txt.o: %.c $(HEADERFILES) $(DEPENDFILE)
-	$(CC) $(TXTPARAMS) -c $(INCLUDES) $(LIBPATHS) -o $@ $<
-$(TXTTARGET) : $(TXTOBJS) $(HEADERFILES) $(DEPENDFILE)
-	$(CC) $(TXTPARAMS) -o $(TXTTARGET) $(INCLUDES) $(LIBPATHS) $(TXTOBJS) $(LIBS)
+	$(CC) $(CPPFLAGS) $(IPSCAN_CPPFLAGS) $(TXTPARAMS) $(CFLAGS) $(IPSCAN_CFLAGS) -c -o $@ $<
+$(TXTTARGET) : record-method $(TXTOBJS) $(HEADERFILES) $(DEPENDFILE)
+	$(CC) $(LDFLAGS) $(IPSCAN_LDFLAGS) -o $@ $(TXTOBJS) $(LDLIBS) $(IPSCAN_LDLIBS)
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Rules to build an individual fast text-version object and the overall text-version target
+# Rules to build an individual fast text-version object and the overall fast text-version target
+# -------------------------------------------------------------------------
 %-fast-txt.o: %.c $(HEADERFILES) $(DEPENDFILE)
-	$(CC) $(FASTTXTPARAMS) -c $(INCLUDES) $(LIBPATHS) -o $@ $<
-$(FASTTXTTARGET) : $(FASTTXTOBJS) $(HEADERFILES) $(DEPENDFILE)
-	$(CC) $(FASTTXTPARAMS) -o $(FASTTXTTARGET) $(INCLUDES) $(LIBPATHS) $(FASTTXTOBJS) $(LIBS)
+	$(CC) $(CPPFLAGS) $(IPSCAN_CPPFLAGS) $(FASTTXTPARAMS) $(CFLAGS) $(IPSCAN_CFLAGS) -c -o $@ $<
+$(FASTTXTTARGET) : record-method $(FASTTXTOBJS) $(HEADERFILES) $(DEPENDFILE)
+	$(CC) $(LDFLAGS) $(IPSCAN_LDFLAGS) -o $@ $(FASTTXTOBJS) $(LDLIBS) $(IPSCAN_LDLIBS)
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Rules to build an individual javascript-version object and the overall jscript-version target
+# Rules to build an individual javascript-version object and the overall javascript-version target
+# -------------------------------------------------------------------------
 %-js.o: %.c $(HEADERFILES) $(DEPENDFILE)
-	$(CC) $(JSPARAMS) -c $(INCLUDES) $(LIBPATHS) -o $@ $<
-$(JSTARGET) : $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
-	$(CC) $(JSPARAMS) -o $(JSTARGET) $(INCLUDES) $(LIBPATHS) $(JSOBJS) $(LIBS)
+	$(CC) $(CPPFLAGS) $(IPSCAN_CPPFLAGS) $(JSPARAMS) $(CFLAGS) $(IPSCAN_CFLAGS) -c -o $@ $<
+$(JSTARGET) : record-method $(JSOBJS) $(HEADERFILES) $(DEPENDFILE)
+	$(CC) $(LDFLAGS) $(IPSCAN_LDFLAGS) -o $@ $(JSOBJS) $(LDLIBS) $(IPSCAN_LDLIBS)
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Rules to build an individual faqst javascript-version object and the overall jscript-version target
+# Rules to build an individual fast javascript-version object and the overall fast javascript-version target
+# -------------------------------------------------------------------------
 %-fast-js.o: %.c $(HEADERFILES) $(DEPENDFILE)
-	$(CC) $(FASTJSPARAMS) -c $(INCLUDES) $(LIBPATHS) -o $@ $<
-$(FASTJSTARGET) : $(FASTJSOBJS) $(HEADERFILES) $(DEPENDFILE)
-	$(CC) $(FASTJSPARAMS) -o $(FASTJSTARGET) $(INCLUDES) $(LIBPATHS) $(FASTJSOBJS) $(LIBS)
+	$(CC) $(CPPFLAGS) $(IPSCAN_CPPFLAGS) $(FASTJSPARAMS) $(CFLAGS) $(IPSCAN_CFLAGS) -c -o $@ $<
+$(FASTJSTARGET) : record-method $(FASTJSOBJS) $(HEADERFILES) $(DEPENDFILE)
+	$(CC) $(LDFLAGS) $(IPSCAN_LDFLAGS) -o $@ $(FASTJSOBJS) $(LDLIBS) $(IPSCAN_LDLIBS)
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Strip un-needed symbols from the binaries
+# Strip un-needed symbols from the binaries - called as part of the installation
+# -------------------------------------------------------------------------
 .PHONY: strip
 strip: $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 	@echo "Stripping the binaries to remove un-needed symbols"
@@ -299,6 +386,7 @@ strip: $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 # -------------------------------------------------------------------------
 # Rules to copy the built objects to the target installation directory
 # then change the owner and either capability bits or suid
+# -------------------------------------------------------------------------
 .PHONY: install
 install : check-method $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET) strip
 	@echo "Installing IPscan CGI executables"
@@ -309,24 +397,38 @@ install : check-method $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 	$(INSTALL_PROGRAM) -o root -g root $(FASTTXTTARGET) $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
 	$(INSTALL_PROGRAM) -o root -g root $(JSTARGET) $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
 	$(INSTALL_PROGRAM) -o root -g root $(FASTJSTARGET) $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
-ifeq ($(CAPNETRAW0_ROOTSUID1),0)
+ifeq ($(METHOD),caps)
+	@echo "Installing CAP_NET_RAW file capabilities"
 	@command -v $(SETCAP) >/dev/null || { echo "\n\nERROR: setcap is required for METHOD=caps, but not found.\n"; exit 1; }
 	@echo "Setting the installation binaries capability bits"
 	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
 	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
 	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
 	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
-else
+	@echo "Verifying installed file capabilities"
+	@getcap $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
+	@getcap $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
+	@getcap $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
+	@getcap $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
+else ifeq ($(METHOD),suid)
+	@echo "Installing setuid-root executables"
+	chmod u-s $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
+	chmod u-s $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
+	chmod u-s $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
+	chmod u-s $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
 	@echo "Setting the installation binaries suid bits"
 	chmod u+s $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
 	chmod u+s $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
 	chmod u+s $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
 	chmod u+s $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
+else
+	$(error Invalid METHOD=$(METHOD))
 endif
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # Rule to clean the source directory	
+# -------------------------------------------------------------------------
 .PHONY: clean
 clean :
 	rm -f $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)

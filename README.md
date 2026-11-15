@@ -23,7 +23,8 @@ along with IPscan. If not, see <http://www.gnu.org/licenses/>.
 IPscan requires access to a MySQL, or MariaDB, database and the associated client development
 libraries (libmysqlclient-dev or similar) to be installed on the server which will act as
 your scanner. The database is used to *temporarily* hold scan results until shortly after
-the test completes. 
+the test completes. The latest versions also need the Linux capabilities development library
+(libcap-dev or similar) and binaries installed. 
 
 Versions 2.04 and earlier were known to build on: openSUSE versions 11.1/11.4/12.1/13.1,
 Centos 7, Fedora 16, Ubuntu 12.04, Mint 12, FreeBSD 9, Arch Linux ARM (Raspberry Pi) and
@@ -92,7 +93,6 @@ types/codes.
        $ ./database.bsh --upgrade
 
        Note: Answer 'y' when  prompted to delete the results table and runtime account.
-
        $ ./database.bsh --install-schema
 
        Note: The message 'Schema installed; runtime privileges restricted to the 
@@ -111,11 +111,17 @@ types/codes.
        ownership to root ensures the Apache user cannot overwrite the binaries and gain
        CAP_NET_RAW capabilities.
 
-       If you are running the scanner on a low bandwidth or resource constrained server
+       If you are running the scanner on a bandwidth-limited, or resource-constrained, server
        then it is possible to limit the number of simultaneous scans performed by specifying
-       something similar to:
+       IPSCAN_MAX_SCANS at compile-time:
 
-       make IPSCAN_MAX_SCANS=3 && make install
+       make IPSCAN_MAX_SCANS=N && make install
+
+       where N is a positive integer, defining the maximum number of scans that can be
+       performed simultaneously. N=0 (the default) is interpreted as there being no constraint
+       on the number of simultaneous scans. If a constraint is in place, and N sessions are 
+       already in progress, then the server will respond to further attempts to establish
+       new sessions with a 503 status code, indicating server unavailability.
 
        Many other parameters can be specified using a similar approach at build-time.
        Read the Makefile for details. In general, when changing any compile-time setting

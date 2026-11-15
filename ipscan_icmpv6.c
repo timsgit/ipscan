@@ -44,9 +44,10 @@
 // 1.01			Make drop/regain privileges a compile-time option
 // 1.02			Move to new ICMPv6 mappings
 // 1.03			Improve checks for direct ICMPv6 response from HUT, fix various printf formats and typos
+// 1.04			Improve the Linux capabilities support to minimise privileged NET_CAP_RAW time
 
 //
-#define IPSCAN_ICMPV6_VER "1.03"
+#define IPSCAN_ICMPV6_VER "1.04"
 //
 
 #include "ipscan.h"
@@ -201,7 +202,7 @@ int check_icmpv6_echoresponse(char * hostname, uint64_t starttime, uint64_t sess
 	// run with ROOT privileges, or setcap net, keep section to a minimum
 	if (PORTUNKNOWN == retval)
 	{
-		sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+		sock = ipscan_raw_socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
 		errsv = errno;
 		if (-1 == sock)
 		{

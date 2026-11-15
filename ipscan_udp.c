@@ -71,9 +71,10 @@
 // 1.13			Add OpenVPN probe
 // 1.14			Pad QUIC probe to QUIC_MIN_DATAGRAM_SIZE and fix CID generation
 // 1.15			fix some rocky linux build issues
+// 1.16			Improve the Linux capabilities support to minimise privileged NET_CAP_RAW time
 
 //
-#define IPSCAN_UDP_VER "1.15"
+#define IPSCAN_UDP_VER "1.16"
 //
 
 #include "ipscan.h"
@@ -379,14 +380,14 @@ int check_udp_port_raw(char * hostname, uint16_t port, uint8_t special, char * i
 	remoteaddr.sin6_scope_id = 0; // unused in our case
 
 	// Attempt to create a socket
-	int udp_sock = socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
+	int udp_sock = ipscan_raw_socket(AF_INET6, SOCK_RAW, IPPROTO_UDP);
 	if (udp_sock < 0)
         {
         	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: UDPv6 socket. Need root privileges? Unexpected failure : %d (%s)\n", errno, strerror(errno));
 		retval = PORTINTERROR;
         }
 
-    	int icmp_sock = socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
+    	int icmp_sock = ipscan_raw_socket(AF_INET6, SOCK_RAW, IPPROTO_ICMPV6);
 	if (icmp_sock < 0)
         {
         	IPSCAN_LOG( LOGPREFIX "check_udp_port_raw: ERROR: ICMPv6 socket. Need root privileges? Unexpected failure : %d (%s)\n", errno, strerror(errno));

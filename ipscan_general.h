@@ -25,6 +25,7 @@
 //
 // 0.1  first version - to ensure general function APIs are consistent
 // 0.2  add scan_slot_acquire() for server load monitoring and reporting
+// 0.3  add ipscan_raw_socket()
 
 #include "ipscan.h"
 #include <stdint.h>
@@ -62,6 +63,7 @@ int get_my_local_ipaddr(const char *dest_ip, struct in6_addr *local_ip);
 unsigned short checksum(unsigned short *ptr, int nbytes);
 void validate_ipv6addr_string(char *address);
 int scan_slot_acquire(int *slotfd);
+int ipscan_raw_socket(int domain, int type, int protocol);
 //
 //
 //
