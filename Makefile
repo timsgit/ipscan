@@ -158,14 +158,14 @@ MYSQL_CONFIG ?= mysql_config
 
 # -------------------------------------------------------------------------
 # Text-version target executable names
-TXTTARGET=ipscantxtbeta.cgi
-FASTTXTTARGET=ipscanfasttxtbeta.cgi
+TXTTARGET=ipscantxt.cgi
+FASTTXTTARGET=ipscanfasttxt.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # Javascript-version target executable names
-JSTARGET=ipscanjsbeta.cgi
-FASTJSTARGET=ipscanfastjsbeta.cgi
+JSTARGET=ipscanjs.cgi
+FASTJSTARGET=ipscanfastjs.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
