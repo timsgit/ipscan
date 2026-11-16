@@ -48,6 +48,7 @@
 # 0.29 - add support for server resource limit checks/report 
 # 0.30 - add improved Linux capabilities support
 # 0.31 - significant changes to separate various compiler and linker parameters
+# 0.32 - verification of Linux capabilities settings applied to executables
 
 # -------------------------------------------------------------------------
 # Support builds without UDP port scans
@@ -126,8 +127,11 @@ STRIP ?= strip
 # set the binary capabilities to include cap_net_raw
 #
 SETCAP ?= setcap
-# CAP_NET_RAW is permitted but NOT effective at process startup
-SETCAP_CAPS ?= cap_net_raw+p
+GETCAP ?= getcap
+# Note: SETCAP_CAPS should assign/set (=) a flag rather than add (+) one
+# otherwise simplistic binary capabilities verification approach will fail
+# CAP_NET_RAW is permitted (p) but NOT effective (e) at process startup
+SETCAP_CAPS ?= cap_net_raw=p
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
@@ -154,14 +158,14 @@ MYSQL_CONFIG ?= mysql_config
 
 # -------------------------------------------------------------------------
 # Text-version target executable names
-TXTTARGET=ipscantxt.cgi
-FASTTXTTARGET=ipscanfasttxt.cgi
+TXTTARGET=ipscantxtbeta.cgi
+FASTTXTTARGET=ipscanfasttxtbeta.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 # Javascript-version target executable names
-JSTARGET=ipscanjs.cgi
-FASTJSTARGET=ipscanfastjs.cgi
+JSTARGET=ipscanjsbeta.cgi
+FASTJSTARGET=ipscanfastjsbeta.cgi
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
@@ -400,27 +404,38 @@ install : check-method $(TXTTARGET) $(JSTARGET) $(FASTTXTTARGET) $(FASTJSTARGET)
 ifeq ($(METHOD),caps)
 	@echo "Installing CAP_NET_RAW file capabilities"
 	@command -v $(SETCAP) >/dev/null || { echo "\n\nERROR: setcap is required for METHOD=caps, but not found.\n"; exit 1; }
-	@echo "Setting the installation binaries capability bits"
-	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
-	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
-	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
-	$(SETCAP) $(SETCAP_CAPS) $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
-	@echo "Verifying installed file capabilities"
-	@getcap $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
-	@getcap $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
-	@getcap $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
-	@getcap $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
+	@command -v $(GETCAP) >/dev/null || { echo "\n\nERROR: getcap is required for METHOD=caps, but not found.\n"; exit 1; }
+	@echo "Setting and verifying the installation binaries capability bits"
+	@set -eu; \
+	for binary in \
+		"$(DESTDIR)$(TARGETDIR)/$(TXTTARGET)" \
+		"$(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)" \
+		"$(DESTDIR)$(TARGETDIR)/$(JSTARGET)" \
+		"$(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)"; \
+	do \
+		$(SETCAP) $(SETCAP_CAPS) $$binary; \
+		expected="$$binary $(SETCAP_CAPS)"; \
+		actual=$$($(GETCAP) "$$binary"); \
+		if [ "$$actual" != "$$expected" ]; then \
+			echo "ERROR: incorrect capabilities on $$binary"; \
+			echo "       Expected: $$expected"; \
+			echo "       Actual:   $${actual:-<none>}"; \
+			exit 1; \
+		fi; \
+		echo "OK: $$binary: $(SETCAP_CAPS)"; \
+	done
 else ifeq ($(METHOD),suid)
-	@echo "Installing setuid-root executables"
-	chmod u-s $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
-	chmod u-s $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
-	chmod u-s $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
-	chmod u-s $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
-	@echo "Setting the installation binaries suid bits"
-	chmod u+s $(DESTDIR)$(TARGETDIR)/$(TXTTARGET)
-	chmod u+s $(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)
-	chmod u+s $(DESTDIR)$(TARGETDIR)/$(JSTARGET)
-	chmod u+s $(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)
+	@echo "Setting the installation binaries SUID bits"
+	@set -eu; \
+	for binary in \
+		"$(DESTDIR)$(TARGETDIR)/$(TXTTARGET)" \
+		"$(DESTDIR)$(TARGETDIR)/$(FASTTXTTARGET)" \
+		"$(DESTDIR)$(TARGETDIR)/$(JSTARGET)" \
+		"$(DESTDIR)$(TARGETDIR)/$(FASTJSTARGET)"; \
+	do \
+		chmod u-s $$binary; \
+		chmod u+s $$binary; \
+	done
 else
 	$(error Invalid METHOD=$(METHOD))
 endif
