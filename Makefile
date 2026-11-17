@@ -292,7 +292,7 @@ FASTJSPARAMS =$(CFLAGS) -DTEXTMODE=0 -DFAST=1 $(CMNPARAMS)
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
-# Define the common header files which are always a dependancy
+# Define the common header files which are always a dependency
 # -------------------------------------------------------------------------
 HEADERFILES=ipscan.h ipscan_db.h ipscan_portlist.h ipscan_general.h ipscan_web.h ipscan_tcp.h 
 HEADERFILES+= ipscan_udp.h ipscan_icmpv6.h
