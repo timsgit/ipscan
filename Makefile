@@ -170,7 +170,7 @@ MYSQL_CONFIG ?= mysql_config
 
 # -------------------------------------------------------------------------
 # default to gcc if in the path, otherwise cc.
-# environment-supplied or command-line CC= take precedence
+# command-line make CC= will take precedence
 # -------------------------------------------------------------------------
 ifeq ($(shell command -v gcc 2>/dev/null),)
 CC = cc
