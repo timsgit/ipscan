@@ -149,9 +149,10 @@
 // 1.26 - add IPv6 address string validation for UDP and TCP indirect hosts
 // 1.27 - add server resource limit handling - report 503
 // 1.28 - fix some rocky linux build issues
+// 1.29 - fix chars passed to toupper/tolower
 
 //
-#define IPSCAN_MAIN_VER "1.28"
+#define IPSCAN_MAIN_VER "1.29"
 //
 
 #include "ipscan.h"
@@ -342,7 +343,7 @@ int main(void)
 
 	// Determine request method and query-string
 	char requestmethod[ (MAXREQMETHODLEN + 1) ];
-	char thischar;
+	unsigned char thischar;
 	char *reqmethodvar;
 	char *querystringvar;
 	char querystring[ (MAXQUERYSTRLEN + 1) ];
@@ -471,8 +472,10 @@ int main(void)
 		// Force Uppercase to ease comparison
 		for (i = 0; i < (unsigned int)strnlen(requestmethod, (MAXREQMETHODLEN+1)); i++)
 		{
-			thischar=requestmethod[i];
-			requestmethod[i]=(char)(toupper(thischar) & 0xFF);
+			thischar=(unsigned char)requestmethod[i];
+			// clamp thischar to be in the ASCII range
+			if (thischar > 127) {querystring[i] = '\0'; break;};
+			requestmethod[i]=(char)toupper(thischar);
 		}
 
 		if (0 == strncmp("GET", requestmethod, 3))
@@ -511,8 +514,10 @@ int main(void)
 				// Force lowercase to ease later comparison
 				for (i = 0; i < (unsigned int)strnlen(querystring,(MAXQUERYSTRLEN)); i++)
 				{
-					thischar=querystring[i];
-					querystring[i]=(char)(tolower(thischar) & 0xFF);
+					thischar=(unsigned char)querystring[i];
+					// clamp thischar to be in the ASCII range
+					if (thischar > 127) {querystring[i] = '\0'; break;};
+					querystring[i]=(char)tolower(thischar);
 				}
 
 				//
