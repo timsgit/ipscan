@@ -118,7 +118,7 @@ types/codes.
        make IPSCAN_MAX_SCANS=N && make install
 
        where N is a positive integer, defining the maximum number of scans that can be
-       performed simultaneously. N=0 (the default) is interpreted as there being no constraint
+       performed simultaneously. N=0 is interpreted as there being no constraint
        on the number of simultaneous scans. If a constraint is in place, and N sessions are 
        already in progress, then the server will respond to further attempts to establish
        new sessions with a 503 status code, indicating server unavailability.
