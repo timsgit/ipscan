@@ -50,6 +50,7 @@
 # 0.31 - significant changes to separate various compiler and linker parameters
 # 0.32 - verification of Linux capabilities settings applied to executables
 # 0.33 - fix typo and separate objects based on METHOD to prevent incorrect installation
+# 0.34 - change IPSCAN_MAX_SCANS based on compiler target
 
 # -------------------------------------------------------------------------
 # Support builds without UDP port scans
@@ -114,10 +115,19 @@ IPSCAN_SLOT_DIR ?= /var/lib/ipscan
 
 # -------------------------------------------------------------------------
 # Define the maximum number of simultaneous IPscans that can be executed
-# on the server. Defaults to 0, which is equivalent to unlimited.
+# on the server. Defaults according to compiler target.
+#
+#  8: AARCH64 (might be a Raspberry Pi)
+# 16: others  (likely something with more resources)
+#
+# Use: make IPSCAN_MAX_SCANS=n if neither of these defaults is appropriate
 # -------------------------------------------------------------------------
 ifeq ($(origin IPSCAN_MAX_SCANS),undefined)
-IPSCAN_MAX_SCANS := 0
+ifeq ($(shell $(CC) -dumpmachine | grep -Eq 'aarch64-linux-gnu' && echo yes),yes)
+IPSCAN_MAX_SCANS := 8
+else
+IPSCAN_MAX_SCANS := 16
+endif
 endif
 # -------------------------------------------------------------------------
 

@@ -117,9 +117,10 @@
 // 1.20 - fix a couple of robustness issues in update_teststate_db()
 // 1.21 - change logging in case of failure to connect to MySQL server, so that only user is recorded
 // 1.22 - removed CREATE TABLE - now created manually by 'database.bsh --install-schema'
+// 1.23 - change some reported addresses in delete_from_db for easier parsing in test environment 
 
 //
-#define IPSCAN_DB_VER "1.22"
+#define IPSCAN_DB_VER "1.23"
 //
 
 #include "ipscan.h"
@@ -707,6 +708,19 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 			}
 			else
 			{
+				char saferemoteaddrstring[INET6_ADDRSTRLEN+1];
+				memset(saferemoteaddrstring, 0, INET6_ADDRSTRLEN+1);
+				#if (1 < IPSCAN_LOGVERBOSITY)
+               			// report host addresses as full 128-bit addresses
+               			bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), false );
+               			#else
+               			// report host addresses as 48-bit addresses
+               			bool convertedok = ipv6_address_to_string( host_msb, host_lsb, saferemoteaddrstring, (INET6_ADDRSTRLEN+1), true );
+               			#endif
+               			if (false == convertedok)
+               			{
+               				IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: failed to convert remote host address to a safe variant\n" );
+               			}
 				char query[MAXDBQUERYSIZE];
 				//
 				// @autocommit = 1
@@ -741,11 +755,13 @@ int delete_from_db(uint64_t host_msb, uint64_t host_lsb, uint64_t timestamp, uin
 					if (0 == rc)
 					{
 						my_ulonglong affectedrows = mysql_affected_rows(connection);
-						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: INFO: DELETE success, rows affected = %llu, PID=%d, hostmsb = %"PRIu64", hostlsb = %"PRIu64", createdate = %"PRIu64", session = %"PRIu64"\n", affectedrows, pid, host_msb, host_lsb, timestamp, session );
+						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: INFO: DELETE success, rows affected = %llu, PID=%d, host = %s , createdate = %"PRIu64", session = %"PRIu64"\n",
+							affectedrows, pid, saferemoteaddrstring, timestamp, session );
 					}
 					else
 					{
-						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: DELETE failed, returned %d (%s) PID=%d, hostmsb = %"PRIu64", hostlsb = %"PRIu64", createdate = %"PRIu64", session = %"PRIu64"\n", rc, mysql_error(connection),  pid, host_msb, host_lsb, timestamp, session );
+						IPSCAN_LOG( LOGPREFIX "ipscan: delete_from_db: ERROR: DELETE failed, returned %d (%s) PID=%d, host = %s , createdate = %"PRIu64", session = %"PRIu64"\n",\
+							rc, mysql_error(connection), pid, saferemoteaddrstring, timestamp, session );
 						retval = 910;
 					}
 				}
